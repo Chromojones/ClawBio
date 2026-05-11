@@ -19,7 +19,6 @@ from clawbio.common.reproducibility import (
     write_checksums,
     write_environment_yml,
     write_portable_commands_sh,
-    write_ro_crate,
 )
 
 
@@ -410,7 +409,7 @@ def main() -> None:
     # Build input image
     if args.demo:
         img_prep = make_demo_image()
-        image_path = "demo (synthetic fluorescence nuclei, offline)"
+        image_path = "demo (synthetic fluorescence nuclei — offline)"
         stem = "demo"
     else:
         if not args.input:
@@ -479,22 +478,6 @@ def main() -> None:
         ],
         output_dir,
         anchor=output_dir,
-    )
-    write_ro_crate(
-        output_dir,
-        skill_name="cell-detection",
-        skill_version="0.1.0",
-        script_path="skills/cell-detection/cell_detection.py",
-        description="Cell segmentation using cpsam (Cellpose 4.0)",
-        params={
-            "image_path": image_path,
-            "diameter": args.diameter,
-            "use_gpu": use_gpu,
-            "do_3D": args.do_3D,
-            "exclude_on_edges": args.exclude_on_edges,
-            "flow_threshold": args.flow_threshold,
-            "cellprob_threshold": args.cellprob_threshold,
-        },
     )
 
     print(f"[cell-detection] Done — {len(metrics)} cells detected.")
