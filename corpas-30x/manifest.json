@@ -17,7 +17,7 @@
         "md5": "72b728aefe54f9492b108c23ca7539bf",
         "size_bytes": 174345958,
         "sha256": "5f8f4e6c8af0e029d242d1229234d8a9895720c4440086455147cd6aea96ff2d",
-        "status": "verified",
+        "status": "present",
         "description": "Genome-wide SNP calls (GRCh37)"
       },
       "indels.vcf.gz": {
@@ -26,7 +26,7 @@
         "md5": "0e173b22b24eb98b2193029ae65a2a8f",
         "size_bytes": 50063317,
         "sha256": "486fc40760b47424796a5cddd2670cd8ece6d9d8d4fe6f255b77fc9d5e33b566",
-        "status": "verified",
+        "status": "present",
         "description": "Genome-wide indel calls (GRCh37)"
       },
       "sv.pass.vcf.gz": {
@@ -35,7 +35,7 @@
         "md5": "c823daf4fab4be2815c39ea47f69f7a7",
         "size_bytes": 865081,
         "sha256": "3158d431bb57ee3bf5db340f203eb86c15a2189a9e641105dbd61ded6bad7260",
-        "status": "verified",
+        "status": "present",
         "description": "Structural variant calls, PASS filter (DEL, DUP, INV, BND, INS)"
       },
       "cnv.vcf.gz": {
@@ -44,7 +44,7 @@
         "md5": "44828f4d0b471a255c873951a5cbdf73",
         "size_bytes": 95078,
         "sha256": "7f3f7974b18f1f9d41dfc1392bb0d05c7e5062dc3b075c4d13ac4ba2fc84c3b0",
-        "status": "verified",
+        "status": "present",
         "description": "Copy number variant calls"
       },
       "snps_summary.vcf": {
@@ -53,7 +53,7 @@
         "md5": "55414adaacabfee3738c2ed88a36b0d4",
         "size_bytes": 65498,
         "sha256": "638421dbe506918a0358e5c920222a77bbb620804a2dbfbd17778613cc1158e7",
-        "status": "verified",
+        "status": "present",
         "description": "SNP summary/example file (uncompressed)"
       },
       "indels_summary.vcf": {
@@ -62,7 +62,7 @@
         "md5": "cd1097aeade2d4247f787f3c05b15f43",
         "size_bytes": 65498,
         "sha256": "594c948c75ff6492ec7034f68d01c5f39c3adcbdb96ed05d8157648df10b7b90",
-        "status": "verified",
+        "status": "present",
         "description": "Indel summary/example file (uncompressed)"
       }
     },
