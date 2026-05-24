@@ -1,17 +1,35 @@
-"""API entry point for skill registry and orchestrator integration."""
+"""Programmatic entry point for gi-expression.
 
+Invokes the skill's CLI in a subprocess (matching how clawbio.py runs
+skills) and returns the parsed result.json. This avoids relying on
+private helper functions inside gi_expression.py.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
 from pathlib import Path
-from importlib.util import spec_from_file_location, module_from_spec
 
-_mod_path = Path(__file__).parent / "gi_expression.py"
-_spec = spec_from_file_location("gi_expression", _mod_path)
-_mod = module_from_spec(_spec)
-_spec.loader.exec_module(_mod)
+
+_SKILL_DIR = Path(__file__).resolve().parent
+_SCRIPT = _SKILL_DIR / "gi_expression.py"
 
 
 def run(input_path: str, output_dir: str = "/tmp/gi-expression") -> dict:
-    """Run the skill programmatically. Returns result dict."""
-    data = _mod.validate_input(Path(input_path))
-    result = _mod.run_analysis(data)
-    _mod.write_report(result, Path(output_dir))
-    return result
+    """Run the skill programmatically. Returns the parsed result.json dict.
+
+    Raises RuntimeError if the skill exits non-zero.
+    """
+    out = Path(output_dir)
+    cmd = [sys.executable, str(_SCRIPT), "--input", str(input_path), "--output", str(out)]
+    completed = subprocess.run(cmd, capture_output=True, text=True)
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"gi-expression exited with code {completed.returncode}: {completed.stderr.strip()}"
+        )
+    result_json = out / "result.json"
+    if not result_json.exists():
+        raise RuntimeError(f"gi-expression produced no result.json at {result_json}")
+    return json.loads(result_json.read_text())

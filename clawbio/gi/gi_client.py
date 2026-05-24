@@ -5,11 +5,9 @@ Shared across `gi-promoter`, `gi-splice`, `gi-enhancer`, `gi-chromatin`,
 
 Auth resolution order:
 1. Explicit ``api_key=`` constructor arg.
-2. ``GI_API_KEY`` environment variable.
-3. ``HACKATHON_FALLBACK_KEY`` (a shared partner key bundled for the
-   ClawBio hackathon). Capped at concurrent=50, rpm=120; treat as a
-   first-touch demo key. Heavy/serious use should request an individual
-   key (alex@genomicintelligence.ai) and set ``GI_API_KEY``.
+2. ``GI_API_KEY`` environment variable (see ``.env.example`` for the
+   shared hackathon-tier key; heavy use should request an individual key
+   from alex@genomicintelligence.ai).
 
 Base URL: ``GI_BASE_URL`` env, default ``https://api.genomicintelligence.ai``.
 
@@ -25,7 +23,6 @@ from typing import Any, Dict, Optional
 import requests
 
 
-HACKATHON_FALLBACK_KEY = "gi_cCtc4FLFXnh3f3NwTPUMcKIqLH7Y679L"
 DEFAULT_BASE_URL = "https://api.genomicintelligence.ai"
 
 
@@ -51,7 +48,12 @@ def resolve_api_key(explicit: Optional[str] = None) -> str:
     env = os.environ.get("GI_API_KEY")
     if env:
         return env
-    return HACKATHON_FALLBACK_KEY
+    raise RuntimeError(
+        "Genomic Intelligence API key not configured. Set GI_API_KEY in your "
+        "environment (see .env.example for the shared hackathon-tier key), or "
+        "pass api_key= explicitly. Heavy/serious use should request an "
+        "individual key from alex@genomicintelligence.ai."
+    )
 
 
 class Client:
