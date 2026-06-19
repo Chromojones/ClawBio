@@ -1,0 +1,12 @@
+[
+  {
+    "pmid": "31802123",
+    "title": "FLASH: ultra-fast protocols to identify RNA-protein interactions in cells",
+    "clip_score": 0.95,
+    "modalities": ["flash", "iclip"],
+    "gse": ["GSE118265"],
+    "srp": ["SRP156596"],
+    "url": "https://pubmed.ncbi.nlm.nih.gov/31802123/",
+    "status": "flagged_clip"
+  }
+]

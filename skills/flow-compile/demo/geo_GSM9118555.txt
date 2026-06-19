@@ -1,0 +1,7 @@
+Barcode trimming (first 15 bp of read and quality string + their attachment to read name + removal of empty space characters and "/" in the read names): custom bash script
+Quality control: FastQC (v0.11.5)
+Adapter trimming (min. read length of 30 bp includes 15 bp barcode and UMI regions plus 15 bp sequence insert): Flexbar (v3.0.0) with non-default parameters: --zip-output GZ --threads 4 --stdout-log --adapter-seq AGATCGGAAGAGCGGTTCAG --adapter-min-overlap 1 --min-read-length 30 --length-dist
+For iCLIP2, the protocol from a previous publication was used (PMID: 31610236). Briefly, after protein-RNA complex extraction using the HNRNPH antibody, the RNA was 3' end dephosphorylated and subsequently ligated with a pre-adenylated L3-App linker.
+Library strategy OTHER
+Organism Homo sapiens
+Title iCLIP, MCF7, HNRNPH immunoprecipitation, rep1

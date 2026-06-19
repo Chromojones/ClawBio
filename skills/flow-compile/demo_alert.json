@@ -1,0 +1,13 @@
+{
+  "query": "\"crosslinking and immunoprecipitation\"[Title/Abstract] AND (CLIP OR iCLIP OR \"PAR-CLIP\" OR eCLIP OR FLASH)",
+  "days_back": 30,
+  "known_pmids": [],
+  "demo_paper": {
+    "pmid": "31802123",
+    "title": "FLASH: ultra-fast protocols to identify RNA-protein interactions in cells",
+    "gse": "GSE118265",
+    "srp": "SRP156596",
+    "clip_score": 0.95,
+    "modalities": ["FLASH", "iCLIP"]
+  }
+}

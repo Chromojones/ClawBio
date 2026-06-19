@@ -1,0 +1,1 @@
+Raw Illumina reads were processed as follows: Barcodes (NNNCGGANNN and NNNGGCANNN) were used for demultiplexing. PCR duplicates, i.e., reads having the same sequence and barcode, were removed using a customized Unix script.
