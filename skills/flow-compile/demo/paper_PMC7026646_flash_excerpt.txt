@@ -1,0 +1,14 @@
+FLASH (Fast Ligation of RNA after some sort of Affinity Purification for High-throughput Sequencing)
+Source: PMC7026646 — FLASH: ultra-fast protocol to identify RNA–protein interactions in cells
+
+Custom FLASH adapters contained two barcodes and random nucleotides adjacent to the 3'-adapters
+according to the pattern NNB1B2NT1T2T3T4T5T6NN (N = random tag nucleotide; T = tag nucleotide;
+B = RY-space tag nucleotide). Random tags were used to merge PCR duplicates, regular tags were
+used to specify the pull-down condition. The semi-random RY-space tags were used to distinguish
+the biological replicates of libraries XF1-XF8.
+
+XL1 DHX9 FLASH CLIP-seq (GSE89276): human DHX9 immunoprecipitation with DHX9-mAb and DHX9-Rb
+antibodies; biological replicates repA and repB. GEO protocol notes RR = replicate A and
+YY = replicate B in the RY-space barcode positions.
+
+Adapter grammar for Flow 5' Barcode Sequence field: NNBBNTTTTTTNN (see GSE118265 / YEO lab FLASH).

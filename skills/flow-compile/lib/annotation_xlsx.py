@@ -14,7 +14,7 @@ def write_annotation_xlsx(
     sheet_name: str = "Sheet1",
 ) -> Path:
     """
-    Export annotation table for uploadsample_flowbio_v6.py (--input-xlsx).
+    Export annotation table for uploadsample_flowbio_v6.py (--input; CSV preferred over XLSX).
 
     Uses openpyxl engine; column headers match flow_annotate.ANNOTATION_COLUMNS.
     """

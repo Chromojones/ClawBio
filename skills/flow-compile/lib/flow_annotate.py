@@ -7,11 +7,15 @@ from typing import Any
 
 import pandas as pd
 
+from lib.barcode_evidence import normalize_flow_barcode
 from lib.barcode_resolver import BarcodeResolution
 from lib.organism import normalize_organism, validate_organism_column
+from lib.protein_target_annotation import infer_purification_target_annotation
+from lib.sample_naming import build_flow_sample_name, validate_flow_sample_name
 
 ANNOTATION_COLUMNS = [
     "File",
+    "File 2",
     "Sample Name",
     "Project Name",
     "Scientist",
@@ -30,6 +34,7 @@ ANNOTATION_COLUMNS = [
     "Cell or Tissue",
     "Organism",
     "Protein (Purification Target)",
+    "Purification Target Annotation",
 ]
 
 
@@ -66,27 +71,37 @@ def infer_protein_target(title: str, characteristics: list[str] | None = None) -
 def purification_agent(characteristics: list[str]) -> str:
     for item in characteristics:
         lower = item.lower()
-        if ("purification" in lower or "antibody:" in lower) and ":" in item:
+        if ("purification" in lower or "antibody:" in lower or "clip antibody:" in lower) and ":" in item:
+            return item.split(":", 1)[1].strip()
+    return ""
+
+
+def _cell_from_characteristics(characteristics: list[str]) -> str:
+    for item in characteristics:
+        lower = item.lower()
+        if lower.startswith("cell line:") or lower.startswith("cell type:"):
             return item.split(":", 1)[1].strip()
     return ""
 
 
 def build_sample_name(protein: str, cell: str, org: str, title: str, srr: str) -> str:
-    rep = "Rep2" if "rep2" in title.lower() else "Rep1"
-    parts = [p for p in [protein, org, cell, rep, srr] if p]
-    return "_".join(parts)
+    return build_flow_sample_name(protein, cell, org, title, srr)
 
 
 def infer_experimental_method(protocol: str, series_title: str = "") -> str:
     blob = f"{protocol} {series_title}".lower()
     if "iclip2" in blob:
         return "iCLIP2"
-    if "iclip" in blob or "flash" in blob:
+    if "flash" in blob:
+        return "FLASH"
+    if "iclip" in blob:
         return "iCLIP"
     if "eclip" in blob:
         return "eCLIP"
     if "par-clip" in blob or "parclip" in blob:
         return "PAR-CLIP"
+    if "uvclap" in blob:
+        return "uvCLAP"
     return "iCLIP"
 
 
@@ -96,6 +111,18 @@ def load_srr_map(path) -> pd.DataFrame:
     if not required.issubset(df.columns):
         raise ValueError(f"SRR map must contain columns: {sorted(required)}")
     return df
+
+
+def _fastq_paths_for_gsm(srr_rows: pd.DataFrame) -> tuple[str, str]:
+    """Return (reads1, reads2) paths for a GSM from srr_map rows."""
+    rows = srr_rows.sort_values("mate")
+    file1 = str(rows.iloc[0]["fastq"])
+    file2 = ""
+    if "file2" in rows.columns and pd.notna(rows.iloc[0].get("file2")):
+        file2 = str(rows.iloc[0]["file2"]).strip()
+    elif len(rows) > 1:
+        file2 = str(rows.iloc[1]["fastq"])
+    return file1, file2
 
 
 def build_annotation_table(
@@ -118,22 +145,33 @@ def build_annotation_table(
     method = experimental_method or infer_experimental_method(protocol_blob, project_name)
 
     rows: list[dict[str, str]] = []
-    for _, srr_row in srr_map.iterrows():
-        gsm = str(srr_row["gsm"])
-        sample = samples.get(gsm)
-        if not sample:
+    for gsm, srr_rows in srr_map.groupby("gsm", sort=False):
+        sample = samples.get(str(gsm))
+        if sample is None:
             continue
+        srr_rows = srr_rows.sort_values("mate")
         title = sample.get("title", "")
-        cell = sample.get("source_name_ch1", "")
+        cell = sample.get("source_name_ch1", "") or _cell_from_characteristics(
+            sample.get("characteristics", [])
+        )
         org = normalize_organism(sample.get("organism_ch1", ""))
         characteristics = sample.get("characteristics", [])
         protein = infer_protein_target(title, characteristics)
-        barcode = barcode_by_gsm.get(gsm)
-        srr = str(srr_row["srr"])
+        barcode = barcode_by_gsm.get(str(gsm))
+        srr = str(srr_rows.iloc[0]["srr"])
         sample_name = build_sample_name(protein, cell, org, title, srr)
+        name_errors = validate_flow_sample_name(sample_name)
+        if name_errors:
+            raise ValueError(
+                f"Invalid Flow sample name for {gsm} ({title!r}): "
+                + "; ".join(name_errors)
+            )
 
+        file1, file2 = _fastq_paths_for_gsm(srr_rows)
         row = {col: "" for col in ANNOTATION_COLUMNS}
-        row["File"] = str(srr_row["fastq"])
+        row["File"] = file1
+        if file2:
+            row["File 2"] = file2
         row["Sample Name"] = sample_name
         row["Project Name"] = project_name
         row["Scientist"] = scientist
@@ -142,7 +180,7 @@ def build_annotation_table(
         row["Purification Agent"] = purification_agent(characteristics)
         row["Experimental Method"] = method
         row["Sequencer"] = sample.get("instrument_model", "")
-        row["5' Barcode Sequence"] = barcode.five_prime if barcode else ""
+        row["5' Barcode Sequence"] = normalize_flow_barcode(barcode.five_prime) if barcode else ""
         row["3' Barcode Sequence"] = barcode.three_prime if barcode else ""
         row["GEO ID"] = gsm
         row["PubMed ID"] = pmid
@@ -150,6 +188,12 @@ def build_annotation_table(
         row["Cell or Tissue"] = cell
         row["Organism"] = org
         row["Protein (Purification Target)"] = protein
+        row["Purification Target Annotation"] = infer_purification_target_annotation(
+            title=title,
+            characteristics=characteristics,
+            experimental_method=method,
+            protein_target=protein,
+        )
         rows.append(row)
 
     df = pd.DataFrame(rows, columns=ANNOTATION_COLUMNS)

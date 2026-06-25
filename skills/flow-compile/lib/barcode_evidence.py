@@ -47,8 +47,21 @@ class BarcodeProposal:
     agent_notes: str = ""
 
 
+FLOW_BARCODE_CHARS = frozenset("ACGTN")
+
+
 def _n_mers(length: int) -> str:
     return "N" * length if length > 0 else ""
+
+
+def normalize_flow_barcode(pattern: str) -> str:
+    """
+    Flow upload metadata allows only A, C, G, T, N in 5' barcode sequences.
+    Map FLASH/IUPAC grammar symbols (R, Y, B) and any other non-ACGTN character to N.
+    """
+    if not pattern:
+        return ""
+    return "".join(ch if ch in FLOW_BARCODE_CHARS else "N" for ch in pattern.upper())
 
 
 def extract_evidence_from_text(text: str, source: str) -> list[BarcodeEvidence]:
@@ -178,6 +191,9 @@ def merge_proposal_from_evidence(gsm: str, evidence: list[BarcodeEvidence]) -> B
     else:
         agent_notes = "No barcode proposal — add paper/GEO text or confirm manually."
 
+    five_prime = normalize_flow_barcode(five_prime)
+    umi = normalize_flow_barcode(umi)
+
     return BarcodeProposal(
         gsm=gsm,
         five_prime=five_prime,
@@ -208,8 +224,8 @@ def load_confirmed_proposals(path) -> dict[str, BarcodeProposal]:
         ev = [BarcodeEvidence(**e) for e in item.get("evidence", [])]
         out[item["gsm"]] = BarcodeProposal(
             gsm=item["gsm"],
-            five_prime=item["five_prime"],
-            umi_barcode=item.get("umi_barcode", ""),
+            five_prime=normalize_flow_barcode(item["five_prime"]),
+            umi_barcode=normalize_flow_barcode(item.get("umi_barcode", "")),
             protocol=item.get("protocol", "generic"),
             confidence=item.get("confidence", "high"),
             status="confirmed",

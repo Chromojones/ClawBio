@@ -43,9 +43,31 @@ from lib.fastq_headers import (
     resolve_srr_fastq_paths,
     sample_headers_from_fastq_dir,
 )
+from lib.flash_umi_extract import (
+    apply_umi_extracted_filenames,
+    collect_flash_umi_pairs,
+    planned_flash_umi_pairs,
+    srr_from_annotation_file,
+    umi_output_basename,
+    write_umi_extract_script,
+)
+from lib.uvclap_umi_extract import (
+    apply_uvclap_umi_filenames,
+    collect_uvclap_umi_pairs,
+    gsm_merge_plan_from_srr_map,
+    planned_uvclap_umi_pairs,
+    write_merge_pe_script,
+    write_umi_extract_script as write_uvclap_umi_extract_script,
+)
 from lib.flow_annotate import build_annotation_table, load_srr_map
 from lib.geo_matrix import parse_geo_matrix
-from lib.pipeline_params import derive_clip_pipeline_params, summarize_params_for_report
+from lib.pipeline_params import (
+    derive_clip_pipeline_params,
+    derive_flash_post_umi_params,
+    derive_uvclap_post_umi_params,
+    summarize_params_for_report,
+    write_analysis_params_hook,
+)
 from lib.pubmed_stage import CLIP_ALERT_QUERY, run_pubmed_stage
 
 DEMO_MATRIX = SKILL_DIR / "demo_geo_matrix.txt"
@@ -60,6 +82,22 @@ GSE105082_SRR_MAP = SKILL_DIR / "demo_gse105082_srr_map.tsv"
 GSE105082_GEO_CACHE = SKILL_DIR / "demo"
 GSE105082_PAPER = SKILL_DIR / "demo" / "paper_PMC6307142_iclip_excerpt.txt"
 GSE105082_FLOW_PROJECT_ID = "997999200849251656"
+XL1_DHX9_MATRIX = SKILL_DIR / "demo_xl1_dhx9_geo_matrix.txt"
+XL1_DHX9_SRR_MAP = SKILL_DIR / "demo_xl1_dhx9_srr_map.tsv"
+XL1_DHX9_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
+XL1_DHX9_FLOW_PROJECT_ID = "834759538599245747"
+XL9_DHX9_MATRIX = SKILL_DIR / "demo_xl9_dhx9_geo_matrix.txt"
+XL9_DHX9_SRR_MAP = SKILL_DIR / "demo_xl9_dhx9_srr_map.tsv"
+XL9_DHX9_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
+XL9_DHX9_FLOW_PROJECT_ID = "834759538599245747"
+XL8_DHX9_MATRIX = SKILL_DIR / "demo_xl8_dhx9_geo_matrix.txt"
+XL8_DHX9_SRR_MAP = SKILL_DIR / "demo_xl8_dhx9_srr_map.tsv"
+XL8_DHX9_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
+XL8_DHX9_FLOW_PROJECT_ID = "834759538599245747"
+XL2_HNRNPC_MATRIX = SKILL_DIR / "demo_xl2_hnrnpc_geo_matrix.txt"
+XL2_HNRNPC_SRR_MAP = SKILL_DIR / "demo_xl2_hnrnpc_srr_map.tsv"
+XL2_HNRNPC_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
+XL2_HNRNPC_FLOW_PROJECT_ID = "834759538599245747"
 EXIT_PAUSED = 3
 
 
@@ -79,7 +117,9 @@ class WorkflowResult:
     header_inspection: dict[str, Any] | None = None
 
 
-def write_prefetch_script(output_dir: Path, fastqs: list[str], max_runs: int) -> Path:
+def write_prefetch_script(
+    output_dir: Path, fastqs: list[str], max_runs: int | None = None
+) -> Path:
     script = output_dir / "prefetch.sh"
     seen_srr: set[str] = set()
     lines = [
@@ -101,9 +141,9 @@ def write_prefetch_script(output_dir: Path, fastqs: list[str], max_runs: int) ->
             continue
         seen_srr.add(srr)
         lines.append(f"prefetch {srr}")
-        lines.append(f"fasterq-dump {srr} --skip-technical --threads 4")
-        lines.append(f"pigz -f {srr}.fastq")
-        if len(seen_srr) >= max_runs:
+        lines.append(f"fasterq-dump {srr} --split-files --skip-technical --threads 4")
+        lines.append(f"pigz -f {srr}_1.fastq {srr}_2.fastq 2>/dev/null || pigz -f {srr}.fastq")
+        if max_runs is not None and max_runs > 0 and len(seen_srr) >= max_runs:
             break
     lines.append('echo "FASTQs in $(pwd)"')
     script.write_text("\n".join(lines) + "\n")
@@ -244,6 +284,7 @@ def _resolve_barcodes_agent_assisted(
         paper_texts=paper_texts,
         geo_cache_dir=geo_cache_dir,
         fetch_geo=fetch_geo,
+        sample_titles={gsm: matrix_data["samples"][gsm].get("title", "") for gsm in gsms},
     )
     proposal_path = write_proposal_bundle(output_dir, proposals)
     stages["barcode_extract"] = f"{len(proposals)} proposal(s) → {proposal_path.name}"
@@ -278,6 +319,127 @@ def _apply_cleaned_filenames(annotation) -> tuple[Any, bool]:
     return updated, True
 
 
+def _annotation_is_flash(annotation, matrix_data: dict[str, Any] | None = None) -> bool:
+    if "Experimental Method" in annotation.columns:
+        methods = annotation["Experimental Method"].dropna().astype(str).str.strip().str.upper()
+        if (methods == "FLASH").any():
+            return True
+    if matrix_data:
+        blob = " ".join(
+            str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
+        )
+        if "flash" in blob.lower():
+            return True
+    return False
+
+
+def _annotation_is_uvclap(annotation, matrix_data: dict[str, Any] | None = None) -> bool:
+    if "Experimental Method" in annotation.columns:
+        methods = annotation["Experimental Method"].dropna().astype(str).str.strip().str.upper()
+        if (methods == "UVCLAP").any():
+            return True
+    if matrix_data:
+        blob = " ".join(
+            str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
+        )
+        if "uvclap" in blob.lower():
+            return True
+    return False
+
+
+def _setup_uvclap_umi_stage(
+    output_dir: Path,
+    annotation,
+    srr_map_df,
+    fastq_dir: Path | None,
+) -> tuple[Any, str, str]:
+    """Write umi_extract.sh (+ merge_pe.sh) and retarget annotation to PE UMI FASTQs."""
+    srr_ids = list(
+        dict.fromkeys(
+            srr_from_annotation_file(str(row.get("File", "")))
+            for _, row in annotation.iterrows()
+            if srr_from_annotation_file(str(row.get("File", "")))
+        )
+    )
+    if not srr_ids:
+        return annotation, "skipped — no SRR in annotation", ""
+
+    merge_stage = ""
+    merges = gsm_merge_plan_from_srr_map(srr_map_df)
+    if fastq_dir and merges:
+        merge_script = write_merge_pe_script(output_dir, merges, fastq_dir=fastq_dir)
+        if merge_script:
+            merge_stage = f"merge_pe.sh ({len(merges)} GSM(s))"
+
+    if not fastq_dir:
+        ann = apply_uvclap_umi_filenames(annotation)
+        return ann, "planned — pass --fastq-dir to write umi_extract.sh", merge_stage
+
+    pairs = collect_uvclap_umi_pairs(fastq_dir, srr_ids)
+    if not pairs:
+        pairs = planned_uvclap_umi_pairs(fastq_dir, srr_ids)
+    script = write_uvclap_umi_extract_script(output_dir, pairs)
+    if not script:
+        return apply_uvclap_umi_filenames(annotation), "skipped — could not write umi_extract.sh", merge_stage
+    return apply_uvclap_umi_filenames(annotation), f"umi_extract.sh ({len(pairs)} library/ies)", merge_stage
+
+
+def _setup_flash_umi_stage(
+    output_dir: Path,
+    annotation,
+    fastq_dir: Path | None,
+    *,
+    prefer_cleaned_r1: bool = False,
+) -> tuple[Any, str]:
+    """Write umi_extract.sh and retarget annotation to SE *_1.umi.fastq.gz uploads.
+
+    UMI extract runs on raw (uncleaned) PE mates so read names stay paired; header
+    clean runs on *_1.umi.fastq.gz after extraction when needed.
+    """
+    srr_ids = list(
+        dict.fromkeys(
+            srr_from_annotation_file(str(row.get("File", "")))
+            for _, row in annotation.iterrows()
+            if srr_from_annotation_file(str(row.get("File", "")))
+        )
+    )
+    if not srr_ids:
+        return annotation, "skipped — no SRR in annotation"
+
+    if not fastq_dir:
+        return apply_umi_extracted_filenames(annotation), "planned — pass --fastq-dir to write umi_extract.sh"
+
+    pairs = collect_flash_umi_pairs(fastq_dir, srr_ids, prefer_cleaned_r1=prefer_cleaned_r1)
+    if not pairs:
+        pairs = planned_flash_umi_pairs(fastq_dir, srr_ids, prefer_cleaned_r1=prefer_cleaned_r1)
+    script = write_umi_extract_script(output_dir, pairs)
+    if not script:
+        return apply_umi_extracted_filenames(annotation), "skipped — could not write umi_extract.sh"
+    return apply_umi_extracted_filenames(annotation), f"umi_extract.sh ({len(pairs)} library/ies)"
+
+
+def _resolve_fastq_paths_from_annotation(
+    fastq_dir: Path | None,
+    annotation,
+) -> list[tuple[str, Path | None]]:
+    """Resolve on-disk FASTQs using annotation File basename, then SRR fallback."""
+    from lib.fastq_headers import find_fastq_for_srr
+
+    pairs: list[tuple[str, Path | None]] = []
+    for _, row in annotation.iterrows():
+        fname = str(row.get("File", "")).strip()
+        srr = srr_from_annotation_file(fname)
+        if not srr:
+            continue
+        if fastq_dir and fname:
+            candidate = fastq_dir / Path(fname).name
+            if candidate.is_file():
+                pairs.append((srr, candidate))
+                continue
+        pairs.append((srr, find_fastq_for_srr(fastq_dir, srr) if fastq_dir else None))
+    return pairs
+
+
 def _run_header_inspection(
     output_dir: Path,
     annotation,
@@ -287,6 +449,7 @@ def _run_header_inspection(
     fastq_dir: Path | None,
     reads_per_file: int,
     removespace_script: Path | None = None,
+    skip_header_clean: bool = False,
 ) -> tuple[dict[str, str], dict[str, Any], str, str]:
     """Write headers.txt, pipeline_params.json, optional clean_fastq.sh; return params, inspection, statuses."""
     header_stage = ""
@@ -298,7 +461,7 @@ def _run_header_inspection(
             srr_ids.append(match.group(1))
     srr_ids = list(dict.fromkeys(srr_ids))
 
-    srr_paths = resolve_srr_fastq_paths(fastq_dir, srr_ids)
+    srr_paths = _resolve_fastq_paths_from_annotation(fastq_dir, annotation)
     resolved_paths = [path for _srr, path in srr_paths if path and path.exists()]
     inspection = sample_headers_from_fastq_dir(
         [(srr, path) for srr, path in srr_paths if path],
@@ -331,6 +494,12 @@ def _run_header_inspection(
     inspection_dict = inspection_to_dict(inspection) if inspection.sample_headers else {}
 
     (output_dir / "pipeline_params.json").write_text(json.dumps(params, indent=2))
+    write_analysis_params_hook(
+        output_dir,
+        params,
+        inspection if inspection.sample_headers else None,
+        headers_path=headers_path,
+    )
 
     if inspection.sample_headers:
         header_stage = (
@@ -341,7 +510,7 @@ def _run_header_inspection(
     else:
         header_stage = "skipped — no FASTQ files (prefetch first, then --fastq-dir)"
 
-    if resolved_paths and headers_need_cleaning(inspection.sample_headers):
+    if not skip_header_clean and resolved_paths and headers_need_cleaning(inspection.sample_headers):
         rs_script = resolve_removespace_script(removespace_script)
         if rs_script:
             write_clean_fastq_script(output_dir, resolved_paths, removespace_script=rs_script)
@@ -377,9 +546,11 @@ def _write_flow_delivery_scripts(
 
     base_dir = fastq_dir.resolve() if fastq_dir else output_dir
     row_count = len(annotation)
-    xlsx = output_dir / "annotation.xlsx"
-    if not xlsx.exists():
-        upload_stage = "skipped — annotation.xlsx missing"
+    csv_path = output_dir / "annotation.csv"
+    xlsx_path = output_dir / "annotation.xlsx"
+    annotation_path = csv_path if csv_path.exists() else xlsx_path
+    if not annotation_path.exists():
+        upload_stage = "skipped — annotation.csv missing"
         analysis_stage = upload_stage
         return upload_stage, analysis_stage
 
@@ -390,13 +561,13 @@ def _write_flow_delivery_scripts(
         write_upload_script(
             output_dir,
             upload_script=up,
-            annotation_xlsx=xlsx,
+            annotation_path=annotation_path,
             project_id=flow_project_id,
             base_dir=base_dir,
             row_count=row_count,
             dry_run=upload_dry_run,
         )
-        upload_stage = f"upload.sh ({row_count} row(s); dry_run={upload_dry_run})"
+        upload_stage = f"upload.sh ({row_count} row(s); {annotation_path.name}; dry_run={upload_dry_run})"
     else:
         upload_stage = "skipped — uploadsample_flowbio_v6.py not found"
 
@@ -430,7 +601,7 @@ def run_pipeline(
     scan_pubmed: bool = False,
     pubmed_query: str | None = None,
     pubmed_cache: Path | None = None,
-    max_files: int = 2,
+    max_files: int | None = None,
     write_prefetch: bool = False,
     paper_texts: list[tuple[str, Path]] | None = None,
     geo_cache_dir: Path | None = None,
@@ -454,6 +625,7 @@ def run_pipeline(
         "flow-annotate",
         "fastq-headers",
         "header-clean",
+        "flash-umi-extract",
         "annotation-xlsx",
         "flow-upload",
         "flow-analysis",
@@ -513,6 +685,27 @@ def run_pipeline(
     annotation = build_annotation_table(matrix_data, srr_map, barcode_by_gsm)
     stages["flow_annotate"] = f"{len(annotation)} rows; Organism ∈ {{Hs, Mm, Gg}}"
 
+    flash_study = _annotation_is_flash(annotation, matrix_data)
+    uvclap_study = _annotation_is_uvclap(annotation, matrix_data)
+    if flash_study:
+        annotation = apply_umi_extracted_filenames(annotation)
+        stale_clean = output_dir / "clean_fastq.sh"
+        if stale_clean.exists():
+            stale_clean.unlink()
+    elif uvclap_study:
+        annotation = apply_uvclap_umi_filenames(annotation)
+        stale_clean = output_dir / "clean_fastq.sh"
+        if stale_clean.exists():
+            stale_clean.unlink()
+
+    umi_on_disk = False
+    if fastq_dir and flash_study:
+        umi_on_disk = all(
+            (fastq_dir / umi_output_basename(srr_from_annotation_file(str(row.get("File", ""))))).is_file()
+            for _, row in annotation.iterrows()
+            if srr_from_annotation_file(str(row.get("File", "")))
+        )
+
     pipeline_params, header_inspection, header_stage, clean_stage = _run_header_inspection(
         output_dir,
         annotation,
@@ -521,15 +714,62 @@ def run_pipeline(
         fastq_dir=fastq_dir,
         reads_per_file=reads_per_file,
         removespace_script=removespace_script,
+        skip_header_clean=flash_study or uvclap_study,
     )
     stages["fastq_headers"] = header_stage
+    if flash_study:
+        clean_stage = "skipped (FLASH — keep umi_tools headers with spaces for umi_dedup)"
+    elif uvclap_study:
+        clean_stage = "skipped (uvCLAP — keep umi_tools PE headers for umi_dedup)"
     stages["header_clean"] = clean_stage
     if pipeline_params:
         stages["pipeline_params"] = f"move_umi_to_header={pipeline_params.get('move_umi_to_header')}"
 
-    use_cleaned_names = (output_dir / "clean_fastq.sh").exists()
+    use_cleaned_names = (output_dir / "clean_fastq.sh").exists() and not flash_study and not uvclap_study
     if use_cleaned_names:
         annotation, _ = _apply_cleaned_filenames(annotation)
+
+    flash_umi_stage = ""
+    uvclap_umi_stage = ""
+    uvclap_merge_stage = ""
+    if flash_study:
+        _, flash_umi_stage = _setup_flash_umi_stage(
+            output_dir,
+            annotation,
+            fastq_dir,
+            prefer_cleaned_r1=False,
+        )
+        pipeline_params = derive_flash_post_umi_params()
+        stages["flash_umi_extract"] = flash_umi_stage
+        (output_dir / "pipeline_params.json").write_text(json.dumps(pipeline_params, indent=2))
+        write_analysis_params_hook(
+            output_dir,
+            pipeline_params,
+            None,
+            headers_path=output_dir / "headers.txt",
+        )
+        stages["pipeline_params"] = "move_umi_to_header=false (FLASH post umi_tools extract)"
+    elif uvclap_study:
+        _, uvclap_umi_stage, uvclap_merge_stage = _setup_uvclap_umi_stage(
+            output_dir,
+            annotation,
+            srr_map,
+            fastq_dir,
+        )
+        pipeline_params = derive_uvclap_post_umi_params()
+        stages["uvclap_umi_extract"] = uvclap_umi_stage
+        if uvclap_merge_stage:
+            stages["uvclap_merge_pe"] = uvclap_merge_stage
+        (output_dir / "pipeline_params.json").write_text(json.dumps(pipeline_params, indent=2))
+        write_analysis_params_hook(
+            output_dir,
+            pipeline_params,
+            None,
+            headers_path=output_dir / "headers.txt",
+        )
+        stages["pipeline_params"] = (
+            "move_umi_to_header=false; trimgalore_params with 3' clip R1=10 R2=5"
+        )
 
     if not flagged and pmid:
         flagged = [
@@ -584,7 +824,10 @@ def run_pipeline(
 
     if write_prefetch:
         write_prefetch_script(output_dir, annotation["File"].tolist(), max_files)
-        stages["prefetch"] = f"prefetch.sh (max {max_files} SRR)"
+        if max_files is not None and max_files > 0:
+            stages["prefetch"] = f"prefetch.sh (max {max_files} SRR)"
+        else:
+            stages["prefetch"] = f"prefetch.sh ({len(annotation)} SRR)"
         result.chain.append("prefetch")
 
     return result, False
@@ -609,7 +852,7 @@ def _build_pipeline_kwargs(
         "scan_pubmed": scan,
         "pubmed_query": args.pubmed_query,
         "pubmed_cache": pubmed_cache,
-        "max_files": args.max_files,
+        "max_files": args.max_files if args.max_files > 0 else None,
         "write_prefetch": args.download or args.run_automated,
         "paper_texts": paper_texts,
         "geo_cache_dir": geo_cache_dir,
@@ -644,6 +887,38 @@ def run(args: argparse.Namespace) -> int:
         paper_texts = [(f"paper:{GSE105082_PAPER.name}", GSE105082_PAPER)]
         geo_cache_dir = GSE105082_GEO_CACHE
         flow_project_id = args.flow_project_id or GSE105082_FLOW_PROJECT_ID
+    elif args.case == "xl1_dhx9":
+        matrix_path = XL1_DHX9_MATRIX
+        srr_map_path = XL1_DHX9_SRR_MAP
+        pubmed_cache = None
+        scan = False
+        paper_texts = [(f"paper:{XL1_DHX9_PAPER.name}", XL1_DHX9_PAPER)]
+        geo_cache_dir = None
+        flow_project_id = args.flow_project_id or XL1_DHX9_FLOW_PROJECT_ID
+    elif args.case == "xl9_dhx9":
+        matrix_path = XL9_DHX9_MATRIX
+        srr_map_path = XL9_DHX9_SRR_MAP
+        pubmed_cache = None
+        scan = False
+        paper_texts = [(f"paper:{XL9_DHX9_PAPER.name}", XL9_DHX9_PAPER)]
+        geo_cache_dir = None
+        flow_project_id = args.flow_project_id or XL9_DHX9_FLOW_PROJECT_ID
+    elif args.case == "xl8_dhx9":
+        matrix_path = XL8_DHX9_MATRIX
+        srr_map_path = XL8_DHX9_SRR_MAP
+        pubmed_cache = None
+        scan = False
+        paper_texts = [(f"paper:{XL8_DHX9_PAPER.name}", XL8_DHX9_PAPER)]
+        geo_cache_dir = None
+        flow_project_id = args.flow_project_id or XL8_DHX9_FLOW_PROJECT_ID
+    elif args.case == "xl2_hnrnpc":
+        matrix_path = XL2_HNRNPC_MATRIX
+        srr_map_path = XL2_HNRNPC_SRR_MAP
+        pubmed_cache = None
+        scan = False
+        paper_texts = [(f"paper:{XL2_HNRNPC_PAPER.name}", XL2_HNRNPC_PAPER)]
+        geo_cache_dir = None
+        flow_project_id = args.flow_project_id or XL2_HNRNPC_FLOW_PROJECT_ID
     elif args.demo:
         matrix_path = DEMO_MATRIX
         srr_map_path = DEMO_SRR_MAP
@@ -789,8 +1064,8 @@ def main() -> int:
     parser.add_argument("--demo", action="store_true", help="GSE118265 FLASH demo")
     parser.add_argument(
         "--case",
-        choices=["hnrnph", "gse105082"],
-        help="Preset: hnrnph (GSE303135) or gse105082 (DHX9 iCLIP GSE105082)",
+        choices=["hnrnph", "gse105082", "xl1_dhx9", "xl2_hnrnpc", "xl8_dhx9", "xl9_dhx9"],
+        help="Preset: hnrnph (GSE303135), gse105082 (DHX9 iCLIP), xl1_dhx9 (GSE89276), xl2_hnrnpc (GSE94781), xl8_dhx9 (GSE89751), xl9_dhx9 (GSE89598) FLASH",
     )
     parser.add_argument("--geo-matrix", type=Path)
     parser.add_argument("--srr-map", type=Path)
@@ -812,7 +1087,12 @@ def main() -> int:
     parser.add_argument("--scan-pubmed", action="store_true")
     parser.add_argument("--pubmed-query")
     parser.add_argument("--download", action="store_true")
-    parser.add_argument("--max-files", type=int, default=2)
+    parser.add_argument(
+        "--max-files",
+        type=int,
+        default=0,
+        help="Cap prefetch SRR count (0 = all samples in series; default)",
+    )
     parser.add_argument(
         "--fastq-dir",
         type=Path,

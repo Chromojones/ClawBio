@@ -28,7 +28,7 @@ After flow-compile produces `annotation.csv`, `annotation.xlsx`, `headers.txt`, 
 
 ```bash
 python flowAPIscripts/upload/uploadsample_flowbio_v6.py \
-  --input-xlsx annotation.xlsx \
+  --input annotation.csv \
   --rows 1-2 \
   --project-id 997999200849251656 \
   --base-dir /path/to/fastq_files \

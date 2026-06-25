@@ -29,7 +29,7 @@ def write_credentials_env(output_dir: Path, username: str, password: str) -> Pat
     path = output_dir / ".flow_credentials.env"
     output_dir.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        f"FLOWBIO_USERNAME={username!r}\nFLOWBIO_PASSWORD={password!r}\n",
+        f"export FLOWBIO_USERNAME={username!r}\nexport FLOWBIO_PASSWORD={password!r}\n",
         encoding="utf-8",
     )
     path.chmod(stat.S_IRUSR | stat.S_IWUSR)

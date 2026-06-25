@@ -117,7 +117,7 @@ credentials → pubmed-summariser → geo-matrix → barcode-extract → flow-an
 | 5 | `lib/fastq_headers` + `lib/header_clean` | `headers.txt`, `clean_fastq.sh` (removespace) |
 | 6 | `lib/annotation_xlsx` | `annotation.xlsx` for upload v6 |
 | 7 | `prefetch.sh` | SRA download (polled every 4 min with `--run-automated`) |
-| 8 | `upload_live.sh` | `uploadsample_flowbio_v6.py` (polled every 4 min) |
+| 8 | `upload_live.sh` | `uploadsample_flowbio_v6.py` via `annotation.csv` (polled every 4 min) |
 | 9 | `run_analysis.sh` | `flowrunanalysis_flowbio.py` + `pipeline_params.json` |
 
 **End-to-end demo:** `DEMO.md` (GSE105082). **Diagram:** `WORKFLOW.md`.
@@ -150,7 +150,7 @@ This skill **orchestrates** CLIP literature → GEO/SRA audit → barcode-resolv
 
 ## Workflow
 
-**Manual gates only:** (1) confirm barcodes, (2) create Flow project. See `DEMO.md`.
+**Agent hooks:** (1) barcode review with sources (`CONFIRM_BARCODES.md`), (2) Flow project ID, (3) analysis params (`CONFIRM_ANALYSIS_PARAMS.md` → `analysis_params.confirmed.json`). See `DEMO.md`.
 
 1. **Credentials** (`--run-automated` / `--execute-upload`): prompt → `.flow_credentials.env`
 2. **PubMed alert** (`--scan-pubmed`): flagged papers; demo uses cache unless `--scan-pubmed`
@@ -200,6 +200,8 @@ Monitor upload: `tail -f /tmp/gse105082-demo/logs/upload.log`
 
 ## Gotchas
 
+- **Flow sample names must not contain spaces.** Sanitize `!Sample_source_name_ch1` and other tokens (`ATCC Cell Lines` → `ATCC_Cell_Lines`). Invalid names break CLIP samplesheets at execution time.
+- **Replicate labels come from GEO titles**, not guesswork. `iCLIP-DHX9-1` / `iCLIP-DHX9-2` map to `Rep1` / `Rep2`. A title ending in `-2` must not become `Rep1` (GSE105082 bug fixed in `lib/sample_naming.py`).
 - **Never guess barcodes.** If protocol text and tags disagree, leave `5' Barcode Sequence` empty
   and list the conflict in `barcode_audit.json`.
 - **GEO matrix column order** must follow `!Sample_geo_accession`; do not assume sample order

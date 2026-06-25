@@ -21,8 +21,8 @@ def test_sample_name_filter():
 
 
 def test_write_scripts(tmp_path):
-    ann = tmp_path / "annotation.xlsx"
-    pd.DataFrame({"File": ["SRR1.fastq.gz"], "Sample Name": ["test"], "Experimental Method": ["iCLIP"]}).to_excel(
+    ann = tmp_path / "annotation.csv"
+    pd.DataFrame({"File": ["SRR1.fastq.gz"], "Sample Name": ["test"], "Experimental Method": ["iCLIP"]}).to_csv(
         ann, index=False
     )
     up = Path("/home/mikej10/advbfx/flowAPIscripts/upload/uploadsample_flowbio_v6.py")
@@ -32,7 +32,7 @@ def test_write_scripts(tmp_path):
     write_upload_script(
         tmp_path,
         upload_script=up,
-        annotation_xlsx=ann,
+        annotation_path=ann,
         project_id="123",
         base_dir=tmp_path,
         row_count=1,
@@ -46,5 +46,6 @@ def test_write_scripts(tmp_path):
         experimental_method="iCLIP",
     )
     assert (tmp_path / "upload.sh").exists()
+    assert '--input "$ANNOTATION"' in (tmp_path / "upload.sh").read_text()
     assert (tmp_path / "run_analysis.sh").exists()
     assert "--params-json" in (tmp_path / "run_analysis.sh").read_text()

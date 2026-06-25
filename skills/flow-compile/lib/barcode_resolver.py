@@ -6,6 +6,8 @@ import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from lib.barcode_evidence import normalize_flow_barcode
+
 TAG_PATTERN = re.compile(r"3'\s*tag:\s*([ACGTNRY]+)", re.I)
 FIVE_TAG_PATTERN = re.compile(r"5'\s*tag:\s*([ACGTNRY]+)", re.I)
 ADAPTER_FLASH = re.compile(r"NNBBN[A-Z]+NN", re.I)
@@ -74,7 +76,7 @@ def resolve_flash(samples: dict[str, dict[str, Any]]) -> list[BarcodeResolution]
         resolutions.append(
             BarcodeResolution(
                 gsm=gsm,
-                five_prime=five_prime,
+                five_prime=normalize_flow_barcode(five_prime),
                 three_prime=three_tag,
                 protocol="flash",
                 confidence=confidence,
@@ -110,7 +112,7 @@ def resolve_iclip2(samples: dict[str, dict[str, Any]]) -> list[BarcodeResolution
         resolutions.append(
             BarcodeResolution(
                 gsm=gsm,
-                five_prime=five_prime,
+                five_prime=normalize_flow_barcode(five_prime),
                 three_prime=extract_three_prime_tag(characteristics),
                 protocol="iclip2",
                 confidence=confidence,

@@ -71,6 +71,14 @@ def write_run_workflow_script(
         "  FASTQ_DIR=\"$FASTQ_DIR\" run_step prefetch \"$OUTPUT/prefetch.sh\" \"$OUTPUT/logs/prefetch.log\"",
         "fi",
         "",
+        "eval \"$COMPILE_CMD --fastq-dir $FASTQ_DIR\"",
+        "",
+        "if [[ -f \"$OUTPUT/umi_extract.sh\" ]]; then",
+        "  run_step umi_extract \"$OUTPUT/umi_extract.sh\" \"$OUTPUT/logs/umi_extract.log\"",
+        "fi",
+        "",
+        "eval \"$COMPILE_CMD --fastq-dir $FASTQ_DIR\"",
+        "",
         "if [[ -f \"$OUTPUT/clean_fastq.sh\" ]]; then",
         "  run_step clean \"$OUTPUT/clean_fastq.sh\" \"$OUTPUT/logs/clean.log\"",
         "fi",
@@ -131,6 +139,25 @@ def run_automated_workflow(
         if rc != 0:
             return rc
 
+    # Refresh annotation / scripts with real FASTQs (writes clean_fastq.sh when needed)
+    compile_kwargs = {**compile_kwargs, "fastq_dir": fastq_dir}
+    result, paused = compile_fn(**compile_kwargs)
+    if paused or result is None:
+        return 3
+
+    if (output_dir / "umi_extract.sh").exists():
+        rc = run_shell_step(
+            "FLASH UMI extract (umi_tools)",
+            output_dir / "umi_extract.sh",
+            logs / "umi_extract.log",
+            poll_interval=poll_interval,
+        )
+        if rc != 0:
+            return rc
+        result, paused = compile_fn(**compile_kwargs)
+        if paused or result is None:
+            return 3
+
     if (output_dir / "clean_fastq.sh").exists():
         rc = run_shell_step(
             "header clean (removespace)",
@@ -140,12 +167,9 @@ def run_automated_workflow(
         )
         if rc != 0:
             return rc
-
-    # Refresh annotation / scripts with real FASTQs
-    compile_kwargs = {**compile_kwargs, "fastq_dir": fastq_dir}
-    result, paused = compile_fn(**compile_kwargs)
-    if paused or result is None:
-        return 3
+        result, paused = compile_fn(**compile_kwargs)
+        if paused or result is None:
+            return 3
 
     if not skip_upload and (output_dir / "upload_live.sh").exists():
         rc = run_shell_step(
@@ -161,8 +185,11 @@ def run_automated_workflow(
         if rc != 0:
             return rc
         upload_log = (logs / "upload.log").read_text(errors="replace")
-        if "successful=0" in upload_log or "failed=" in upload_log and "successful=2" not in upload_log:
-            print("Upload may have failed — check logs/upload.log", file=sys.stderr)
+        if "successful=0" in upload_log:
+            print("Upload failed — check logs/upload.log", file=sys.stderr)
+            return 1
+        if "failed=" in upload_log and "failed=0" not in upload_log:
+            print("Upload had failures — check logs/upload.log", file=sys.stderr)
             return 1
 
     if not skip_analysis and (output_dir / "run_analysis.sh").exists():

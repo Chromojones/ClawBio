@@ -35,8 +35,8 @@ class TestBarcodeResolution:
         data = parse_geo_matrix(DEMO_MATRIX)
         resolutions = resolve_barcodes(data["samples"], protocol="flash")
         by_gsm = {r.gsm: r for r in resolutions}
-        assert by_gsm["GSM3323898"].five_prime == "NNBBNGTGGAANN"
-        assert by_gsm["GSM3323900"].five_prime == "NNBBNTGGAACNN"
+        assert by_gsm["GSM3323898"].five_prime == "NNNNNGTGGAANN"
+        assert by_gsm["GSM3323900"].five_prime == "NNNNNTGGAACNN"
 
 
 class TestOrganismInPipeline:
@@ -102,6 +102,8 @@ class TestGSE105082Case:
         proposals = json.loads((out / "barcode_proposals.json").read_text())
         assert proposals["status"] == "pending_confirmation"
         assert any(p["five_prime"] == "NNNCGGANNN" for p in proposals["proposals"])
+        by_gsm = {p["gsm"]: p for p in proposals["proposals"]}
+        assert by_gsm["GSM2817678"]["five_prime"] == "NNNGGCANNN"
 
     def test_headers_and_params_with_fastq(self, tmp_path):
         fq_dir = tmp_path / "fastq"
@@ -161,3 +163,9 @@ class TestGSE105082Case:
         assert (out / "headers.txt").exists()
         assert (out / "clean_fastq.sh").exists()
         assert result.flow_project_id == "997999200849251656"
+        import pandas as pd
+
+        df = pd.read_csv(out / "annotation.csv")
+        names = dict(zip(df["GEO ID"], df["Sample Name"]))
+        assert names["GSM2817677"] == "DHX9_Hs_ATCC_Cell_Lines_Rep1_SRR6181530"
+        assert names["GSM2817678"] == "DHX9_Hs_ATCC_Cell_Lines_Rep2_SRR6181534"

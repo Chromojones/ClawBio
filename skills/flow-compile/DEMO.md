@@ -6,10 +6,12 @@ Flow project: https://app.flow.bio/projects/997999200849251656/
 Bundled demo FASTQ snippet: `demo/SRR6181530.fastq.gz` (5 reads — for header/clean tests only).  
 Full runs: prefetch SRR6181530 + SRR6181534 (~900 MB each).
 
-## Manual gates (only two)
+## Manual gates
 
 1. **Confirm barcodes** — edit `barcode_proposals.json` → `status: confirmed`
 2. **Create Flow project** — pass `--flow-project-id` (preset `997999200849251656` for `--case gse105082`)
+3. **Confirm analysis params** — review `pipeline_params.json`, then create
+   `analysis_params.confirmed.json` (copy must match current params)
 
 ---
 
@@ -57,6 +59,13 @@ uv run python skills/flow-compile/flow_compile.py \
 | Re-compile | (Python) | stdout |
 | Upload | `upload_live.sh` | `logs/upload.log` |
 | Analysis | `run_analysis.sh` | `logs/analysis.log` |
+
+Before `run_analysis.sh` executes, it enforces a manual params check:
+
+```bash
+cp /tmp/gse105082-demo/pipeline_params.json \
+   /tmp/gse105082-demo/analysis_params.confirmed.json
+```
 
 ---
 

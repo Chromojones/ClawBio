@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from lib.barcode_evidence import extract_evidence_from_text, merge_proposal_from_evidence
+from lib.barcode_evidence import extract_evidence_from_text, merge_proposal_from_evidence, normalize_flow_barcode
 from lib.barcode_extract import extract_barcodes_for_gsms, write_proposal_bundle
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
@@ -36,3 +36,13 @@ class TestGSM9118554Extraction:
         assert path.exists()
         assert (tmp_path / "CONFIRM_BARCODES.md").exists()
         assert all(p.status == "pending_confirmation" for p in proposals)
+
+
+class TestNormalizeFlowBarcode:
+    def test_ryb_to_n(self):
+        assert normalize_flow_barcode("NNRRNTTTTTTNN") == "NNNNNTTTTTTNN"
+        assert normalize_flow_barcode("NNYYNTTTTTTNN") == "NNNNNTTTTTTNN"
+        assert normalize_flow_barcode("NNBBNGTGGAANN") == "NNNNNGTGGAANN"
+
+    def test_acgtn_unchanged(self):
+        assert normalize_flow_barcode("NNNCGGANNN") == "NNNCGGANNN"
