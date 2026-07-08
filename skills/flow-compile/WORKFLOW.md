@@ -62,7 +62,7 @@ The agent must make a **purposeful effort** to find barcodes in metadata and lit
    → barcode proposals → HARD STOP #1 (exit 3)
 2. User confirms barcodes → re-run with --accept-proposals
    → annotation.csv (flow_annotate + sample_naming + protein_target_annotation + organism)
-3. Download: prefetch.sh (SRA) OR wget_fastq.sh (ENA FTP) — verify gzip -t
+3. Download: prefetch.sh (SRA, generated) OR manual `wget -c` per URI (ENA FTP) — verify gzip -t
 4. Re-compile with --fastq-dir DIR
    → headers.txt + pipeline_params.json
    → optional branch: umi_extract.sh (FLASH / uvCLAP) OR clean_fastq.sh (removespace)

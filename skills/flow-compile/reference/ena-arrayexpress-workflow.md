@@ -54,15 +54,17 @@ flow-compile consumes a GEO-style series matrix + `srr_map.tsv`. For ENA, map:
 ## 1. Download FASTQs from ENA FTP
 
 ENA serves gzipped FASTQs directly — no `prefetch`/`fasterq-dump` needed. Use the
-`Comment[FASTQ_URI]` values:
+`Comment[FASTQ_URI]` values with a guarded `wget -c` (resumes partial downloads):
 
 ```bash
 wget -c -O ERR039788.fastq.gz \
   "ftp://ftp.sra.ebi.ac.uk/vol1/fastq/ERR039/ERR039788/ERR039788.fastq.gz"
 ```
 
-A generated `wget_fastq.sh` (one guarded `wget -c` per run) is the ENA analogue
-of `prefetch.sh`. `wget -c` resumes partial downloads.
+**This is a manual step** — `flow_compile.py` does *not* emit a `wget_fastq.sh`
+(the SRA `prefetch.sh` generator has no ENA equivalent). The agent writes one
+`wget -c` per `Comment[FASTQ_URI]` (a short loop, or one line per run) and runs
+it before re-compiling with `--fastq-dir`.
 
 ### Always verify integrity before upload
 
@@ -234,7 +236,7 @@ Resources table, use the pull → propose → apply → push chain in
 | Metadata | series matrix + SraRunTable | full SDRF (`sdrf?full=true`) |
 | Sample key | `GSM*` | `ERS*` |
 | Run id | `SRR*` | `ERR*` |
-| Download | `prefetch.sh` (SRA) | `wget_fastq.sh` (ENA FASTQ FTP) |
+| Download | `prefetch.sh` (SRA, generated) | manual `wget -c` per `Comment[FASTQ_URI]` (not generated) |
 | Barcode source | GEO `data_processing` / paper methods | `Comment[SUBMITTED_FILE_NAME]` |
 | Integrity | (SRA validated) | **`gzip -t` every file** |
 | Everything else | identical | identical |

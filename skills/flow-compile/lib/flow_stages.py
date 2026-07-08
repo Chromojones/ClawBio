@@ -43,7 +43,6 @@ def write_upload_script(
     base_dir: Path,
     row_count: int,
     dry_run: bool = True,
-    resume_rows: str = "",
 ) -> Path:
     script = output_dir / "upload.sh"
     rows = f"1-{row_count}" if row_count > 1 else "1"
@@ -69,20 +68,11 @@ def write_upload_script(
     script.write_text("\n".join(lines) + "\n")
     script.chmod(0o755)
 
+    # upload_live.sh: same command without --dry-run (used by --execute-upload / run_workflow.sh)
     live_lines = lines[:-1] + ['  --base-dir "$BASE_DIR"']
     live = output_dir / "upload_live.sh"
     live.write_text("\n".join(live_lines) + "\n")
     live.chmod(0o755)
-
-    if resume_rows:
-        resume_lines = live_lines.copy()
-        for i, line in enumerate(resume_lines):
-            if "--rows" in line:
-                resume_lines[i] = f"  --rows {resume_rows} \\"
-                break
-        resume = output_dir / "upload_remaining.sh"
-        resume.write_text("\n".join(resume_lines) + "\n")
-        resume.chmod(0o755)
 
     return script
 
