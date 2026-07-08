@@ -25,8 +25,8 @@ def test_write_scripts(tmp_path):
     pd.DataFrame({"File": ["SRR1.fastq.gz"], "Sample Name": ["test"], "Experimental Method": ["iCLIP"]}).to_csv(
         ann, index=False
     )
-    up = Path("/home/mikej10/advbfx/flowAPIscripts/upload/uploadsample_flowbio_v6.py")
-    an = Path("/home/mikej10/advbfx/flowAPIscripts/analysis/flowrunanalysis_flowbio.py")
+    up = SKILL_DIR / "lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py"
+    an = SKILL_DIR / "lib/vendor/flow_api/analysis/flowrunanalysis_flowbio.py"
     if not up.is_file() or not an.is_file():
         return
     write_upload_script(

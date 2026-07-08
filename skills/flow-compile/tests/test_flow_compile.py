@@ -1,4 +1,4 @@
-"""Tests for flow-compile orchestrator."""
+"""Tests for flow-compile orchestrator (GSE105082 / GSM2817677 demo)."""
 
 import json
 import sys
@@ -9,82 +9,31 @@ import pytest
 SKILL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL_DIR))
 
-from flow_compile import (
-    DEMO_MATRIX,
-    DEMO_PUBMED_CACHE,
-    DEMO_SRR_MAP,
-    GSE105082_MATRIX,
-    GSE105082_SRR_MAP,
-    EXIT_PAUSED,
-    run_pipeline,
-)
-from lib.barcode_resolver import resolve_barcodes
-from lib.geo_matrix import parse_geo_matrix
+from flow_compile import GSE105082_MATRIX, GSE105082_SRR_MAP, run_pipeline
+from lib.geo_matrix import parse_geo_matrix, scan_barcode_patterns, scan_replicate_barcode_cores
 from lib.organism import normalize_organism
 
 
 class TestGeoMatrix:
-    def test_parse_demo_matrix(self):
-        data = parse_geo_matrix(DEMO_MATRIX)
-        assert data["series"]["geo_accession"] == "GSE118265"
-        assert len(data["samples"]) == 2
+    def test_parse_gse105082_full_matrix(self):
+        data = parse_geo_matrix(GSE105082_MATRIX)
+        assert data["series"]["geo_accession"] == "GSE105082"
+        assert "GSM2817677" in data["samples"]
+        assert len(data["samples"]) == 24
 
+    def test_scan_barcode_patterns(self):
+        assert "NNNCGGANNN" in scan_barcode_patterns("Barcodes (NNNCGGANNN and NNNGGCANNN)")
+        assert scan_barcode_patterns("Homo sapiens HeLa") == []
 
-class TestBarcodeResolution:
-    def test_flash_barcodes(self):
-        data = parse_geo_matrix(DEMO_MATRIX)
-        resolutions = resolve_barcodes(data["samples"], protocol="flash")
-        by_gsm = {r.gsm: r for r in resolutions}
-        assert by_gsm["GSM3323898"].five_prime == "NNNNNGTGGAANN"
-        assert by_gsm["GSM3323900"].five_prime == "NNNNNTGGAACNN"
+    def test_scan_replicate_barcode_cores(self):
+        url = "GSM2817678_rsem_GGCA.trimmed.nodup.no10.fastq.transcript.sort.nodup.bw"
+        assert scan_replicate_barcode_cores(url) == ["GGCA"]
+        assert scan_replicate_barcode_cores("no core here") == []
 
-
-class TestOrganismInPipeline:
-    def test_demo_organism_codes_only(self, tmp_path):
-        out = tmp_path / "demo"
-        result, _paused = run_pipeline(out, DEMO_MATRIX, DEMO_SRR_MAP, pubmed_cache=DEMO_PUBMED_CACHE)
-        import pandas as pd
-
-        df = pd.read_csv(out / "annotation.csv")
-        assert set(df["Organism"].unique()) <= {"Hs"}
-        assert normalize_organism("Homo sapiens") == "Hs"
-
-
-class TestDemoPipeline:
-    def test_demo_runs_without_error(self, tmp_path):
-        out = tmp_path / "demo"
-        result, paused = run_pipeline(out, DEMO_MATRIX, DEMO_SRR_MAP, pubmed_cache=DEMO_PUBMED_CACHE)
-        assert paused is False
-        assert result is not None
-        assert result.barcodes_resolved == 2
-        assert "pubmed-summariser" in result.chain
-        assert (out / "annotation.csv").exists()
-        assert (out / "annotation.xlsx").exists()
-        assert (out / "report.md").exists()
-
-    def test_report_contains_disclaimer(self, tmp_path):
-        out = tmp_path / "demo"
-        run_pipeline(out, DEMO_MATRIX, DEMO_SRR_MAP, pubmed_cache=DEMO_PUBMED_CACHE)
-        assert "Not a medical device" in (out / "report.md").read_text()
-
-    def test_report_documents_chain(self, tmp_path):
-        out = tmp_path / "demo"
-        run_pipeline(out, DEMO_MATRIX, DEMO_SRR_MAP, pubmed_cache=DEMO_PUBMED_CACHE)
-        report = (out / "report.md").read_text()
-        assert "pubmed-summariser" in report
-        assert "fastq-headers" in report or "Pipeline params" in report
-
-    def test_flagged_papers_from_cache(self, tmp_path):
-        out = tmp_path / "demo"
-        run_pipeline(out, DEMO_MATRIX, DEMO_SRR_MAP, pubmed_cache=DEMO_PUBMED_CACHE)
-        flagged = json.loads((out / "flagged_papers.json").read_text())
-        assert flagged[0]["pmid"] == "31802123"
-
-    def test_prefetch_script(self, tmp_path):
-        out = tmp_path / "demo"
-        run_pipeline(out, DEMO_MATRIX, DEMO_SRR_MAP, pubmed_cache=DEMO_PUBMED_CACHE, write_prefetch=True, max_files=2)
-        script = (out / "prefetch.sh").read_text()
-        assert "prefetch SRR7657599" in script
+    def test_matrix_replicate_cores_gse105082(self):
+        data = parse_geo_matrix(GSE105082_MATRIX)
+        assert data["samples"]["GSM2817677"]["replicate_barcode_cores"] == ["CGGA"]
+        assert data["samples"]["GSM2817678"]["replicate_barcode_cores"] == ["GGCA"]
 
 
 class TestGSE105082Case:
@@ -101,9 +50,9 @@ class TestGSE105082Case:
         assert result is None
         proposals = json.loads((out / "barcode_proposals.json").read_text())
         assert proposals["status"] == "pending_confirmation"
-        assert any(p["five_prime"] == "NNNCGGANNN" for p in proposals["proposals"])
-        by_gsm = {p["gsm"]: p for p in proposals["proposals"]}
-        assert by_gsm["GSM2817678"]["five_prime"] == "NNNGGCANNN"
+        assert proposals["proposals"][0]["gsm"] == "GSM2817677"
+        assert proposals["proposals"][0]["five_prime"] == "NNNCGGANNN"
+        assert (out / "CONFIRM_BARCODES.md").exists()
 
     def test_headers_and_params_with_fastq(self, tmp_path):
         fq_dir = tmp_path / "fastq"
@@ -114,7 +63,6 @@ class TestGSE105082Case:
         import shutil
 
         shutil.copy(demo, fq_dir / "SRR6181530.fastq.gz")
-        shutil.copy(demo, fq_dir / "SRR6181534.fastq.gz")
 
         out = tmp_path / "out"
         proposals_path = tmp_path / "proposals.json"
@@ -126,16 +74,6 @@ class TestGSE105082Case:
                         {
                             "gsm": "GSM2817677",
                             "five_prime": "NNNCGGANNN",
-                            "umi_barcode": "",
-                            "protocol": "generic",
-                            "confidence": "high",
-                            "status": "confirmed",
-                            "evidence": [],
-                            "agent_notes": "test",
-                        },
-                        {
-                            "gsm": "GSM2817678",
-                            "five_prime": "NNNGGCANNN",
                             "umi_barcode": "",
                             "protocol": "generic",
                             "confidence": "high",
@@ -166,6 +104,7 @@ class TestGSE105082Case:
         import pandas as pd
 
         df = pd.read_csv(out / "annotation.csv")
-        names = dict(zip(df["GEO ID"], df["Sample Name"]))
-        assert names["GSM2817677"] == "DHX9_Hs_ATCC_Cell_Lines_Rep1_SRR6181530"
-        assert names["GSM2817678"] == "DHX9_Hs_ATCC_Cell_Lines_Rep2_SRR6181534"
+        assert len(df) == 1
+        assert df.iloc[0]["GEO ID"] == "GSM2817677"
+        assert df.iloc[0]["Sample Name"] == "DHX9_Hs_ATCC_Cell_Lines_Rep1_SRR6181530"
+        assert normalize_organism(df.iloc[0]["Organism"]) == "Hs"

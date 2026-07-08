@@ -62,13 +62,26 @@ metadata:
     packages:
       - pandas>=2.0
       - biopython>=1.80
+      - requests>=2.31
+      - openpyxl>=3.1
+    optional_packages:
+      - flowbio   # Flow.bio client — required only for upload / analysis / metadata-push stages
+    system:
+      - wget      # ENA FASTQ FTP download (ena-arrayexpress-workflow)
+      - pigz      # removespace / header clean
   demo_data:
-    - path: demo_geo_matrix.txt
-      description: Two-sample excerpt from GSE118265 (FLASH/iCLIP) with barcode protocol text.
-    - path: demo_srr_map.tsv
-      description: GSM3323898–GSM3323899 mapped to SRR7657599–SRR7657600 (2 runs, paired-end).
-    - path: demo_alert.json
-      description: Synthetic PubMed alert payload for PMID 31802123.
+    - path: demo/GSE105082_series_matrix.txt
+      description: Full GEO series matrix from NCBI FTP (24 GSMs; demo uses GSM2817677 via srr_map).
+    - path: demo_gse105082_srr_map.tsv
+      description: GSM2817677 → SRR6181530.
+    - path: demo/geo_GSM2817677.txt
+      description: Cached GEO sample page for barcode evidence.
+    - path: demo/paper_PMC6307142_iclip_excerpt.txt
+      description: Methods excerpt with NNNCGGANNN / NNNGGCANNN barcodes.
+    - path: demo/SRR6181530.fastq.gz
+      description: 5-read FASTQ snippet (matches GSM2817677).
+    - path: demo/SRR6181530.cleaned.fastq.gz
+      description: removespace output snippet for header-clean tests.
   endpoints:
     cli: python skills/flow-compile/flow_compile.py --output {output_dir} [options]
   openclaw:
@@ -97,6 +110,32 @@ metadata:
 **Orchestrator skill** — chains specialist stages into a CLIP literature → Flow annotation pipeline.
 The agent dispatches and explains; each stage runs deterministic Python.
 
+## Installation
+
+Clone ClawBio and install the Python environment (Python ≥ 3.11):
+
+```bash
+git clone https://github.com/ClawBio/ClawBio.git
+cd ClawBio
+uv sync          # or: pip install -e .
+```
+
+`flow_compile.py` and the `lib/` compile stages need only `pandas`, `biopython`,
+`requests`, `openpyxl` (all pulled by `uv sync`). The **Flow delivery/metadata
+stages** additionally require:
+
+```bash
+pip install flowbio          # Flow.bio client (not on PyPI resolution — install directly)
+# system tools:
+#   wget  — ENA FASTQ FTP download (reference/ena-arrayexpress-workflow.md)
+#   pigz  — removespace / FASTQ header clean
+```
+
+Set credentials via env (`FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD`) or let the
+credentials stage write `.flow_credentials.env`. Everything the delivery stages
+call is vendored under `lib/vendor/flow_api/`, so a ClawBio-only clone is
+self-contained (no parent advbfx tree required).
+
 ## Skill chain
 
 ```
@@ -120,16 +159,47 @@ credentials → pubmed-summariser → geo-matrix → barcode-extract → flow-an
 | 8 | `upload_live.sh` | `uploadsample_flowbio_v6.py` via `annotation.csv` (polled every 4 min) |
 | 9 | `run_analysis.sh` | `flowrunanalysis_flowbio.py` + `pipeline_params.json` |
 
-**End-to-end demo:** `DEMO.md` (GSE105082). **Diagram:** `WORKFLOW.md`.
+**End-to-end demo:** `DEMO.md` (GSE105082). **Diagram + runbook:** `WORKFLOW.md`.
+**ENA / ArrayExpress (SDRF) variant:** `reference/ena-arrayexpress-workflow.md` (worked example E-MTAB-432).
 
 Design decisions from grilling: see `DESIGN.md`.
+
+## Mandatory guardrails (never bypass)
+
+All Flow uploads must go through `flow_compile.py` with these **hard stops**:
+
+### Session inputs (agent collects first)
+
+1. **Credentials** — Flow username/password → `.flow_credentials.env`
+2. **Flow project** — user creates project; pass `--flow-project-id`
+3. **Accessions** — GSE (+ GSM list) or E-MTAB; `srr_map.tsv` (GSM→SRR or ERS→ERR)
+4. **Literature** — primary paper + any referenced CLIP protocol papers the GEO/SDRF cites
+
+### Hard stops (pipeline enforces)
+
+1. **Barcodes (SEVERE)** — `barcode_extract` gathers evidence from matrix + GEO pages + `--paper-text`; writes `CONFIRM_BARCODES.md`. Pipeline **exit 3** until every GSM has `status: confirmed` in `barcode_proposals.json` and you re-run with `--accept-proposals`. If evidence is missing → `NEEDS_USER_INPUT`; **do not invent barcodes**.
+2. **FASTQ headers** — when `--fastq-dir` exists, `lib/fastq_headers.py` → `headers.txt`:
+   - **`:rbc:` in read name** → `move_umi_to_header=false`, `umi_separator=rbc:`.
+   - **eCLIP/seCLIP + `:rbc:`** → `encode_eclip=true`.
+   - **eCLIP/seCLIP + no `:rbc:`** → `encode_eclip=false`, `move_umi_to_header=true`, `_` separator.
+   - **Other CLIP** → `encode_eclip=false`. See `reference/eclip-analysis-params.md`.
+3. **Analysis** — `CONFIRM_ANALYSIS_PARAMS.md` → `analysis_params.confirmed.json` must match `pipeline_params.json` before `run_analysis.sh`.
+
+**Do not** create ad-hoc `build_*_workflow.py` scripts that skip these gates. See `.cursor/rules/flow-compile-upload-guardrails.mdc`.
 
 Integrates:
 
 - **Annotation rules** — `reference/annotation-rules.md` (from Flow annotate / `annotation-file-creation` skill).
+- **eCLIP analysis params** — `reference/eclip-analysis-params.md` (`encode_eclip`, PE crosslink on R1).
+- **ENA / ArrayExpress workflow** — `reference/ena-arrayexpress-workflow.md` (SDRF barcodes, ENA FTP download, per-UMI-group executions).
 - **Flow API concepts** — `reference/flow-api-notes.md` (vocabulary from
   [goodwright flow-ai](https://github.com/goodwright/flow-skills/tree/main/plugins/flow-ai/skills/flow-ai);
   we learn upload/metadata patterns but **do not invoke** the flow-ai plugin).
+
+Bundled Flow API scripts (self-contained clone): upload / analysis / preprocessing
+and **post-upload sample updating** live in `lib/vendor/flow_api/` — see that
+directory's `README.md` (`metadata/flow_edit_samples.py` for name / 5′ barcode
+edits; `metadata/flow_public_samples_push_metadata_v2.py` for bulk metadata push).
 
 ## Trigger
 
@@ -150,64 +220,77 @@ This skill **orchestrates** CLIP literature → GEO/SRA audit → barcode-resolv
 
 ## Workflow
 
+**Canonical runbook:** `WORKFLOW.md` (agent playbook + Mermaid diagram + branches).
+
 **Agent hooks:** (1) barcode review with sources (`CONFIRM_BARCODES.md`), (2) Flow project ID, (3) analysis params (`CONFIRM_ANALYSIS_PARAMS.md` → `analysis_params.confirmed.json`). See `DEMO.md`.
 
-1. **Credentials** (`--run-automated` / `--execute-upload`): prompt → `.flow_credentials.env`
-2. **PubMed alert** (`--scan-pubmed`): flagged papers; demo uses cache unless `--scan-pubmed`
-3. **GEO audit**: Parse series matrix; index GSM columns
-4. **Barcode extraction**: Agent + GEO/paper text → `barcode_proposals.json`; **pause** until confirmed
-5. **Annotation build**: CSV + XLSX; Organism ∈ `{Hs, Mm, Gg}`
-6. **Header inspection**: `headers.txt` + `pipeline_params.json` (move_umi, umi_header_format)
-7. **Header clean**: `clean_fastq.sh` → removespace when headers have `/`, spaces, or `_`
-8. **Prefetch** (`--download` / `--run-automated`): `prefetch.sh`; poll every 4 min
-9. **Upload**: `upload_live.sh`; monitor with `tail -f logs/upload.log`
-10. **Analysis**: `run_analysis.sh` with `--params-json pipeline_params.json`
+### Barcode discovery (agent orchestrates, scripts extract)
 
-### End-to-end demo (GSE105082)
+| Step | Source | How |
+|------|--------|-----|
+| 1 | GEO series matrix | `geo_matrix.py` scans cells for `[ACGTN]+` patterns → `barcode_hints` |
+| 2 | Per-GSM GEO pages | `geo_sample_fetch.py` / `--geo-cache-dir` / `--fetch-geo` |
+| 3 | Paper methods | Agent saves excerpt → `--paper-text` |
+| 4 | Referenced papers | Agent fetches when GEO says “refer to publication” |
+| 5 | ENA SDRF | `Comment[SUBMITTED_FILE_NAME]` — see `reference/ena-arrayexpress-workflow.md` |
+| 6 | Rank + pause | `barcode_evidence.py` → `barcode_extract.py` → **HARD STOP** |
+
+### Pipeline stages
+
+1. **Credentials** + **Flow project ID** (user)
+2. **Compile** (`--geo-matrix`, `--srr-map`, `--paper-text`, …) → barcode pause
+3. **Confirm barcodes** → `--accept-proposals` → `flow_annotate` + `sample_naming` + `protein_target_annotation`
+4. **Download** — `prefetch.sh` (SRA) or ENA `wget` (+ `gzip -t` verify)
+5. **Re-compile** `--fastq-dir` → `headers.txt`, `pipeline_params.json`
+6. **Branch** — FLASH/uvCLAP `umi_extract.sh` **or** `clean_fastq.sh` (removespace)
+7. **Re-compile** again (filenames in `annotation.csv` match disk)
+8. **Upload** — `upload_live.sh`
+9. **Analysis HARD STOP** — confirm params → `run_analysis.sh`
+
+### End-to-end demo (GSM2817677)
 
 ```bash
-# Phase A — barcode pause
+# Phase A — barcode pause (exit 3)
 uv run python skills/flow-compile/flow_compile.py \
-  --case gse105082 --output /tmp/gse105082-demo
+  --case gse105082 --output /tmp/flow-compile-demo
 
 # Phase B — after confirming barcodes + Flow project
 uv run python skills/flow-compile/flow_compile.py \
-  --case gse105082 --output /tmp/gse105082-demo \
-  --accept-proposals /tmp/gse105082-demo/barcode_proposals.json \
-  --fastq-dir ~/gse105082/fastq_files \
-  --run-automated
+  --case gse105082 --output /tmp/flow-compile-demo \
+  --accept-proposals /tmp/flow-compile-demo/barcode_proposals.json \
+  --fastq-dir skills/flow-compile/demo \
+  --flow-project-id 997999200849251656
 ```
 
-Monitor upload: `tail -f /tmp/gse105082-demo/logs/upload.log`
+Monitor upload: `tail -f /tmp/flow-compile-demo/logs/upload.log`
 
 ## Example Output
 
 ```markdown
-# Flow Compile Report — GSE118265
+# Flow Compile Report — GSE105082
 
 | Stage | Status |
 |-------|--------|
-| PubMed alert | 1 CLIP paper flagged (PMID 31802123) |
-| GEO matrix | 2 GSM columns parsed |
-| SRA files | 4 FASTQ paths (2 runs × PE) |
-| Barcodes | 2/2 resolved (protocol + 3' tag) |
+| GEO matrix | 1 GSM (GSM2817677) |
+| SRA files | 1 FASTQ (SRR6181530) |
+| Barcodes | 0/1 resolved — paused for confirmation |
 
 ## Barcode audit
-| GSM | 5' Barcode | Confidence | Sources |
-|-----|------------|------------|---------|
-| GSM3323898 | NNBBNGTGGAANN | high | extract_protocol, 3' tag GTGGAA |
+| GSM | 5' proposal | Source | Status |
+|-----|-------------|--------|--------|
+| GSM2817677 | NNNCGGANNN | paper:PMC6307142 | pending_confirmation |
 ```
 
 ## Gotchas
 
 - **Flow sample names must not contain spaces.** Sanitize `!Sample_source_name_ch1` and other tokens (`ATCC Cell Lines` → `ATCC_Cell_Lines`). Invalid names break CLIP samplesheets at execution time.
 - **Replicate labels come from GEO titles**, not guesswork. `iCLIP-DHX9-1` / `iCLIP-DHX9-2` map to `Rep1` / `Rep2`. A title ending in `-2` must not become `Rep1` (GSE105082 bug fixed in `lib/sample_naming.py`).
-- **Never guess barcodes.** If protocol text and tags disagree, leave `5' Barcode Sequence` empty
-  and list the conflict in `barcode_audit.json`.
+- **Never guess barcodes.** If protocol text and tags disagree on unrelated patterns, leave `5' Barcode Sequence` empty
+  and list the issue in `barcode_audit.json`. When the paper lists multiple barcodes and a supplementary filename
+  embeds a short fixed core (e.g. `CGGA` / `GGCA` in `_rsem_*.`), treat it as **replicate variant assignment** — see `DESIGN.md` Q4.
 - **GEO matrix column order** must follow `!Sample_geo_accession`; do not assume sample order
   matches SRA sort order.
-- **5' vs 3' tags**: FLASH-style studies encode condition in `3' tag` but Flow needs the full
-  `5' adapter pattern (`NNBBN{tag}NN`) from methods text — see GSE118265 demo.
+- **5' vs 3' tags**: FLASH-style studies need the full `5' adapter pattern from methods — see `WORKFLOW.md` FLASH branch (not the bundled demo).
 - **Organism must be Hs, Mm, or Gg** — never write `Homo sapiens` to the upload sheet; `lib/organism.py` validates.
 - **Upload credentials**: Never print `FLOWBIO_PASSWORD` or API tokens; dry-run by default.
 - **Agent boundary**: LLM may read paper PDFs for methods; barcode strings must come from
@@ -225,8 +308,16 @@ The agent routes, reads papers, and explains conflicts. The skill owns accession
 matrix alignment, barcode merging, and annotation CSV generation. The agent must not override
 barcode resolution thresholds or skip the audit table.
 
-## Related tooling (outside this repo)
+## Related tooling
 
-- Upload: `flowAPIscripts/upload/uploadsample_flowbio_v6.py`
+Bundled in this skill (`lib/vendor/flow_api/`, self-contained clone):
+
+- Upload: `lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py`
+- Analysis: `lib/vendor/flow_api/analysis/flowrunanalysis_flowbio.py`
+- Post-upload sample updating: `lib/vendor/flow_api/metadata/` (see its `README.md`)
+
+Outside this repo:
+
 - Annotation skill (Cursor): `advbfx/.cursor/skills/annotation-file-creation/SKILL.md`
+- Post-upload metadata skill (Cursor): `advbfx/.cursor/skills/update-sample-metadata/SKILL.md`
 - Flow REST skill: [goodwright/flow-skills flow-ai](https://github.com/goodwright/flow-skills/tree/main/plugins/flow-ai/skills/flow-ai)

@@ -25,6 +25,57 @@ UVCLAP_TRIMGALORE_PARAMS = (
     f"{DEFAULT_TRIMGALORE_PARAMS} --three_prime_clip_R1 10 --three_prime_clip_R2 5"
 )
 
+ECLIP_METHODS = frozenset({"eclip", "seclip"})
+
+
+def is_eclip_method(experimental_method: str) -> bool:
+    return (experimental_method or "").strip().lower() in ECLIP_METHODS
+
+
+def derive_clip_pipeline_params(
+    inspection: HeaderInspection | None,
+    *,
+    five_prime_barcode: str = "",
+    experimental_method: str = "",
+    skip_umi_dedupe: str = "false",
+) -> dict[str, str]:
+    """
+    Flow CLIP execution params from header inspection + confirmed barcodes.
+
+    eCLIP / seCLIP:
+    - UMI already in header (:rbc:) → move_umi_to_header=false, umi_separator=rbc:,
+      encode_eclip=true (pre-extracted ENCODE-style dumps).
+    - UMI still in read sequence (raw SRA) → move_umi_to_header=true, umi_separator=_,
+      umi_header_format from 5′ barcode (typically 10N), encode_eclip=false.
+      Flow Trim Galore + UMI tools extract to header with `_`, then umi_collapse.
+
+    Other CLIP methods: same header rules; encode_eclip stays false.
+    """
+    eclip = is_eclip_method(experimental_method)
+
+    if inspection and inspection.has_rbc:
+        move = "false"
+        separator = "rbc:"
+        header_format = ""
+        encode = "true" if eclip else "false"
+    else:
+        move = "true"
+        separator = "_"
+        header_format = barcode_to_header_format(five_prime_barcode)
+        encode = "false"
+
+    params: dict[str, str] = {
+        "move_umi_to_header": move,
+        "umi_separator": separator,
+        "skip_umi_dedupe": skip_umi_dedupe,
+        "crosslink_position": "start",
+        "encode_eclip": encode,
+        "star_params": DEFAULT_STAR_PARAMS,
+    }
+    if header_format:
+        params["umi_header_format"] = header_format
+    return params
+
 
 def derive_uvclap_post_umi_params(*, skip_umi_dedupe: str = "false") -> dict[str, str]:
     """
@@ -63,46 +114,13 @@ def derive_flash_post_umi_params(*, skip_umi_dedupe: str = "false") -> dict[str,
     }
 
 
-def derive_clip_pipeline_params(
-    inspection: HeaderInspection | None,
-    *,
-    five_prime_barcode: str = "",
-    skip_umi_dedupe: str = "false",
-) -> dict[str, str]:
-    """
-    Flow CLIP execution params.
-
-    - rbc: in header → barcode already extracted → move_umi_to_header false, umi_separator rbc:
-    - otherwise → extract to header with underscore separator
-    """
-    if inspection and inspection.has_rbc:
-        move = "false"
-        separator = "rbc:"
-        header_format = ""
-    else:
-        move = "true"
-        separator = "_"
-        header_format = barcode_to_header_format(five_prime_barcode)
-
-    params: dict[str, str] = {
-        "move_umi_to_header": move,
-        "umi_separator": separator,
-        "skip_umi_dedupe": skip_umi_dedupe,
-        "crosslink_position": "start",
-        "encode_eclip": "false",
-        "star_params": DEFAULT_STAR_PARAMS,
-    }
-    if header_format:
-        params["umi_header_format"] = header_format
-    return params
-
-
 def summarize_params_for_report(params: dict[str, str], inspection: HeaderInspection | None) -> str:
     lines = [
         "## Flow pipeline params (from header inspection)",
         "",
         f"- **move_umi_to_header:** `{params.get('move_umi_to_header')}`",
         f"- **umi_separator:** `{params.get('umi_separator')}`",
+        f"- **encode_eclip:** `{params.get('encode_eclip')}`",
     ]
     if params.get("trimgalore_params"):
         lines.append(f"- **trimgalore_params:** `{params['trimgalore_params']}`")

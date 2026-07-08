@@ -151,6 +151,43 @@ def extract_evidence_from_text(text: str, source: str) -> list[BarcodeEvidence]:
     return evidence
 
 
+def evidence_from_matrix_hints(hints: list[str], gsm: str) -> list[BarcodeEvidence]:
+    """Turn geo_matrix.scan_barcode_patterns hits into ranked evidence."""
+    out: list[BarcodeEvidence] = []
+    for pat in hints:
+        out.append(
+            BarcodeEvidence(
+                source=f"geo_matrix:{gsm}",
+                quote=pat,
+                kind="geo_matrix_literal",
+                five_prime_proposal=normalize_flow_barcode(pat),
+                confidence="medium",
+                notes="Literal N/A/C/G/T pattern found in GEO series matrix cell text",
+            )
+        )
+    return out
+
+
+def evidence_from_replicate_cores(cores: list[str], gsm: str) -> list[BarcodeEvidence]:
+    """Fixed 4-mer cores from supplementary filenames — replicate variant hints, not full patterns."""
+    out: list[BarcodeEvidence] = []
+    for core in cores:
+        out.append(
+            BarcodeEvidence(
+                source=f"geo_matrix:{gsm}",
+                quote=core,
+                kind="geo_matrix_replicate_core",
+                five_prime_proposal="",
+                confidence="medium",
+                notes=(
+                    "Fixed 4-mer in supplementary filename — likely identifies which paper barcode "
+                    "variant applies to this replicate (map core as substring of full NNN… pattern)"
+                ),
+            )
+        )
+    return out
+
+
 def merge_proposal_from_evidence(gsm: str, evidence: list[BarcodeEvidence]) -> BarcodeProposal:
     """Pick best five_prime / UMI from ranked evidence. Status pending until human confirms."""
     protocol = "iclip2" if any(e.kind == "protocol_iclip2" for e in evidence) else "generic"
@@ -160,6 +197,7 @@ def merge_proposal_from_evidence(gsm: str, evidence: list[BarcodeEvidence]) -> B
         "min_read_barcode_umi": 1,
         "barcode_umi_lengths": 2,
         "literal_barcode": 3,
+        "geo_matrix_literal": 4,
         "protocol_iclip2": 9,
         "flexbar_adapter": 10,
     }
@@ -182,14 +220,22 @@ def merge_proposal_from_evidence(gsm: str, evidence: list[BarcodeEvidence]) -> B
 
     if five_prime and umi and protocol == "iclip2":
         agent_notes = (
-            f"GEO suggests {len(five_prime)}-mer barcode + {len(umi)}-mer UMI. "
-            f"Your annotation TSV may use a single combined run (e.g. 16N) — confirm against FASTQ."
+            f"GEO Data processing gives {len(five_prime)} bp barcode + {len(umi)} bp UMI as separate "
+            f"regions (not a single {len(five_prime) + len(umi)} bp run — that combined length is "
+            "unusually long for a 5' barcode field and is general domain knowledge, not something "
+            "verifiable from FASTQ, since random N bases give no visible boundary between barcode "
+            f"and UMI on the read). Agent's best guess: 5' Barcode Sequence = {five_prime} "
+            f"({len(five_prime)}N) using the barcode-only length from GEO. Present this reasoning "
+            "plus the exact quote in CONFIRM_BARCODES.md; user confirms or overrides."
         )
     elif five_prime:
         top = next((e for e in ranked if e.five_prime_proposal == five_prime), ranked[0] if ranked else None)
         agent_notes = f"Proposal from {top.kind if top else 'evidence'} ({top.source if top else ''})."
     else:
-        agent_notes = "No barcode proposal — add paper/GEO text or confirm manually."
+        agent_notes = (
+            "NEEDS_USER_INPUT — no barcode proposal from GEO matrix, GEO sample pages, or paper text. "
+            "Agent must search referenced publications or ask the user; do not invent a pattern."
+        )
 
     five_prime = normalize_flow_barcode(five_prime)
     umi = normalize_flow_barcode(umi)

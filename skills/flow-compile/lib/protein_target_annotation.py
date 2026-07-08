@@ -6,6 +6,7 @@ import re
 
 # Flow display combines purification_target + annotation as GENE:annotation (e.g. QKI:c3xFLAG-HBH).
 C_TERM_3XFLAG_HBH = "c3xFLAG-HBH"
+C_TERM_V5 = "cV5"
 
 
 def characteristic_value(characteristics: list[str], *prefixes: str) -> str:
@@ -31,6 +32,7 @@ def infer_purification_target_annotation(
     characteristics: list[str],
     experimental_method: str,
     protein_target: str,
+    extract_protocol: str = "",
 ) -> str:
     """
     Flow annotation sub-field on purification_target.
@@ -40,7 +42,12 @@ def infer_purification_target_annotation(
     """
     expr = _expression_vector(characteristics)
     clip_ab = _clip_antibody(characteristics).lower()
+    proto = (extract_protocol or "").lower()
     method = (experimental_method or "").upper()
+
+    # Tethered eCLIP (e.g. GSE290281): V5-tagged RBPs pulled with anti-V5 — not FLAG.
+    if "v5-antibody" in proto or "v5 antibody" in proto:
+        return C_TERM_V5
 
     if not expr or expr.lower() in {"hbh tag", "empty vector", "vector only"}:
         return ""

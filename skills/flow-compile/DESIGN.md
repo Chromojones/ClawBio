@@ -32,13 +32,40 @@
 
 - Agent (or user) supplies paper methods + GEO sample text paths
 - Python (`lib/barcode_evidence.py`) extracts candidate patterns deterministically
+- `geo_matrix.py` scans matrix cells for literal `[ACGTN]+` barcode hints (`barcode_hints`)
 - Pipeline **pauses** with `barcode_proposals.json` + `CONFIRM_BARCODES.md` until human sets `status: confirmed`
 - Re-run with `--accept-proposals` to build annotation
+- Empty evidence → `NEEDS_USER_INPUT`; agent must not invent patterns
 
-**Test case:** hnRNPH GSE303135 / [GSM9118554](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM9118554) — 15 bp barcode trim from GEO data_processing.
+**Search order (grilling audit, 2026-07):** gather evidence from **all** sources (matrix → GEO pages → paper → referenced papers → ENA SDRF), rank by `kind`, present full evidence table, hard stop until confirmed.
 
-**Methods corpus:** [PMC6307142](https://pmc.ncbi.nlm.nih.gov/articles/PMC6307142/) iCLIP barcodes `NNNCGGANNN` / `NNNGGCANNN` (reference only; upload target is hnRNPH PMID 41867855).
+### Q3 — partial evidence / sibling N-pattern (grilling 2026-07-08)
 
-## Next grilling question
+**Decision:** Do not block the whole study when most GSMs resolve and one lacks direct evidence.
 
-**Q3:** For hnRNPH, is Flow `5' Barcode Sequence` **15N**, **30N** (barcode+UMI), or **16N** as in your current TSV? Confirm against FASTQ before upload.
+- Allow compile through annotation/download for resolved GSMs.
+- For unresolved GSMs: **agent responsibility only** — agent may propose an N-only pattern matching sibling length in `barcode_proposals.json` with clear `agent_notes` before user confirmation. **No automatic Python inference** in `barcode_extract.py`.
+- Still **pause at barcode confirmation**; user must explicitly confirm every GSM.
+
+### Q4 — paper barcodes vs matrix filename cores (grilling 2026-07-08)
+
+**Decision:** When the paper lists multiple demux barcodes and a GEO supplementary filename embeds a short fixed core (e.g. `_rsem_CGGA.` / `_rsem_GGCA.`), treat that as **replicate-specific variant assignment**, not a contradiction.
+
+- **GSE105082 example:** Methods give `NNNCGGANNN` and `NNNGGCANNN`. GSM2817677 supp file has `CGGA` → rep1 variant `NNNCGGANNN`; GSM2817678 has `GGCA` → rep2 variant `NNNGGCANNN`.
+- Agent presents **both** the paper quote and the filename core in `CONFIRM_BARCODES.md`, with a short explanation linking core → full pattern.
+- **No automatic CONFLICT flag in Python** — agent reads the evidence table and writes `agent_notes` (same as Q3: agent compares sources).
+- Status stays `pending_confirmation` until the user confirms each GSM.
+
+### Q5 — hnRNPH-style: bp-length evidence, no literal motif (grilling 2026-07-08)
+
+**Case:** GSM9118554 (hnRNPH iCLIP2, GSE303135) — GEO *Data processing* gives lengths, not a motif: "Barcode trimming (first 15 bp...)" and "min. read length of 30 bp includes 15 bp barcode and UMI regions plus 15 bp sequence insert."
+
+**Question:** Is `5' Barcode Sequence` **15N**, a combined **30N**, or something else?
+
+**Decision:** Correct answer is **15N**. The agent's responsibility is to:
+1. Quote the GEO Data processing evidence exactly (both the trim sentence and the min-read sentence).
+2. Make an **attempted guess**, not just list raw options — propose 15N based on the reasoning that GEO describes "15 bp barcode **and** UMI regions" as separate quantities within a 30 bp total, and that a 30N combined run would be unusually long for a single 5' barcode field.
+3. Explicitly flag that this guess relies on **general protocol knowledge** (typical barcode/UMI lengths), not something derivable purely from the quoted text, and — critically — **is not verifiable from the FASTQ itself**. Barcode and UMI are both random bases with no visible boundary in the read, so inspecting reads cannot confirm the split. (This corrects an earlier draft of this doc that suggested "confirm against FASTQ" — that check doesn't work for random-base barcodes.)
+4. Still present the guess in `CONFIRM_BARCODES.md` for explicit user confirmation — never silently commit to 15N without the hard stop.
+
+This generalizes: whenever evidence gives **lengths only** (no literal `[ACGTN]` string), the agent must reason from bp counts to a proposed N-pattern and clearly label that reasoning as an inference, distinct from literal-motif evidence (e.g. GSE105082's `NNNCGGANNN`).

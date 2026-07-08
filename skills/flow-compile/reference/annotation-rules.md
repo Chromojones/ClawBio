@@ -22,6 +22,11 @@ Source of truth for field mapping: `advbfx/.cursor/skills/annotation-file-creati
 | Protein (Purification Target) | Gene symbol from title/characteristics |
 | Organism | `Hs`, `Mm`, `Gg` only — never full scientific names |
 | Purification Target Annotation | Tag on protein (`c3xFLAG-HBH`); API key `purification_target__annotation`; displays as `GENE:annotation` |
+| Purification Agent | Full antibody string from **paper Methods** when GEO is vague; format `Mouse Anti-TARGET (Vendor Catalog)` — see skill `update-sample-metadata`; post-upload via `flow_public_samples_push_metadata_v2.py` |
+
+## eCLIP / seCLIP (read 1 only)
+
+Paired-end eCLIP FASTQs from SRA have two mates, but **Flow upload is single-end (R1 only)**. Read 2 carried the sequencing-center **demultiplexing** index; PCR duplicate marking uses the UMI Flow extracts from read 1 via Trim Galore (`move_umi_to_header=true`, `encode_eclip=false` for raw SRA without `:rbc:`). See `reference/eclip-analysis-params.md`.
 
 ## FLASH UMI extract (pre-upload)
 
@@ -50,6 +55,16 @@ FLASH PE libraries carry **13 nt** on read 2 (`NNXXXXXXNNNNN`: 2 random + 6 UMI 
 3. `!Sample_description`
 4. `!Sample_characteristics_ch1` (`3' tag`, `5' tag`)
 5. Paper methods text (manual `--paper-text`)
+
+## Agent barcode search (conceptual)
+
+Investigation is agent-driven; scripts only regex-scan text you attach (`--paper-text`, `--geo-cache-dir`, `--fetch-geo`).
+
+1. **GEO series matrix first** (`--geo-matrix`) — titles, `extract_protocol_ch1`, matrix `data_processing` if present, series PMID.
+2. **Publication Methods — CLIP subsection** — when GEO defers to the paper, read Methods and **focus on the CLIP assay section** (iCLIP, eCLIP, PAR-CLIP, etc.). The same paper often describes several barcoding formats (RNA-seq, RIP, facility indexes, other protocols); pass only the CLIP-relevant excerpt to `--paper-text`.
+3. **GEO sample Data processing** — per-GSM pages via `--fetch-geo` or cached `geo_GSM*.txt`. The *Data processing* block is a good secondary check for trim length and barcode prose (see `reference/barcode-examples.md`, hnRNPH). It is not always populated — e.g. GSE105082 iCLIP samples point back to the paper.
+
+See `reference/barcode-examples.md` for worked examples and the human confirmation gate.
 
 ## Flow API metadata keys
 

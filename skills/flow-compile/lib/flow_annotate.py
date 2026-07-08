@@ -39,6 +39,11 @@ ANNOTATION_COLUMNS = [
 
 
 def infer_protein_target(title: str, characteristics: list[str] | None = None) -> str:
+    # GEO titles like "CPSF5, HEK293T, input, replicate 1 eCLIP"
+    if "," in (title or ""):
+        lead = title.split(",", 1)[0].strip()
+        if lead and re.match(r"^[A-Za-z0-9][A-Za-z0-9-]*$", lead):
+            return lead.upper()
     upper_title = title.upper()
     if "GFP" in upper_title.split():
         return "GFP"
@@ -68,11 +73,23 @@ def infer_protein_target(title: str, characteristics: list[str] | None = None) -
     return ""
 
 
-def purification_agent(characteristics: list[str]) -> str:
+def purification_agent(
+    characteristics: list[str],
+    *,
+    extract_protocol: str = "",
+    title: str = "",
+) -> str:
     for item in characteristics:
         lower = item.lower()
         if ("purification" in lower or "antibody:" in lower or "clip antibody:" in lower) and ":" in item:
             return item.split(":", 1)[1].strip()
+    proto = (extract_protocol or "").lower()
+    if "v5-antibody" in proto or "v5 antibody" in proto:
+        return "V5-antibody"
+    if "immunoprecipitated with rbp specific" in proto:
+        lead = (title or "").split(",", 1)[0].strip()
+        if lead:
+            return f"{lead} antibody"
     return ""
 
 
@@ -113,16 +130,33 @@ def load_srr_map(path) -> pd.DataFrame:
     return df
 
 
-def _fastq_paths_for_gsm(srr_rows: pd.DataFrame) -> tuple[str, str]:
+def is_eclip_method(method: str) -> bool:
+    return (method or "").strip().lower() in {"eclip", "seclip"}
+
+
+def _fastq_paths_for_gsm(
+    srr_rows: pd.DataFrame,
+    *,
+    r1_only: bool = False,
+) -> tuple[str, str]:
     """Return (reads1, reads2) paths for a GSM from srr_map rows."""
     rows = srr_rows.sort_values("mate")
     file1 = str(rows.iloc[0]["fastq"])
     file2 = ""
-    if "file2" in rows.columns and pd.notna(rows.iloc[0].get("file2")):
-        file2 = str(rows.iloc[0]["file2"]).strip()
-    elif len(rows) > 1:
-        file2 = str(rows.iloc[1]["fastq"])
+    if not r1_only:
+        if "file2" in rows.columns and pd.notna(rows.iloc[0].get("file2")):
+            file2 = str(rows.iloc[0]["file2"]).strip()
+        elif len(rows) > 1:
+            file2 = str(rows.iloc[1]["fastq"])
     return file1, file2
+
+
+def apply_eclip_r1_only_filenames(annotation: pd.DataFrame) -> pd.DataFrame:
+    """eCLIP/seCLIP: upload read 1 only (R2 was for sequencing-center demultiplexing)."""
+    updated = annotation.copy()
+    if "File 2" in updated.columns:
+        updated["File 2"] = ""
+    return updated
 
 
 def build_annotation_table(
@@ -167,7 +201,8 @@ def build_annotation_table(
                 + "; ".join(name_errors)
             )
 
-        file1, file2 = _fastq_paths_for_gsm(srr_rows)
+        eclip_r1_only = is_eclip_method(method)
+        file1, file2 = _fastq_paths_for_gsm(srr_rows, r1_only=eclip_r1_only)
         row = {col: "" for col in ANNOTATION_COLUMNS}
         row["File"] = file1
         if file2:
@@ -177,7 +212,11 @@ def build_annotation_table(
         row["Scientist"] = scientist
         row["PI"] = pi
         row["Organisation"] = organisation
-        row["Purification Agent"] = purification_agent(characteristics)
+        row["Purification Agent"] = purification_agent(
+            characteristics,
+            extract_protocol=str(sample.get("extract_protocol_ch1", "")),
+            title=title,
+        )
         row["Experimental Method"] = method
         row["Sequencer"] = sample.get("instrument_model", "")
         row["5' Barcode Sequence"] = normalize_flow_barcode(barcode.five_prime) if barcode else ""
@@ -193,6 +232,7 @@ def build_annotation_table(
             characteristics=characteristics,
             experimental_method=method,
             protein_target=protein,
+            extract_protocol=str(sample.get("extract_protocol_ch1", "")),
         )
         rows.append(row)
 

@@ -69,3 +69,35 @@ class TestPipelineParams:
         params = derive_clip_pipeline_params(None, five_prime_barcode="NNNNNNNNNNNNNNN")
         assert params["move_umi_to_header"] == "true"
         assert params["umi_separator"] == "_"
+        assert params["encode_eclip"] == "false"
+
+    def test_eclip_raw_sra_encode_false(self):
+        from lib.fastq_headers import HeaderInspection
+
+        insp = HeaderInspection(has_rbc=False, barcode_in_header=False, sample_headers=[], fastq_files=[])
+        params = derive_clip_pipeline_params(
+            insp, five_prime_barcode="NNNNNNNNNN", experimental_method="eCLIP"
+        )
+        assert params["move_umi_to_header"] == "true"
+        assert params["encode_eclip"] == "false"
+        assert params["umi_header_format"] == "NNNNNNNNNN"
+
+    def test_eclip_rbc_in_header_encode_true(self):
+        from lib.fastq_headers import HeaderInspection
+
+        insp = HeaderInspection(has_rbc=True, barcode_in_header=True, sample_headers=[], fastq_files=[])
+        params = derive_clip_pipeline_params(
+            insp, five_prime_barcode="NNNNNNNNNN", experimental_method="eCLIP"
+        )
+        assert params["move_umi_to_header"] == "false"
+        assert params["umi_separator"] == "rbc:"
+        assert params["encode_eclip"] == "true"
+
+    def test_iclip_rbc_encode_false(self):
+        from lib.fastq_headers import HeaderInspection
+
+        insp = HeaderInspection(has_rbc=True, barcode_in_header=True, sample_headers=[], fastq_files=[])
+        params = derive_clip_pipeline_params(
+            insp, five_prime_barcode="NNNNNNNNNNNNNNN", experimental_method="iCLIP"
+        )
+        assert params["encode_eclip"] == "false"

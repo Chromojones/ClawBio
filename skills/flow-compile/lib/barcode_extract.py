@@ -8,6 +8,8 @@ from pathlib import Path
 
 from lib.barcode_evidence import (
     BarcodeProposal,
+    evidence_from_matrix_hints,
+    evidence_from_replicate_cores,
     extract_evidence_from_text,
     merge_proposal_from_evidence,
     normalize_flow_barcode,
@@ -91,6 +93,12 @@ def render_confirmation_md(proposals: list[BarcodeProposal], output_dir: Path) -
                 lines.append(f"  - note: {ev.notes}")
         lines.append("")
     lines.append("*Do not upload until all required GSMs are confirmed.*")
+    lines.append("")
+    lines.append(
+        "**Hard stop:** If any GSM shows `NEEDS_USER_INPUT` or an empty 5' proposal, "
+        "the agent must obtain evidence from the user or a referenced publication — "
+        "never invent barcode strings."
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -101,10 +109,12 @@ def extract_barcodes_for_gsms(
     geo_cache_dir: Path | None = None,
     fetch_geo: bool = False,
     sample_titles: dict[str, str] | None = None,
+    matrix_samples: dict[str, dict] | None = None,
 ) -> list[BarcodeProposal]:
-    """Gather evidence from paper files + GEO; return pending proposals."""
+    """Gather evidence from matrix hints, paper files, and GEO; return pending proposals."""
     paper_texts = paper_texts or []
     sample_titles = sample_titles or {}
+    matrix_samples = matrix_samples or {}
     proposals: list[BarcodeProposal] = []
 
     shared_paper_evidence = []
@@ -113,7 +123,14 @@ def extract_barcodes_for_gsms(
         shared_paper_evidence.extend(extract_evidence_from_text(text, label))
 
     for gsm in gsms:
-        evidence = list(shared_paper_evidence)
+        evidence: list = []
+        hints = (matrix_samples.get(gsm) or {}).get("barcode_hints") or []
+        if hints:
+            evidence.extend(evidence_from_matrix_hints(hints, gsm))
+        cores = (matrix_samples.get(gsm) or {}).get("replicate_barcode_cores") or []
+        if cores:
+            evidence.extend(evidence_from_replicate_cores(cores, gsm))
+        evidence.extend(list(shared_paper_evidence))
         cache = (geo_cache_dir / f"geo_{gsm}.txt") if geo_cache_dir else None
         if fetch_geo or (cache and cache.exists()):
             raw, source = load_geo_sample_text(gsm, cache_path=cache if cache else None)

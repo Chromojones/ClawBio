@@ -9,17 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 
-def resolve_advbfx_script(name: str, explicit: Path | None = None) -> Path | None:
-    if explicit and explicit.is_file():
-        return explicit.resolve()
-    for candidate in (
-        Path("/home/mikej10/advbfx/flowAPIscripts") / name,
-        Path.cwd() / "flowAPIscripts" / name,
-        Path.cwd().parent / "flowAPIscripts" / name,
-    ):
-        if candidate.is_file():
-            return candidate.resolve()
-    return None
+from lib.script_paths import resolve_flow_script as resolve_advbfx_script
 
 
 def _srr_from_file(filename: str) -> str:
@@ -53,6 +43,7 @@ def write_upload_script(
     base_dir: Path,
     row_count: int,
     dry_run: bool = True,
+    resume_rows: str = "",
 ) -> Path:
     script = output_dir / "upload.sh"
     rows = f"1-{row_count}" if row_count > 1 else "1"
@@ -82,6 +73,17 @@ def write_upload_script(
     live = output_dir / "upload_live.sh"
     live.write_text("\n".join(live_lines) + "\n")
     live.chmod(0o755)
+
+    if resume_rows:
+        resume_lines = live_lines.copy()
+        for i, line in enumerate(resume_lines):
+            if "--rows" in line:
+                resume_lines[i] = f"  --rows {resume_rows} \\"
+                break
+        resume = output_dir / "upload_remaining.sh"
+        resume.write_text("\n".join(resume_lines) + "\n")
+        resume.chmod(0o755)
+
     return script
 
 

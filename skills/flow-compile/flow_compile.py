@@ -59,7 +59,11 @@ from lib.uvclap_umi_extract import (
     write_merge_pe_script,
     write_umi_extract_script as write_uvclap_umi_extract_script,
 )
-from lib.flow_annotate import build_annotation_table, load_srr_map
+from lib.flow_annotate import (
+    apply_eclip_r1_only_filenames,
+    build_annotation_table,
+    load_srr_map,
+)
 from lib.geo_matrix import parse_geo_matrix
 from lib.pipeline_params import (
     derive_clip_pipeline_params,
@@ -70,34 +74,11 @@ from lib.pipeline_params import (
 )
 from lib.pubmed_stage import CLIP_ALERT_QUERY, run_pubmed_stage
 
-DEMO_MATRIX = SKILL_DIR / "demo_geo_matrix.txt"
-DEMO_SRR_MAP = SKILL_DIR / "demo_srr_map.tsv"
-DEMO_PUBMED_CACHE = SKILL_DIR / "demo_pubmed_clip.json"
-HNRNPH_MATRIX = SKILL_DIR / "demo_hnrnph_geo_matrix.txt"
-HNRNPH_SRR_MAP = SKILL_DIR / "demo_hnrnph_srr_map.tsv"
-HNRNPH_GEO_CACHE = SKILL_DIR / "demo" / "geo_GSM9118554.txt"
-HNRNPH_PAPER = SKILL_DIR / "demo" / "paper_PMC6307142_iclip_excerpt.txt"
-GSE105082_MATRIX = SKILL_DIR / "demo_gse105082_geo_matrix.txt"
+GSE105082_MATRIX = SKILL_DIR / "demo" / "GSE105082_series_matrix.txt"
 GSE105082_SRR_MAP = SKILL_DIR / "demo_gse105082_srr_map.tsv"
 GSE105082_GEO_CACHE = SKILL_DIR / "demo"
 GSE105082_PAPER = SKILL_DIR / "demo" / "paper_PMC6307142_iclip_excerpt.txt"
 GSE105082_FLOW_PROJECT_ID = "997999200849251656"
-XL1_DHX9_MATRIX = SKILL_DIR / "demo_xl1_dhx9_geo_matrix.txt"
-XL1_DHX9_SRR_MAP = SKILL_DIR / "demo_xl1_dhx9_srr_map.tsv"
-XL1_DHX9_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
-XL1_DHX9_FLOW_PROJECT_ID = "834759538599245747"
-XL9_DHX9_MATRIX = SKILL_DIR / "demo_xl9_dhx9_geo_matrix.txt"
-XL9_DHX9_SRR_MAP = SKILL_DIR / "demo_xl9_dhx9_srr_map.tsv"
-XL9_DHX9_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
-XL9_DHX9_FLOW_PROJECT_ID = "834759538599245747"
-XL8_DHX9_MATRIX = SKILL_DIR / "demo_xl8_dhx9_geo_matrix.txt"
-XL8_DHX9_SRR_MAP = SKILL_DIR / "demo_xl8_dhx9_srr_map.tsv"
-XL8_DHX9_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
-XL8_DHX9_FLOW_PROJECT_ID = "834759538599245747"
-XL2_HNRNPC_MATRIX = SKILL_DIR / "demo_xl2_hnrnpc_geo_matrix.txt"
-XL2_HNRNPC_SRR_MAP = SKILL_DIR / "demo_xl2_hnrnpc_srr_map.tsv"
-XL2_HNRNPC_PAPER = SKILL_DIR / "demo" / "paper_PMC7026646_flash_excerpt.txt"
-XL2_HNRNPC_FLOW_PROJECT_ID = "834759538599245747"
 EXIT_PAUSED = 3
 
 
@@ -239,6 +220,7 @@ def generate_report(result: WorkflowResult, flagged: list[dict[str, Any]]) -> st
 def _resolve_barcodes_agent_assisted(
     matrix_data: dict[str, Any],
     *,
+    target_gsms: list[str] | None = None,
     paper_texts: list[tuple[str, Path]],
     geo_cache_dir: Path | None,
     fetch_geo: bool,
@@ -249,7 +231,7 @@ def _resolve_barcodes_agent_assisted(
     """
     Returns (barcode_by_gsm, stage_status, paused_for_confirmation).
     """
-    gsms = list(matrix_data["samples"].keys())
+    gsms = target_gsms or list(matrix_data["samples"].keys())
     stages: dict[str, str] = {}
 
     if accept_proposals and accept_proposals.exists():
@@ -285,6 +267,7 @@ def _resolve_barcodes_agent_assisted(
         geo_cache_dir=geo_cache_dir,
         fetch_geo=fetch_geo,
         sample_titles={gsm: matrix_data["samples"][gsm].get("title", "") for gsm in gsms},
+        matrix_samples=matrix_data["samples"],
     )
     proposal_path = write_proposal_bundle(output_dir, proposals)
     stages["barcode_extract"] = f"{len(proposals)} proposal(s) → {proposal_path.name}"
@@ -329,6 +312,22 @@ def _annotation_is_flash(annotation, matrix_data: dict[str, Any] | None = None) 
             str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
         )
         if "flash" in blob.lower():
+            return True
+    return False
+
+
+def _annotation_is_eclip(annotation, matrix_data: dict[str, Any] | None = None) -> bool:
+    if "Experimental Method" in annotation.columns:
+        methods = annotation["Experimental Method"].dropna().astype(str).str.strip().str.lower()
+        if methods.isin({"eclip", "seclip"}).any():
+            return True
+    if matrix_data:
+        blob = " ".join(
+            str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
+        )
+        series_title = str(matrix_data.get("series", {}).get("title", ""))
+        blob = f"{blob} {series_title}".lower()
+        if "eclip" in blob:
             return True
     return False
 
@@ -490,7 +489,17 @@ def _run_header_inspection(
             five_prime = res.five_prime
             break
 
-    params = derive_clip_pipeline_params(inspection if inspection.sample_headers else None, five_prime_barcode=five_prime)
+    experimental_method = ""
+    if "Experimental Method" in annotation.columns:
+        methods = annotation["Experimental Method"].dropna().astype(str).str.strip()
+        if len(methods):
+            experimental_method = methods.iloc[0]
+
+    params = derive_clip_pipeline_params(
+        inspection if inspection.sample_headers else None,
+        five_prime_barcode=five_prime,
+        experimental_method=experimental_method,
+    )
     inspection_dict = inspection_to_dict(inspection) if inspection.sample_headers else {}
 
     (output_dir / "pipeline_params.json").write_text(json.dumps(params, indent=2))
@@ -505,6 +514,7 @@ def _run_header_inspection(
         header_stage = (
             f"headers.txt ({len(inspection.fastq_files)} file(s)); "
             f"move_umi={params['move_umi_to_header']}; "
+            f"encode_eclip={params.get('encode_eclip')}; "
             f"umi_header_format={params.get('umi_header_format', '')}"
         )
     else:
@@ -647,10 +657,16 @@ def run_pipeline(
     matrix_data = parse_geo_matrix(matrix_path)
     gse = matrix_data["series"].get("geo_accession", "")
     pmid = matrix_data["series"].get("pubmed_id", "")
-    stages["geo_audit"] = f"{len(matrix_data['samples'])} GSM columns parsed"
+    srr_map = load_srr_map(srr_map_path)
+    target_gsms = sorted(srr_map["gsm"].astype(str).unique())
+    stages["geo_audit"] = (
+        f"{len(matrix_data['samples'])} GSM columns in matrix; "
+        f"{len(target_gsms)} in srr_map"
+    )
 
     barcode_by_gsm, barcode_stages, paused = _resolve_barcodes_agent_assisted(
         matrix_data,
+        target_gsms=target_gsms,
         paper_texts=paper_texts or [],
         geo_cache_dir=geo_cache_dir,
         fetch_geo=fetch_geo,
@@ -681,12 +697,15 @@ def run_pipeline(
     resolutions = list(barcode_by_gsm.values())
     resolved = sum(1 for r in resolutions if r.five_prime)
 
-    srr_map = load_srr_map(srr_map_path)
     annotation = build_annotation_table(matrix_data, srr_map, barcode_by_gsm)
     stages["flow_annotate"] = f"{len(annotation)} rows; Organism ∈ {{Hs, Mm, Gg}}"
 
     flash_study = _annotation_is_flash(annotation, matrix_data)
     uvclap_study = _annotation_is_uvclap(annotation, matrix_data)
+    eclip_study = _annotation_is_eclip(annotation, matrix_data)
+    if eclip_study:
+        annotation = apply_eclip_r1_only_filenames(annotation)
+        stages["flow_annotate"] += " (eCLIP read 1 only — R2 demux only)"
     if flash_study:
         annotation = apply_umi_extracted_filenames(annotation)
         stale_clean = output_dir / "clean_fastq.sh"
@@ -725,9 +744,13 @@ def run_pipeline(
     if pipeline_params:
         stages["pipeline_params"] = f"move_umi_to_header={pipeline_params.get('move_umi_to_header')}"
 
-    use_cleaned_names = (output_dir / "clean_fastq.sh").exists() and not flash_study and not uvclap_study
+    use_cleaned_names = (
+        (output_dir / "clean_fastq.sh").exists() and not flash_study and not uvclap_study
+    )
     if use_cleaned_names:
         annotation, _ = _apply_cleaned_filenames(annotation)
+    if eclip_study:
+        annotation = apply_eclip_r1_only_filenames(annotation)
 
     flash_umi_stage = ""
     uvclap_umi_stage = ""
@@ -871,15 +894,7 @@ def _build_pipeline_kwargs(
 
 
 def run(args: argparse.Namespace) -> int:
-    if args.case == "hnrnph":
-        matrix_path = HNRNPH_MATRIX
-        srr_map_path = HNRNPH_SRR_MAP
-        pubmed_cache = None
-        scan = False
-        paper_texts = []
-        geo_cache_dir = SKILL_DIR / "demo"
-        flow_project_id = args.flow_project_id or ""
-    elif args.case == "gse105082":
+    if args.case == "gse105082" or args.demo:
         matrix_path = GSE105082_MATRIX
         srr_map_path = GSE105082_SRR_MAP
         pubmed_cache = None
@@ -887,49 +902,9 @@ def run(args: argparse.Namespace) -> int:
         paper_texts = [(f"paper:{GSE105082_PAPER.name}", GSE105082_PAPER)]
         geo_cache_dir = GSE105082_GEO_CACHE
         flow_project_id = args.flow_project_id or GSE105082_FLOW_PROJECT_ID
-    elif args.case == "xl1_dhx9":
-        matrix_path = XL1_DHX9_MATRIX
-        srr_map_path = XL1_DHX9_SRR_MAP
-        pubmed_cache = None
-        scan = False
-        paper_texts = [(f"paper:{XL1_DHX9_PAPER.name}", XL1_DHX9_PAPER)]
-        geo_cache_dir = None
-        flow_project_id = args.flow_project_id or XL1_DHX9_FLOW_PROJECT_ID
-    elif args.case == "xl9_dhx9":
-        matrix_path = XL9_DHX9_MATRIX
-        srr_map_path = XL9_DHX9_SRR_MAP
-        pubmed_cache = None
-        scan = False
-        paper_texts = [(f"paper:{XL9_DHX9_PAPER.name}", XL9_DHX9_PAPER)]
-        geo_cache_dir = None
-        flow_project_id = args.flow_project_id or XL9_DHX9_FLOW_PROJECT_ID
-    elif args.case == "xl8_dhx9":
-        matrix_path = XL8_DHX9_MATRIX
-        srr_map_path = XL8_DHX9_SRR_MAP
-        pubmed_cache = None
-        scan = False
-        paper_texts = [(f"paper:{XL8_DHX9_PAPER.name}", XL8_DHX9_PAPER)]
-        geo_cache_dir = None
-        flow_project_id = args.flow_project_id or XL8_DHX9_FLOW_PROJECT_ID
-    elif args.case == "xl2_hnrnpc":
-        matrix_path = XL2_HNRNPC_MATRIX
-        srr_map_path = XL2_HNRNPC_SRR_MAP
-        pubmed_cache = None
-        scan = False
-        paper_texts = [(f"paper:{XL2_HNRNPC_PAPER.name}", XL2_HNRNPC_PAPER)]
-        geo_cache_dir = None
-        flow_project_id = args.flow_project_id or XL2_HNRNPC_FLOW_PROJECT_ID
-    elif args.demo:
-        matrix_path = DEMO_MATRIX
-        srr_map_path = DEMO_SRR_MAP
-        pubmed_cache = DEMO_PUBMED_CACHE if not args.scan_pubmed else None
-        scan = args.scan_pubmed
-        paper_texts = [(f"paper:{p.name}", p) for p in args.paper_text]
-        geo_cache_dir = args.geo_cache_dir
-        flow_project_id = args.flow_project_id or ""
     else:
         if not args.geo_matrix or not args.srr_map:
-            print("Provide --geo-matrix and --srr-map, --demo, or --case.", file=sys.stderr)
+            print("Provide --geo-matrix and --srr-map, --demo, or --case gse105082.", file=sys.stderr)
             return 2
         matrix_path = Path(args.geo_matrix)
         srr_map_path = Path(args.srr_map)
@@ -939,7 +914,7 @@ def run(args: argparse.Namespace) -> int:
         geo_cache_dir = args.geo_cache_dir
         flow_project_id = args.flow_project_id or ""
 
-    if args.paper_text and args.case not in ("hnrnph",):
+    if args.paper_text:
         paper_texts = [(f"paper:{p.name}", p) for p in args.paper_text]
 
     output_dir = Path(args.output)
@@ -1061,11 +1036,11 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Flow Compile — CLIP orchestrator")
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--demo", action="store_true", help="GSE118265 FLASH demo")
+    parser.add_argument("--demo", action="store_true", help="GSE105082 GSM2817677 demo (alias for --case gse105082)")
     parser.add_argument(
         "--case",
-        choices=["hnrnph", "gse105082", "xl1_dhx9", "xl2_hnrnpc", "xl8_dhx9", "xl9_dhx9"],
-        help="Preset: hnrnph (GSE303135), gse105082 (DHX9 iCLIP), xl1_dhx9 (GSE89276), xl2_hnrnpc (GSE94781), xl8_dhx9 (GSE89751), xl9_dhx9 (GSE89598) FLASH",
+        choices=["gse105082"],
+        help="Preset: gse105082 — GSM2817677 DHX9 iCLIP (bundled demo FASTQ SRR6181530)",
     )
     parser.add_argument("--geo-matrix", type=Path)
     parser.add_argument("--srr-map", type=Path)

@@ -29,17 +29,11 @@ def cleaned_fastq_name(fastq_path: Path) -> str:
     return f"{name}.cleaned.fastq.gz"
 
 
+from lib.script_paths import resolve_flow_script
+
+
 def resolve_removespace_script(explicit: Path | None = None) -> Path | None:
-    if explicit:
-        return explicit if explicit.is_file() else None
-    for candidate in (
-        Path("/home/mikej10/advbfx/flowAPIscripts/preprocessing/removespace.py"),
-        Path.cwd() / "flowAPIscripts/preprocessing/removespace.py",
-        Path.cwd().parent / "flowAPIscripts/preprocessing/removespace.py",
-    ):
-        if candidate.is_file():
-            return candidate.resolve()
-    return None
+    return resolve_flow_script("preprocessing/removespace.py", explicit)
 
 
 def write_clean_fastq_script(

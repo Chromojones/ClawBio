@@ -13,7 +13,7 @@ Adapted from [goodwright/flow-skills flow-ai](https://github.com/goodwright/flow
 
 | flow-ai approach | flow-compile approach |
 |------------------|----------------------|
-| flowbio CLI + curl for upload | `flowAPIscripts/upload/uploadsample_flowbio_v6.py` (`flowbio.v2.Client`) |
+| flowbio CLI + curl for upload | `lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py` (`flowbio.v2.Client`) |
 | `GET /annotation/<sample_type>` template | advbfx `Testtemplate.xlsx` + annotation-file-creation rules |
 | Agent-driven API discovery | Pre-mapped column → metadata keys in upload script |
 
@@ -27,7 +27,7 @@ Project creation is manual for now; a future stage should call `POST /projects` 
 After flow-compile produces `annotation.csv`, `annotation.xlsx`, `headers.txt`, and `pipeline_params.json`:
 
 ```bash
-python flowAPIscripts/upload/uploadsample_flowbio_v6.py \
+python skills/flow-compile/lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py \
   --input annotation.csv \
   --rows 1-2 \
   --project-id 997999200849251656 \
@@ -37,16 +37,20 @@ python flowAPIscripts/upload/uploadsample_flowbio_v6.py \
 
 ## Pipeline params from headers.txt
 
-| Header pattern | `move_umi_to_header` | `umi_separator` |
-|----------------|----------------------|-----------------|
-| Contains `:rbc:` | `false` | `rbc:` |
-| Underscore barcode or barcode in read | `true` | `_` |
+See also `reference/eclip-analysis-params.md` for paired-end eCLIP crosslink notes.
+
+| Header pattern | `move_umi_to_header` | `umi_separator` | `encode_eclip` (eCLIP/seCLIP only) |
+|----------------|----------------------|-----------------|-------------------------------------|
+| Contains `:rbc:` | `false` | `rbc:` | `true` |
+| No `:rbc:` (raw SRA) | `true` | `_` | `false` |
+
+Other CLIP methods: `encode_eclip` stays `false` regardless of headers.
 
 `umi_header_format` uses **N-only structure** matching barcode length (e.g. `NNNNNNNNNN` for 10 bp Murat iCLIP, `NNNNNNNNNNNNNNN` for 15 bp iCLIP2). Annotation keeps the literal pattern (`NNNCGGANNN`) for demultiplexing metadata.
 
 ## Header cleaning (removespace.py)
 
-When sampled headers contain `/`, spaces, or `_` barcode suffixes, flow-compile writes `clean_fastq.sh` calling `flowAPIscripts/preprocessing/removespace.py` (spaces/slashes → underscore). Upload **`.cleaned.fastq.gz`** files — see `fastq_upload_manifest.tsv`.
+When sampled headers contain `/`, spaces, or `_` barcode suffixes, flow-compile writes `clean_fastq.sh` calling `lib/vendor/flow_api/preprocessing/removespace.py` (spaces/slashes → underscore). Upload **`.cleaned.fastq.gz`** files — see `fastq_upload_manifest.tsv`.
 
 ## End-to-end scripts (generated in output dir)
 

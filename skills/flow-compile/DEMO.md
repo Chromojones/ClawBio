@@ -1,151 +1,86 @@
-# flow-compile — end-to-end demo (GSE105082)
+# flow-compile — demo (GSE105082 / GSM2817677)
 
-Canonical demo dataset: **GSE105082** DHX9 iCLIP ([PMID 30591072](https://pubmed.ncbi.nlm.nih.gov/30591072/)).  
-Flow project: https://app.flow.bio/projects/997999200849251656/
+Canonical bundled demo: **one sample** matching the FASTQ snippets in `demo/`.
 
-Bundled demo FASTQ snippet: `demo/SRR6181530.fastq.gz` (5 reads — for header/clean tests only).  
-Full runs: prefetch SRR6181530 + SRR6181534 (~900 MB each).
+| Field | Value |
+|-------|-------|
+| GSE matrix | `demo/GSE105082_series_matrix.txt` (full, from [NCBI FTP](https://ftp.ncbi.nlm.nih.gov/geo/series/GSE105nnn/GSE105082/matrix/)) |
+| GSM | **GSM2817677** (`iCLIP-DHX9-1`) |
+| SRR | **SRR6181530** |
+| Paper | [PMID 30591072](https://pubmed.ncbi.nlm.nih.gov/30591072/) |
+| Barcode (from methods) | `NNNCGGANNN` |
+| Bundled FASTQ | `demo/SRR6181530.fastq.gz` (5 reads) + `demo/SRR6181530.cleaned.fastq.gz` |
+| Flow project (example) | https://app.flow.bio/projects/997999200849251656/ |
 
-## Manual gates
+## What the agent should do first
 
-1. **Confirm barcodes** — edit `barcode_proposals.json` → `status: confirmed`
-2. **Create Flow project** — pass `--flow-project-id` (preset `997999200849251656` for `--case gse105082`)
-3. **Confirm analysis params** — review `pipeline_params.json`, then create
-   `analysis_params.confirmed.json` (copy must match current params)
+1. Ask for **Flow credentials** and a **Flow project ID** (user creates project in UI).
+2. Confirm target: GSE105082, GSM2817677 (or use `--case gse105082` preset).
+3. Run Phase A below — pipeline **must pause** at barcode confirmation.
 
----
-
-## Phase A — Barcode extraction (pauses)
+## Phase A — Barcode extraction (mandatory pause, exit 3)
 
 ```bash
-cd projects/clawbio/ClawBio
+cd ClawBio
 
 uv run python skills/flow-compile/flow_compile.py \
   --case gse105082 \
-  --output /tmp/gse105082-demo
+  --output /tmp/flow-compile-demo
 ```
 
-Exit code **3** = paused. Review:
+Review:
 
-- `/tmp/gse105082-demo/CONFIRM_BARCODES.md`
-- `/tmp/gse105082-demo/barcode_proposals.json`
+- `/tmp/flow-compile-demo/CONFIRM_BARCODES.md`
+- `/tmp/flow-compile-demo/barcode_proposals.json`
 
-Confirm barcodes (rep1: `NNNCGGANNN`, rep2: `NNNGGCANNN`), set each proposal `status: confirmed`.
+Expected proposal for GSM2817677: **`NNNCGGANNN`** from `demo/paper_PMC6307142_iclip_excerpt.txt`
+(“Barcodes (NNNCGGANNN and NNNGGCANNN) were used for demultiplexing”).
 
----
+Set `status: confirmed` in `barcode_proposals.json` before Phase B.
 
-## Phase B — Full automated workflow
+## Phase B — Headers + params (bundled FASTQ, no SRA download)
+
+Uses the 5-read snippet only — enough to test `headers.txt`, `pipeline_params.json`, and `clean_fastq.sh`:
+
+```bash
+uv run python skills/flow-compile/flow_compile.py \
+  --case gse105082 \
+  --output /tmp/flow-compile-demo \
+  --accept-proposals /tmp/flow-compile-demo/barcode_proposals.json \
+  --fastq-dir skills/flow-compile/demo \
+  --flow-project-id 997999200849251656
+```
+
+Before analysis (if you run upload/analysis):
+
+```bash
+cp /tmp/flow-compile-demo/pipeline_params.json \
+   /tmp/flow-compile-demo/analysis_params.confirmed.json
+```
+
+## Phase C — Full automated workflow (real SRA download)
 
 ```bash
 mkdir -p ~/gse105082/fastq_files
 
 uv run python skills/flow-compile/flow_compile.py \
   --case gse105082 \
-  --output /tmp/gse105082-demo \
-  --accept-proposals /tmp/gse105082-demo/barcode_proposals.json \
+  --output /tmp/flow-compile-demo \
+  --accept-proposals /tmp/flow-compile-demo/barcode_proposals.json \
   --fastq-dir ~/gse105082/fastq_files \
+  --flow-project-id 997999200849251656 \
   --run-automated
 ```
 
-**Step 0 — credentials:** prompts for Flow username/password → writes `.flow_credentials.env` (mode 600).
+Monitor: `tail -f /tmp/flow-compile-demo/logs/upload.log`
 
-**Then automatically (4-min polling between long steps):**
+## Agent checklist
 
-| Step | Script | Log file |
-|------|--------|----------|
-| Compile | (Python) | stdout |
-| Download | `prefetch.sh` | `logs/prefetch.log` |
-| Header clean | `clean_fastq.sh` | `logs/clean.log` |
-| Re-compile | (Python) | stdout |
-| Upload | `upload_live.sh` | `logs/upload.log` |
-| Analysis | `run_analysis.sh` | `logs/analysis.log` |
+- [ ] Flow project ID obtained from user
+- [ ] Credentials in `.flow_credentials.env` (never commit)
+- [ ] Barcode evidence presented with source quotes — **not invented**
+- [ ] User confirmed `barcode_proposals.json`
+- [ ] After download: `headers.txt` reviewed
+- [ ] `analysis_params.confirmed.json` matches `pipeline_params.json` before analysis
 
-Before `run_analysis.sh` executes, it enforces a manual params check:
-
-```bash
-cp /tmp/gse105082-demo/pipeline_params.json \
-   /tmp/gse105082-demo/analysis_params.confirmed.json
-```
-
----
-
-## Monitor upload progress
-
-### During `--run-automated`
-
-The orchestrator prints status **every 4 minutes** on stdout:
-
-```
-… Flow upload still running (12.0 min, check again in 4 min)
-  log: /tmp/gse105082-demo/logs/upload.log
-  latest: Row 1: DHX9_Hs_ATCC Cell Lines_Rep1_SRR6181530
-```
-
-### Live log (recommended — open a second terminal)
-
-```bash
-tail -f /tmp/gse105082-demo/logs/upload.log
-```
-
-You will see per-row progress from `uploadsample_flowbio_v6.py`:
-
-```
-Row 1: DHX9_Hs_ATCC Cell Lines_Rep1_SRR6181530
-  sample_type=CLIP
-  data={reads1: .../SRR6181530.cleaned.fastq.gz}
-  -> uploaded sample id=603430893796592425
-...
-Completed. successful=2, failed=0, total=2
-```
-
-### Check if upload is still running
-
-```bash
-ps aux | grep uploadsample_flowbio
-ls -lh /tmp/gse105082-demo/logs/upload.log   # file grows while uploading
-```
-
-### After upload
-
-```bash
-grep -E 'successful|failed|uploaded sample' /tmp/gse105082-demo/logs/upload.log
-```
-
-Success = `successful=2, failed=0`.
-
----
-
-## Visible terminal (optional)
-
-For a scrolling master log with `tee`:
-
-```bash
-bash /tmp/gse105082-demo/run_workflow.sh
-# separate window:
-tail -f /tmp/gse105082-demo/logs/workflow.log
-```
-
----
-
-## Quick test without SRA download
-
-Uses bundled 5-read FASTQ snippet only (upload dry-run / header inspection):
-
-```bash
-uv run python skills/flow-compile/flow_compile.py \
-  --case gse105082 \
-  --output /tmp/gse105082-quick \
-  --accept-proposals /tmp/gse105082-demo/barcode_proposals.json \
-  --fastq-dir skills/flow-compile/demo
-```
-
----
-
-## Legacy demos
-
-| Case | GSE | Purpose |
-|------|-----|---------|
-| `--demo` | GSE118265 | FLASH barcode profile (no pause) |
-| `--case hnrnph` | GSE303135 | iCLIP2 barcode pause demo |
-
-See `WORKFLOW.md` for the Mermaid diagram.
+See **`WORKFLOW.md`** for the full branching diagram (FLASH, uvCLAP, ENA).
