@@ -159,14 +159,21 @@ Resulting params: `move_umi_to_header=true`, `umi_separator=_`,
 ## 6. Interaction with SRA-direct import
 
 `flowbio samples import` pulls **whole runs** — for a PE study that means both mates are
-attached to the sample. It cannot upload read 2 alone. So for PE eCLIP either:
+attached to the sample, with a mate association Flow derives from the filename and which
+cannot be changed afterwards.
 
-- upload read 2 only via the **local-download path** (`reference/sra-direct-import.md` §
-  "SRA-direct vs local-download"), or
-- import both mates and ensure the execution consumes read 2 as the crosslink read.
+**Deleting read 1 does not yield a single-end sample.** The surviving `_2` file stays in the
+`fastq_2` slot, `fastq_1` comes up empty, and the nf-core samplesheet check rejects the row.
+Forcing `fastq_1` at submission time only puts the same file in *both* slots, which is then
+classified paired-end with identical mates and stalls. The full list of failed workarounds
+is in `reference/sra-direct-import.md` §5b.
 
-Record which choice was made in the sample `Comments` — it is not recoverable from the
-Flow record otherwise.
+**So paired-end eCLIP must use the local-download path:** fetch the read-2 FASTQs from ENA
+FTP and upload them with `flowbio samples upload --reads1 <read2 file>` (omitting
+`--reads2`), which assigns slot 1 explicitly and produces a genuine single-end sample.
+
+Record the choice in the sample `Comments` — that read 2 is the uploaded read is not
+recoverable from the Flow record otherwise.
 
 ---
 

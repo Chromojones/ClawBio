@@ -162,27 +162,41 @@ ERROR: Please check samplesheet -> Invalid combination of columns provided!
 Line: 'SMInput_HEK293T_Hs_antiviral_rep2,1,,/media/.../SRX17851514_SRR21863794_2.fastq.gz'
 ```
 
-Three things that do **not** fix it:
+**No submission-time workaround fixes this.** All of these were tried against GSE215250
+and none produces a usable single-end row:
 
 | Attempt | Result |
 |---------|--------|
-| `csv_params.samplesheet.paired = "single"` | No effect — the slot still comes from the filename |
+| `csv_params.samplesheet.paired = "single"` | No effect — slot still derived from the filename |
 | `POST /data/{id}/edit {"filename": …}` | Returns 200 but the rename is **silently ignored** |
 | `POST /data/{id}/edit {"paired": 1}` | `400 — "You can only pair multiplexed data"` |
+| Row `values` with `fastq_1: <data id>`, `fastq_2: ""` | Check *passes*, but `fastq_2` is still auto-filled from the filename, so the **same file occupies both slots** → classified paired-end (`single_end=0`) with identical mates; the run stops after the check |
+| Row `values` with `fastq_1: <data id>`, `fastq_2` key omitted | Identical outcome |
 
-**What works:** pass the data id explicitly as `fastq_1` in the submission rows, which
-overrides the filename-derived slot:
+The nf-core check is unforgiving by design:
 
 ```python
-rows.append({
-    "sample": sample_id,
-    "values": {"group": name, "replicate": "1", "fastq_1": data_id, "fastq_2": ""},
-})
+if sample and fastq_1 and fastq_2:        # -> paired-end,  single_end = 0
+elif sample and fastq_1 and not fastq_2:  # -> single-end,   single_end = 1
+else: print_error("Invalid combination of columns provided!")
 ```
 
-Verified on GSE215250 — `SAMPLE_BASE_SAMPLESHEET_CHECK` passes and the execution proceeds.
-The vendored `flowrunanalysis_flowbio.py` does **not** do this by default (it sends only
-`group`/`replicate`), so a read-2-only sample needs the explicit form above.
+`fastq_2` must be genuinely empty, and nothing at submission time can empty a slot that
+Flow filled from the `_2` filename.
+
+**The fix is at upload time, not submission time.** A sample whose read arrived through
+`samples import` carries an immutable mate association. To get a true single-end sample,
+upload the read-2 file explicitly as `reads1`:
+
+```bash
+flowbio samples upload --name <sample> --sample-type CLIP \
+  --reads1 <SRRxxxx_2.fastq.gz> --project <PID> --organism Hs --metadata ...
+```
+
+`--reads2` is what makes a sample paired; omitting it yields single-end, and the file lands
+in slot 1 regardless of its name. This costs a download of the read-2 files (SRA-direct
+cannot supply them locally), which is the standing limitation of the direct-import path for
+paired-end eCLIP — see §6.
 
 ---
 
