@@ -132,7 +132,9 @@ pip install flowbio          # Flow.bio client (not on PyPI resolution — insta
 ```
 
 Set credentials via env (`FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD`) or let the
-credentials stage write `.flow_credentials.env`. Everything the delivery stages
+credentials stage write `.flow_credentials.env` — it also mints a **`FLOW_API_TOKEN`**,
+which is what the flowbio CLI (`samples import`, `import-status`) and
+`lib/flow_project_assign.py` authenticate with. Everything the delivery stages
 call is vendored under `lib/vendor/flow_api/`, so a ClawBio-only clone is
 self-contained (no parent advbfx tree required).
 

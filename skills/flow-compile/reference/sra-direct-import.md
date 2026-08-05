@@ -147,6 +147,45 @@ Timing: ~3 min for a single sample, ~30 min for 8.
 
 ---
 
+## 5b. Paired-end eCLIP — keeping read 2 only
+
+`samples import` pulls **whole runs**, so a PE study arrives with both mates attached. For
+eCLIP the crosslink is on read 2 (`reference/eclip-analysis-params.md`), so read 1 must be
+removed — but deleting it is not sufficient on its own.
+
+**The trap:** Flow's samplesheet generator assigns the mate slot from the **filename
+suffix**. A lone `…_2.fastq.gz` is still placed in `fastq_2`, leaving `fastq_1` empty, and
+the pipeline rejects the row:
+
+```
+ERROR: Please check samplesheet -> Invalid combination of columns provided!
+Line: 'SMInput_HEK293T_Hs_antiviral_rep2,1,,/media/.../SRX17851514_SRR21863794_2.fastq.gz'
+```
+
+Three things that do **not** fix it:
+
+| Attempt | Result |
+|---------|--------|
+| `csv_params.samplesheet.paired = "single"` | No effect — the slot still comes from the filename |
+| `POST /data/{id}/edit {"filename": …}` | Returns 200 but the rename is **silently ignored** |
+| `POST /data/{id}/edit {"paired": 1}` | `400 — "You can only pair multiplexed data"` |
+
+**What works:** pass the data id explicitly as `fastq_1` in the submission rows, which
+overrides the filename-derived slot:
+
+```python
+rows.append({
+    "sample": sample_id,
+    "values": {"group": name, "replicate": "1", "fastq_1": data_id, "fastq_2": ""},
+})
+```
+
+Verified on GSE215250 — `SAMPLE_BASE_SAMPLESHEET_CHECK` passes and the execution proceeds.
+The vendored `flowrunanalysis_flowbio.py` does **not** do this by default (it sends only
+`group`/`replicate`), so a read-2-only sample needs the explicit form above.
+
+---
+
 ## 6. Verify
 
 ```bash

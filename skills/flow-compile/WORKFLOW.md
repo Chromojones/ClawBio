@@ -25,13 +25,14 @@ This section is the **canonical procedure** for any model running flow-compile. 
 
 The agent's job at session start is to **gather corpus files**, not to guess barcodes.
 
-### Three mandatory hard stops (never bypass)
+### Four mandatory hard stops (never bypass)
 
 | # | Gate | Artifact | Agent action |
 |---|------|----------|--------------|
 | 1 | **Barcode confirmation** | `CONFIRM_BARCODES.md` + `barcode_proposals.json` | Present every GSM with evidence quotes; pipeline exits **3** until user sets `status: confirmed` and you re-run with `--accept-proposals` |
-| 2 | **Flow project ID** | `--flow-project-id` | No `upload_live.sh` / `run_analysis.sh` without it |
-| 3 | **Analysis params** | `analysis_params.confirmed.json` | User copies/confirms `pipeline_params.json`; `run_analysis.sh` refuses to run until files match |
+| 2 | **Flow project ID** | `--flow-project-id` | No upload / import / analysis without it |
+| 3 | **Metadata accuracy** | `CONFIRM_METADATA.md` + `metadata_validation.json` | Antibody, source, target/tag and 5′ barcode are validated per row; pipeline exits **3** on any error until you re-run with `--accept-metadata`. Rules: `reference/metadata-accuracy-checklist.md` |
+| 4 | **Analysis params** | `analysis_params.confirmed.json` | User copies/confirms `pipeline_params.json`; `run_analysis.sh` refuses to run until files match |
 
 **Severity:** Skipping barcode confirmation or inventing barcode strings is a **workflow violation** — treat it like uploading without user approval. If no evidence exists for a GSM, mark `NEEDS_USER_INPUT` and **stop**; ask the user or fetch the referenced publication.
 
@@ -135,8 +136,8 @@ Paste the diagram below into any Mermaid renderer (GitHub, Notion, mermaid.live,
 
 | Label | Meaning |
 |-------|---------|
-| **manual** | Agent hook — pause for user/agent confirmation (barcodes, params, Flow project) |
-| **agent** | Agentic — Cursor agent dispatches skills, reads literature/GEO, presents evidence |
+| **manual** | Researcher action outside the pipeline (create the Flow project) |
+| **gate** | Hard stop — the pipeline exits 3 until the researcher confirms |
 | **script** | Scripted — deterministic Python (`flow_compile.py` / `lib/*`) or generated shell + 4-min polling |
 | **branch** | Protocol-specific optional path (FLASH / uvCLAP UMI pre-extract) |
 
@@ -145,81 +146,96 @@ flowchart TD
     subgraph legend[" "]
         direction LR
         LG1[manual]:::manual
-        LG2[agent]:::agent
+        LG2[gate]:::gate
         LG3[script]:::script
         LG4[branch]:::branch
     end
 
-    subgraph manual_gates["Agent hooks"]
-        M0["Create Flow project<br/><i>hook</i>"]:::manual
-        M1["Barcode hook<br/>CONFIRM_BARCODES.md<br/><i>hook</i>"]:::manual
-        M2["Analysis params hook<br/>CONFIRM_ANALYSIS_PARAMS.md<br/><i>hook</i>"]:::manual
-        M0 --> M1 --> M2
+    subgraph manual_gates["Researcher hooks (hard stops)"]
+        M0["Create Flow project<br/>--flow-project-id"]:::manual
+        M1["1 · Barcodes<br/>CONFIRM_BARCODES.md<br/>--accept-proposals"]:::gate
+        M2["2 · Metadata accuracy<br/>CONFIRM_METADATA.md<br/>--accept-metadata"]:::gate
+        M3["3 · Analysis params<br/>CONFIRM_ANALYSIS_PARAMS.md"]:::gate
+        M0 --> M1 --> M2 --> M3
     end
 
     subgraph start["0 · Credentials"]
-        M2 --> C0["credentials.py<br/>prompt or env<br/><i>script</i>"]:::script
-        C0 --> C1[".flow_credentials.env<br/><i>script</i>"]:::script
+        M3 --> C0["credentials.py<br/>prompt or env<br/>+ mint FLOW_API_TOKEN"]:::script
+        C0 --> C1[".flow_credentials.env"]:::script
     end
 
-    subgraph discover["1 · Literature & GEO index"]
-        C1 --> P0{"--scan-pubmed?<br/><i>optional</i>"}:::script
-        P0 -->|yes| P1["pubmed_stage.py<br/><i>script</i>"]:::script
+    subgraph discover["1 · Literature &amp; GEO index"]
+        C1 --> P0{"--scan-pubmed?"}:::script
+        P0 -->|yes| P1["pubmed_stage.py"]:::script
         P0 -->|no| G0
-        P1 --> G0["geo_matrix.py<br/>parse series matrix<br/><i>script</i>"]:::script
-        G0 --> G1["load srr_map.tsv<br/><i>script</i>"]:::script
-        G1 --> G2["geo_sample_fetch.py<br/>GEO text for barcodes<br/><i>script</i>"]:::script
-        G2 --> B0["barcode_evidence.py<br/>regex on paper + GEO<br/><i>script</i>"]:::script
-        B0 --> B1["barcode_extract.py<br/>proposals per GSM<br/><i>script</i>"]:::script
-        B1 --> B2{"paper text<br/>missing?<br/><i>script</i>"}:::script
-        B2 -->|yes| B3["barcode_resolver.py<br/>heuristic fallback<br/><i>script</i>"]:::script
-        B2 -->|no| E
-        B3 --> E{"barcode hook<br/>confirmed?<br/><i>hook</i>"}:::manual
-        E -->|pause| E
-        E -->|yes / --accept-proposals| F
+        P1 --> G0["geo_matrix.py<br/>parse series matrix"]:::script
+        G0 --> G1["load_srr_map + validate_srr_map<br/>gsm · srr · srx"]:::script
+        G1 --> G2["geo_sample_fetch.py"]:::script
+        G2 --> B0["barcode_evidence.py"]:::script
+        B0 --> B1["barcode_extract.py<br/>proposals per GSM"]:::script
+        B1 --> E{"barcode hook<br/>confirmed?"}:::gate
+        E -->|pause exit 3| E
+        E -->|--accept-proposals| F
     end
 
-    subgraph annotate["2 · Flow annotation"]
-        F["flow_annotate.py<br/>+ sample_naming · organism<br/>+ protein_target_annotation<br/><i>script</i>"]:::script
-        F --> F2["annotation.csv<br/><i>script</i>"]:::script
-        F2 --> F3["annotation_xlsx.py<br/><i>optional</i>"]:::script
+    subgraph annotate["2 · Annotation &amp; metadata gate"]
+        F["flow_annotate.py<br/>+ sample_naming · organism<br/>+ protein_target_annotation"]:::script
+        F --> F1["paper_metadata_enrich.py<br/>antibody · scientist · PI"]:::script
+        F1 --> F2["metadata_validate.py<br/>agent · source · target · barcode"]:::script
+        F2 --> MG{"metadata errors?"}:::gate
+        MG -->|pause exit 3| MG
+        MG -->|--accept-metadata| F3["annotation.csv"]:::script
     end
 
-    subgraph local["3 · Local FASTQ prep (poll every 4 min)"]
-        F3 --> PF["prefetch.sh<br/><i>script</i>"]:::script
-        PF --> PF2{"download finished?<br/><i>script</i>"}:::script
+    F3 --> ROUTE{"in SRA/ENA and<br/>no read transform<br/>needed?"}:::branch
+
+    subgraph direct["3a · SRA-direct import — PREFERRED"]
+        ROUTE -->|yes| S0["sra_header_preview.py<br/>ENA byte-range snippet<br/>headers.txt + provenance"]:::script
+        S0 --> S1["pipeline_params.py<br/>from header state"]:::script
+        S1 --> S2["sra_import.py<br/>import_sheet.csv (SRX only)"]:::script
+        S2 --> S3["flowbio samples import<br/>async job id"]:::script
+        S3 --> S4{"import-status<br/>COMPLETED?"}:::script
+        S4 -->|poll| S4
+        S4 --> S5["flow_project_assign.py<br/>sheet has no project field"]:::script
+        S5 --> S6{"paired-end eCLIP?"}:::branch
+        S6 -->|yes| S7["keep read 2 only<br/>pass data id as fastq_1"]:::branch
+        S6 -->|no| READY
+        S7 --> READY
+    end
+
+    subgraph local["3b · Local download — fallback"]
+        ROUTE -->|"no · not in SRA, or<br/>FLASH / uvCLAP"| PF["prefetch.sh / wget ENA"]:::script
+        PF --> PF2{"download finished?"}:::script
         PF2 -->|poll| PF2
-        PF2 -->|yes| RC["re-compile --fastq-dir<br/><i>script</i>"]:::script
-        RC --> UMI{"FLASH or<br/>uvCLAP?<br/><i>branch</i>"}:::branch
-        UMI -->|FLASH| U1["flash_umi_extract.py<br/>umi_extract.sh<br/><i>branch</i>"]:::branch
-        UMI -->|uvCLAP| U2["uvclap_umi_extract.py<br/>umi_extract.sh<br/><i>branch</i>"]:::branch
+        PF2 --> RC["re-compile --fastq-dir"]:::script
+        RC --> UMI{"FLASH or uvCLAP?"}:::branch
+        UMI -->|FLASH| U1["flash_umi_extract.py"]:::branch
+        UMI -->|uvCLAP| U2["uvclap_umi_extract.py<br/>+ merge_pe.sh"]:::branch
         UMI -->|other| H0
-        U2 --> U3["merge_pe.sh<br/>multi-SRR GSMs<br/><i>branch</i>"]:::branch
-        U1 --> RC2["re-compile --fastq-dir<br/><i>script</i>"]:::script
-        U3 --> RC2
-        RC2 --> H0["fastq_headers.py<br/>headers.txt<br/><i>script</i>"]:::script
-        H0 --> PP["pipeline_params.py<br/>pipeline_params.json<br/><i>script</i>"]:::script
-        PP --> HC{"needs removespace?<br/><i>script</i>"}:::script
-        HC -->|yes| CL["header_clean.py<br/>clean_fastq.sh<br/><i>script</i>"]:::script
-        HC -->|no| L
-        CL --> CL2{"clean finished?<br/><i>script</i>"}:::script
-        CL2 -->|poll| CL2
-        CL2 --> RC3["re-compile --fastq-dir<br/><i>script</i>"]:::script
-        RC3 --> L["upload-ready FASTQs<br/><i>script</i>"]:::script
+        U1 --> RC2["re-compile --fastq-dir"]:::script
+        U2 --> RC2
+        RC2 --> H0["fastq_headers.py<br/>headers.txt"]:::script
+        H0 --> HC{"needs removespace?"}:::script
+        HC -->|yes| CL["header_clean.py<br/>clean_fastq.sh"]:::script
+        HC -->|no| UP
+        CL --> UP["upload_live.sh"]:::script
+        UP --> UP2{"upload finished?"}:::script
+        UP2 -->|poll| UP2
+        UP2 --> READY
     end
 
-    subgraph deliver["4 · Flow delivery (poll every 4 min)"]
-        L --> FS["flow_stages.py<br/>upload_live.sh · run_analysis.sh<br/><i>script</i>"]:::script
-        FS --> P2{"upload finished?<br/>process_runner.py<br/><i>script</i>"}:::script
-        P2 -->|poll| P2
-        P2 --> Q["run_analysis.sh<br/><i>script</i>"]:::script
-        Q --> Q2{"analysis finished?<br/><i>script</i>"}:::script
+    subgraph deliver["4 · Analysis"]
+        READY["samples on Flow"]:::script
+        READY --> AP{"analysis params<br/>confirmed?"}:::gate
+        AP -->|pause| AP
+        AP --> Q["run_analysis.sh<br/>flowrunanalysis_flowbio.py"]:::script
+        Q --> Q2{"execution finished?"}:::script
         Q2 -->|poll| Q2
-        Q2 --> U["CLIP-Seq execution on Flow<br/><i>Flow platform</i>"]:::platform
+        Q2 --> U["CLIP-Seq execution on Flow"]:::platform
     end
 
   classDef manual fill:#fff3cd,stroke:#856404,color:#333
-  classDef agent fill:#d1ecf1,stroke:#0c5460,color:#333
+  classDef gate fill:#f8d7da,stroke:#721c24,color:#333
   classDef script fill:#d4edda,stroke:#155724,color:#333
   classDef branch fill:#e8daef,stroke:#6c3483,color:#333
   classDef platform fill:#e2e3e5,stroke:#6c757d,color:#333

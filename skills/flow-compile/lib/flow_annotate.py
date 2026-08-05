@@ -204,6 +204,18 @@ def load_srr_map(path) -> pd.DataFrame:
     required = {"gsm", "srr", "mate", "fastq"}
     if not required.issubset(df.columns):
         raise ValueError(f"SRR map must contain columns: {sorted(required)}")
+
+    # A run mapped to two GSMs, a duplicate row or a bad mate value means the map itself is
+    # wrong — that attaches the wrong reads to a sample, so refuse rather than proceed.
+    blocking = [
+        issue
+        for issue in validate_srr_map(df)
+        if "multiple runs" not in issue  # informational: extra runs are simply unused
+    ]
+    if blocking:
+        raise ValueError(
+            "srr_map integrity check failed:\n  - " + "\n  - ".join(blocking)
+        )
     return df
 
 
@@ -211,20 +223,79 @@ def is_eclip_method(method: str) -> bool:
     return (method or "").strip().lower() in {"eclip", "seclip"}
 
 
-def _fastq_paths_for_gsm(
-    srr_rows: pd.DataFrame,
-    *,
-    r1_only: bool = False,
-) -> tuple[str, str]:
-    """Return (reads1, reads2) paths for a GSM from srr_map rows."""
+def validate_srr_map(srr_map: pd.DataFrame) -> list[str]:
+    """Structural checks on the agent-authored GSM↔SRR mapping.
+
+    Nothing downstream can distinguish a transposed row from a correct one, so the cheap
+    structural signatures are checked here: a run shared between two GSMs, duplicate rows,
+    mate values outside {1, 2}, and empty FASTQ names. Multi-run GSMs are reported too
+    because only the first run reaches the annotation.
+    """
+    issues: list[str] = []
+    if srr_map is None or srr_map.empty:
+        return issues
+
+    frame = srr_map.copy()
+    for column in ("gsm", "srr", "fastq"):
+        if column in frame.columns:
+            frame[column] = frame[column].astype(str).str.strip()
+
+    if {"srr", "gsm"}.issubset(frame.columns):
+        for srr, group in frame.groupby("srr"):
+            gsms = sorted(set(group["gsm"]))
+            if len(gsms) > 1:
+                issues.append(
+                    f"run {srr} is mapped to multiple samples ({', '.join(gsms)}) — "
+                    "a run belongs to exactly one GSM; check for a transposed row"
+                )
+
+    if {"gsm", "srr", "mate"}.issubset(frame.columns):
+        counts = frame.groupby(["gsm", "srr", "mate"]).size()
+        for (gsm, srr, mate), count in counts.items():
+            if count > 1:
+                issues.append(f"duplicate row: {gsm} / {srr} / mate {mate} appears {count} times")
+
+    if "mate" in frame.columns:
+        bad = sorted({str(m) for m in frame["mate"] if str(m).strip() not in {"1", "2"}})
+        if bad:
+            issues.append(f"invalid mate value(s): {', '.join(bad)} — mate must be 1 or 2")
+
+    if "fastq" in frame.columns:
+        missing = frame[frame["fastq"].isin(["", "nan", "None"])]
+        for _, row in missing.iterrows():
+            issues.append(f"{row.get('gsm', '?')} / {row.get('srr', '?')}: empty fastq name")
+
+    if {"gsm", "srr"}.issubset(frame.columns):
+        for gsm, group in frame.groupby("gsm"):
+            runs = sorted(set(group["srr"]))
+            if len(runs) > 1:
+                issues.append(
+                    f"{gsm} has multiple runs ({', '.join(runs)}) — only {runs[0]} is used; "
+                    "merge the runs before upload if all are wanted"
+                )
+    return issues
+
+
+def _fastq_paths_for_gsm(srr_rows: pd.DataFrame) -> tuple[str, str]:
+    """Return (reads1, reads2) paths for a GSM from srr_map rows.
+
+    A mate exists only when the **same run accession** has a mate-2 row. Two rows with
+    different runs are separate runs of a single-end GSM — treating the second as read 2
+    silently declared two unrelated accessions to be a pair.
+    """
     rows = srr_rows.sort_values("mate")
-    file1 = str(rows.iloc[0]["fastq"])
-    file2 = ""
-    if not r1_only:
-        if "file2" in rows.columns and pd.notna(rows.iloc[0].get("file2")):
-            file2 = str(rows.iloc[0]["file2"]).strip()
-        elif len(rows) > 1:
-            file2 = str(rows.iloc[1]["fastq"])
+    first = rows.iloc[0]
+    file1 = str(first["fastq"])
+
+    explicit = first.get("file2") if "file2" in rows.columns else None
+    if explicit is not None and pd.notna(explicit) and str(explicit).strip():
+        return file1, str(explicit).strip()
+
+    candidates = rows
+    if "srr" in rows.columns:
+        candidates = rows[rows["srr"].astype(str) == str(first.get("srr", ""))]
+    mate2 = candidates[candidates["mate"].astype(str).str.strip() == "2"]
+    file2 = str(mate2.iloc[0]["fastq"]) if len(mate2) else ""
     return file1, file2
 
 
