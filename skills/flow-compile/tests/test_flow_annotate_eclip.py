@@ -1,73 +1,84 @@
-"""Tests for eCLIP annotation (R1-only upload, GSE290281-style titles)."""
+"""eCLIP mate selection.
+
+Paired-end eCLIP carries the crosslink on **read 2** (the randomer is trimmed from R2's
+5' end and the crosslink sits immediately after it). The Yeo pipeline says so explicitly —
+`samtools view -f 128` (second-in-pair) — and `eclipdemux` trims the randomer from
+"the front of 2nd read in pair".
+
+seCLIP is genuinely single-end: read 1 is the only read and carries the crosslink.
+
+An earlier version of this module uploaded read 1 for all eCLIP, which analysed the wrong
+end of the molecule for every paired-end study.
+"""
 
 import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+SKILL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SKILL_DIR))
 
-from lib.flow_annotate import (
-    apply_eclip_r1_only_filenames,
-    build_annotation_table,
-    infer_protein_target,
-    load_srr_map,
-    purification_agent,
+from lib.flow_annotate import (  # noqa: E402
+    apply_eclip_crosslink_mate_filenames,
+    is_eclip_method,
 )
-from lib.barcode_resolver import BarcodeResolution
-from lib.geo_matrix import parse_geo_matrix
-from lib.protein_target_annotation import infer_purification_target_annotation
 
 
-GSE290281_MATRIX = Path(__file__).resolve().parents[5] / "GSE290281/geo/GSE290281_series_matrix.txt"
-GSE290281_SRR = Path(__file__).resolve().parents[5] / "GSE290281/geo/srr_map.tsv"
+class TestIsEclipMethod:
+    def test_eclip_and_seclip_recognised(self):
+        assert is_eclip_method("eCLIP")
+        assert is_eclip_method("seCLIP")
+
+    def test_other_methods_are_not_eclip(self):
+        assert not is_eclip_method("iCLIP")
+        assert not is_eclip_method("")
 
 
-class TestEclipAnnotate:
-    def test_protein_from_comma_title(self):
-        assert infer_protein_target("GRB2, HEK293T, IP, replicate 1 eCLIP") == "GRB2"
-
-    def test_v5_purification_annotation(self):
-        proto = (
-            "Cells were lysed and immunoprecipitated with RBP specific or V5-antibody."
+class TestCrosslinkMateSelection:
+    def test_paired_eclip_promotes_read2_to_the_uploaded_read(self):
+        """R2 carries the crosslink — it becomes File, and File 2 is cleared."""
+        df = pd.DataFrame(
+            [{"File": "SRR1_1.fastq.gz", "File 2": "SRR1_2.fastq.gz",
+              "Experimental Method": "eCLIP"}]
         )
-        ann = infer_purification_target_annotation(
-            title="CPSF5, HEK293T, IP, replicate 1 eCLIP",
-            characteristics=["cell line: HEK293T"],
-            experimental_method="eCLIP",
-            protein_target="CPSF5",
-            extract_protocol=proto,
-        )
-        assert ann == "cV5"
-        agent = purification_agent(
-            ["cell line: HEK293T"],
-            extract_protocol=proto,
-            title="CPSF5, HEK293T, IP, replicate 1 eCLIP",
-        )
-        assert agent == "V5-antibody"
+        out = apply_eclip_crosslink_mate_filenames(df)
+        assert out.loc[0, "File"] == "SRR1_2.fastq.gz"
+        assert out.loc[0, "File 2"] == ""
 
-    def test_apply_r1_only_clears_file2(self):
-        df = pd.DataFrame({"File": ["SRR1_1.fastq.gz"], "File 2": ["SRR1_2.fastq.gz"]})
-        out = apply_eclip_r1_only_filenames(df)
-        assert out.iloc[0]["File 2"] == ""
+    def test_single_end_eclip_keeps_read1(self):
+        """seCLIP / already-R2-only rows have no mate to promote."""
+        df = pd.DataFrame(
+            [{"File": "SRR1.fastq.gz", "File 2": "", "Experimental Method": "seCLIP"}]
+        )
+        out = apply_eclip_crosslink_mate_filenames(df)
+        assert out.loc[0, "File"] == "SRR1.fastq.gz"
+        assert out.loc[0, "File 2"] == ""
 
-    def test_build_annotation_omits_file2_for_eclip(self):
-        if not GSE290281_MATRIX.exists():
-            return
-        matrix = parse_geo_matrix(GSE290281_MATRIX)
-        srr_map = load_srr_map(GSE290281_SRR)
-        barcode = BarcodeResolution(
-            gsm="GSM8809678",
-            five_prime="NNNNNNNNNN",
-            three_prime="",
-            protocol="eCLIP",
-            confidence="confirmed",
+    def test_non_eclip_rows_are_untouched(self):
+        """iCLIP crosslink is on read 1 — never promote its mate."""
+        df = pd.DataFrame(
+            [{"File": "SRR1_1.fastq.gz", "File 2": "SRR1_2.fastq.gz",
+              "Experimental Method": "iCLIP"}]
         )
-        ann = build_annotation_table(
-            matrix,
-            srr_map,
-            {gsm: barcode for gsm in srr_map["gsm"].astype(str).unique()},
+        out = apply_eclip_crosslink_mate_filenames(df)
+        assert out.loc[0, "File"] == "SRR1_1.fastq.gz"
+        assert out.loc[0, "File 2"] == "SRR1_2.fastq.gz"
+
+    def test_mixed_table_only_promotes_eclip_rows(self):
+        df = pd.DataFrame(
+            [
+                {"File": "a_1.fastq.gz", "File 2": "a_2.fastq.gz",
+                 "Experimental Method": "eCLIP"},
+                {"File": "b_1.fastq.gz", "File 2": "b_2.fastq.gz",
+                 "Experimental Method": "iCLIP"},
+            ]
         )
-        assert (ann["File 2"].fillna("") == "").all()
-        assert ann.iloc[0]["Protein (Purification Target)"] == "CPSF5"
-        assert ann.iloc[0]["Purification Target Annotation"] == "cV5"
+        out = apply_eclip_crosslink_mate_filenames(df)
+        assert out.loc[0, "File"] == "a_2.fastq.gz"
+        assert out.loc[1, "File"] == "b_1.fastq.gz"
+
+    def test_missing_file2_column_is_safe(self):
+        df = pd.DataFrame([{"File": "SRR1.fastq.gz", "Experimental Method": "eCLIP"}])
+        out = apply_eclip_crosslink_mate_filenames(df)
+        assert out.loc[0, "File"] == "SRR1.fastq.gz"

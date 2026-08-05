@@ -54,7 +54,34 @@ The agent must make a **purposeful effort** to find barcodes in metadata and lit
 
 **When evidence is empty:** proposal shows `NEEDS_USER_INPUT`; pipeline still pauses; user must supply methods text or confirm manually.
 
-### End-to-end step list (GEO path)
+### End-to-end step list — SRA-direct (PREFERRED, flowbio ≥ 0.10.0)
+
+Flow pulls the reads itself; nothing is downloaded or cleaned locally. Full runbook:
+`reference/sra-direct-import.md`.
+
+```
+0. API token (FLOW_API_TOKEN) + Flow project ID (user)
+1. flow_compile.py --geo-matrix --srr-map --paper-text … --output DIR
+   → barcode proposals → HARD STOP #1 (exit 3)
+2. User confirms barcodes → re-run with --accept-proposals
+   → annotation.csv
+3. Header preview (no download): lib/sra_header_preview.py
+   → ENA byte-range snippet per SRR → headers.txt + headers_provenance.md
+   → pipeline_params.json  (ENA keeps original headers; fastq-dump would destroy :rbc:)
+4. Metadata gate: lib/metadata_validate.py
+   → CONFIRM_METADATA.md → HARD STOP #3 → --accept-metadata
+5. lib/sra_import.py → import_sheet.csv + sra_import.sh   (accession = SRX, never SRR)
+6. bash sra_import.sh
+   → flowbio samples import → poll import-status → flow_project_assign.py
+     (project assignment is a SEPARATE step — the sheet has no project field)
+7. HARD STOP #4: user confirms analysis_params.confirmed.json
+8. run_analysis.sh
+```
+
+**Use the local-download path below instead** when the study is not in SRA/ENA, or when
+reads must be transformed before upload (FLASH / uvCLAP UMI extraction).
+
+### End-to-end step list (GEO path — local download, fallback)
 
 ```
 0. Credentials + Flow project ID (user)
@@ -81,6 +108,7 @@ The agent must make a **purposeful effort** to find barcodes in metadata and lit
 | **FLASH** | extract_protocol / method | `umi_extract.sh` (umi_tools, PE) | **Skip** (keep umi_tools header spaces) | `derive_flash_post_umi_params()` |
 | **uvCLAP** | method | `umi_extract.sh` + optional `merge_pe.sh` | **Skip** | `derive_uvclap_post_umi_params()` |
 | **ENA / ArrayExpress** | E-MTAB accession | `wget` from ENA FTP (not prefetch) | as generic | barcodes from SDRF filename; may need **multiple executions** by `umi_header_format` group |
+| **SRA-direct (preferred)** | study is in SRA/ENA and needs no read transformation | none — Flow pulls the reads | **n/a** (nothing uploaded locally) | from ENA byte-range header preview; see `reference/sra-direct-import.md` |
 
 Decision after header inspection:
 

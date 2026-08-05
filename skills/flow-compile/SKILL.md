@@ -6,7 +6,7 @@ description: >-
   Flow upload annotation sheets, optionally prefetch reads, and upload via Flow API.
 license: MIT
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   author: Michael Jones <jonesmichaelk1@proton.me>
   domain: clip-seq
   tags:
@@ -65,7 +65,7 @@ metadata:
       - requests>=2.31
       - openpyxl>=3.1
     optional_packages:
-      - flowbio   # Flow.bio client — required only for upload / analysis / metadata-push stages
+      - flowbio>=0.10.0   # Flow.bio client + CLI; `samples import` (SRA-direct) requires >=0.10.0
     system:
       - wget      # ENA FASTQ FTP download (ena-arrayexpress-workflow)
       - pigz      # removespace / header clean
@@ -136,6 +136,29 @@ credentials stage write `.flow_credentials.env`. Everything the delivery stages
 call is vendored under `lib/vendor/flow_api/`, so a ClawBio-only clone is
 self-contained (no parent advbfx tree required).
 
+## Preferred workflow — SRA-direct import
+
+**Default to this path.** Flow pulls reads from SRA/ENA itself (`flowbio samples import`,
+flowbio ≥ 0.10.0), so there is no local download, no `prefetch`, and no `removespace`
+header cleaning. Runbook: **`reference/sra-direct-import.md`**.
+
+```
+credentials → geo-matrix → barcode-extract → flow-annotate → metadata gate
+  → header preview (ENA byte-range) → import_sheet.csv → samples import → project assign → analysis
+```
+
+| Step | Module | Note |
+|------|--------|------|
+| Header preview | `lib/sra_header_preview.py` | ENA byte-range keeps **original** headers; `fastq-dump` rewrites deflines and is fallback-only |
+| Metadata gate | `lib/metadata_validate.py` | `CONFIRM_METADATA.md`; released by `--accept-metadata` |
+| Import sheet | `lib/sra_import.py` | Accession must be **SRX/ERX/DRX** — run accessions (`SRR`) fail with HTTP 500 |
+| Project assign | `lib/flow_project_assign.py` | **Required** — the import sheet has no `project` field, so samples land unattached |
+
+`srr_map.tsv` carries both `srr` (header preview) and `srx` (import).
+
+**Use the local-download path instead** when the study is not in SRA/ENA, or when reads must
+be transformed before upload (FLASH / uvCLAP UMI extraction).
+
 ## Skill chain
 
 ```
@@ -183,12 +206,25 @@ All Flow uploads must go through `flow_compile.py` with these **hard stops**:
    - **eCLIP/seCLIP + `:rbc:`** → `encode_eclip=true`.
    - **eCLIP/seCLIP + no `:rbc:`** → `encode_eclip=false`, `move_umi_to_header=true`, `_` separator.
    - **Other CLIP** → `encode_eclip=false`. See `reference/eclip-analysis-params.md`.
-3. **Analysis** — `CONFIRM_ANALYSIS_PARAMS.md` → `analysis_params.confirmed.json` must match `pipeline_params.json` before `run_analysis.sh`.
+3. **Metadata accuracy (SEVERE)** — `lib/metadata_validate.py` checks the antibody, source, target/tag and 5′ barcode of every row, writes `CONFIRM_METADATA.md` + `metadata_validation.json`, and **blocks on any error** until you re-run with `--accept-metadata`. Full rules and worked traps: `reference/metadata-accuracy-checklist.md`.
+
+   | Field | Rule (one line) |
+   |-------|-----------------|
+   | `purification_agent` | From the Methods sentence **naming the CLIP assay**, not the first Key Resources row. Format `<Species> Anti-<TARGET> (<Vendor> <Catalog>)`. Vendor **and** catalog required. Controls → `no antibody` |
+   | `source` | A specific line (`HEK293T`), never a supplier phrase (`ATCC Cell Lines`) or descriptor (`human embryonic kidney`). `cell line:` beats `source_name_ch1`. HEK293 vs HEK293T must be confirmed against the paper |
+   | `source__annotation` | Detail **beyond** the general cell type — lineage/clone (`HeLa` + `Kyoto`). Empty unless the paper names one |
+   | `purification_target` | Gene symbol. eCLIP inputs are `SMInput`, **never** the IP's protein |
+   | `purification_target__annotation` | Terminal prefix + tag (`c3xFLAG-HBH`, `cV5`, `nGFP`). **Empty for endogenous IPs** |
+   | `5' Barcode Sequence` | `ACGTN` literal; execution `umi_header_format` is all-`N` of the same length. eCLIP default `NNNNNNNNNN` |
+
+4. **Analysis** — `CONFIRM_ANALYSIS_PARAMS.md` → `analysis_params.confirmed.json` must match `pipeline_params.json` before `run_analysis.sh`.
 
 **Do not** create ad-hoc `build_*_workflow.py` scripts that skip these gates. See `.cursor/rules/flow-compile-upload-guardrails.mdc`.
 
 Integrates:
 
+- **SRA-direct import** — `reference/sra-direct-import.md` (**canonical workflow**; SRX-only accessions, no project field, header preview).
+- **Metadata accuracy checklist** — `reference/metadata-accuracy-checklist.md` (per-field search order, formats, never-do list, worked traps).
 - **Annotation rules** — `reference/annotation-rules.md` (from Flow annotate / `annotation-file-creation` skill).
 - **eCLIP analysis params** — `reference/eclip-analysis-params.md` (`encode_eclip`, PE crosslink on R1).
 - **ENA / ArrayExpress workflow** — `reference/ena-arrayexpress-workflow.md` (SDRF barcodes, ENA FTP download, per-UMI-group executions).
@@ -283,7 +319,10 @@ Monitor upload: `tail -f /tmp/flow-compile-demo/logs/upload.log`
 
 ## Gotchas
 
-- **Flow sample names must not contain spaces.** Sanitize `!Sample_source_name_ch1` and other tokens (`ATCC Cell Lines` → `ATCC_Cell_Lines`). Invalid names break CLIP samplesheets at execution time.
+- **Flow sample names must not contain spaces.** Sanitize every token before it reaches the name; invalid names break CLIP samplesheets at execution time. Note the source itself now comes from the `cell line:` / `cell type:` characteristic in preference to `!Sample_source_name_ch1` (`lib/flow_annotate.resolve_source`), so a supplier phrase like `ATCC Cell Lines` no longer reaches the name at all — GSE105082 yields `DHX9_Hs_HeLa_Rep1_…`.
+- **`samples import` takes SRX, not SRR.** A run accession returns `HTTP 500` with no diagnostic. `lib/sra_import.py` raises before submitting. Keep both in `srr_map.tsv`: `srr` drives the header preview, `srx` drives the import.
+- **The import sheet has no `project` column.** flowbio's reserved columns are `accession`, `name`, `organism`, `sample_type`; a `project` column is silently swallowed as metadata and the samples land unattached. Always run `lib/flow_project_assign.py` after the job completes.
+- **Never preview headers with `fastq-dump`.** It rewrites deflines to `@SRR…N` even with `--origfmt`, so `:rbc:` becomes undetectable and the whole study takes the wrong params branch. Use the ENA byte-range path; `headers_provenance.md` flags any run that fell back.
 - **Replicate labels come from GEO titles**, not guesswork. `iCLIP-DHX9-1` / `iCLIP-DHX9-2` map to `Rep1` / `Rep2`. A title ending in `-2` must not become `Rep1` (GSE105082 bug fixed in `lib/sample_naming.py`).
 - **Never guess barcodes.** If protocol text and tags disagree on unrelated patterns, leave `5' Barcode Sequence` empty
   and list the issue in `barcode_audit.json`. When the paper lists multiple barcodes and a supplementary filename

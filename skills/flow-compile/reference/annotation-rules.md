@@ -18,15 +18,28 @@ Source of truth for field mapping: `advbfx/.cursor/skills/annotation-file-creati
 | Experimental Method | `iCLIP`, `eCLIP`, `PAR-CLIP`, etc. |
 | 5' Barcode Sequence | From barcode resolver; **Flow metadata allows only `A`, `C`, `G`, `T`, `N`**. FLASH/IUPAC grammar (`R`, `Y`, `B`) is normalized to `N` before upload (`normalize_flow_barcode` in `lib/barcode_evidence.py`). Replicate identity (RR vs YY) is carried in sample name / GEO title, not in R/Y letters. |
 | GEO ID | `GSM…` per row |
-| PubMed ID | Series `!Series_pubmed_id` |
+| Scientist | **First author** full name from linked PubMed record (`paper_metadata_enrich`); never GEO contact name |
+| PI | **Last author** full name from linked PubMed record (`paper_metadata_enrich`); never GEO contact name |
+| PubMed ID | Series `!Series_pubmed_id` (verify against publication — ArrayExpress deposits may be wrong) |
 | Protein (Purification Target) | Gene symbol from title/characteristics |
 | Organism | `Hs`, `Mm`, `Gg` only — never full scientific names |
 | Purification Target Annotation | Tag on protein (`c3xFLAG-HBH`); API key `purification_target__annotation`; displays as `GENE:annotation` |
-| Purification Agent | Full antibody string from **paper Methods** when GEO is vague; format `Mouse Anti-TARGET (Vendor Catalog)` — see skill `update-sample-metadata`; post-upload via `flow_public_samples_push_metadata_v2.py` |
+| Purification Agent | Full antibody string from **paper Methods** when GEO/SDRF is vague; format `Mouse Anti-TARGET (Vendor Catalog)` — resolved by mandatory `paper_metadata_enrich` stage when a PubMed ID is present; warnings in `ANNOTATION_WARNINGS.md` |
 
-## eCLIP / seCLIP (read 1 only)
+## eCLIP / seCLIP — upload the crosslink mate
 
-Paired-end eCLIP FASTQs from SRA have two mates, but **Flow upload is single-end (R1 only)**. Read 2 carried the sequencing-center **demultiplexing** index; PCR duplicate marking uses the UMI Flow extracts from read 1 via Trim Galore (`move_umi_to_header=true`, `encode_eclip=false` for raw SRA without `:rbc:`). See `reference/eclip-analysis-params.md`.
+Paired-end eCLIP FASTQs have two mates and Flow upload is single-end, but the mate to keep
+is **read 2, not read 1**. In PE eCLIP read 1 holds only the 7 nt inline demultiplexing
+barcode, while **read 2 carries the randomer (N5/N10) followed by the crosslink** — the Yeo
+pipeline extracts it with `samtools view -f 128`, and `eclipdemux` trims the randomer from
+"the front of 2nd read in pair". `apply_eclip_crosslink_mate_filenames` promotes File 2 →
+File for eCLIP rows.
+
+**seCLIP** is genuinely single-end: read 1 is the only read and carries the crosslink.
+
+For raw SRA reads without `:rbc:`, Flow extracts the UMI from the uploaded read
+(`move_umi_to_header=true`, `umi_header_format=NNNNNNNNNN`, `encode_eclip=false`).
+Full read-structure table, header states and literature: `reference/eclip-analysis-params.md`.
 
 ## FLASH UMI extract (pre-upload)
 
@@ -46,6 +59,7 @@ FLASH PE libraries carry **13 nt** on read 2 (`NNXXXXXXNNNNN`: 2 random + 6 UMI 
 |------|----------|--------------|
 | Barcode | `CONFIRM_BARCODES.md`, `barcode_proposals.json` | Present 5' barcode, **source** (`evidence[].source`), and quote; wait for `status: confirmed` |
 | Analysis params | `CONFIRM_ANALYSIS_PARAMS.md`, `pipeline_params.json` | Present derived `move_umi_to_header`, `umi_header_format`, etc.; user copies to `analysis_params.confirmed.json` |
+| Paper metadata | `ANNOTATION_WARNINGS.md`, `annotation_warnings.json` | After annotation build: Scientist = first author; PI = last author; purification agents from paper Methods/PMC; review warnings for empty/generic fields |
 | Flow project | CLI `--flow-project-id` | User creates project in Flow UI |
 
 ## Barcode source priority

@@ -90,6 +90,10 @@ class TestGSE105082Case:
             GSE105082_MATRIX,
             GSE105082_SRR_MAP,
             accept_proposals=proposals_path,
+            # GSE105082 has no antibody in GEO and no --paper-text here, so the metadata
+            # gate legitimately blocks on an empty Purification Agent. Approving it is
+            # what the researcher does after reviewing CONFIRM_METADATA.md.
+            accept_metadata=True,
             fastq_dir=fq_dir,
             flow_project_id="997999200849251656",
         )
@@ -106,5 +110,7 @@ class TestGSE105082Case:
         df = pd.read_csv(out / "annotation.csv")
         assert len(df) == 1
         assert df.iloc[0]["GEO ID"] == "GSM2817677"
-        assert df.iloc[0]["Sample Name"] == "DHX9_Hs_ATCC_Cell_Lines_Rep1_SRR6181530"
+        # `cell type: HeLa` now wins over the supplier phrase in !Sample_source_name_ch1
+        # ("ATCC Cell Lines") — see lib/flow_annotate.resolve_source.
+        assert df.iloc[0]["Sample Name"] == "DHX9_Hs_HeLa_Rep1_SRR6181530"
         assert normalize_organism(df.iloc[0]["Organism"]) == "Hs"

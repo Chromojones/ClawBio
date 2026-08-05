@@ -60,10 +60,18 @@ from lib.uvclap_umi_extract import (
     write_umi_extract_script as write_uvclap_umi_extract_script,
 )
 from lib.flow_annotate import (
-    apply_eclip_r1_only_filenames,
+    _match_method,
+    apply_eclip_crosslink_mate_filenames,
     build_annotation_table,
     load_srr_map,
 )
+from lib.paper_metadata_enrich import (
+    collect_annotation_field_warnings,
+    enrich_annotation_from_paper,
+    write_annotation_warnings,
+)
+from lib.metadata_validate import ERROR as METADATA_ERROR
+from lib.metadata_validate import validate_annotation_table, write_metadata_hook
 from lib.geo_matrix import parse_geo_matrix
 from lib.pipeline_params import (
     derive_clip_pipeline_params,
@@ -311,7 +319,7 @@ def _annotation_is_flash(annotation, matrix_data: dict[str, Any] | None = None) 
         blob = " ".join(
             str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
         )
-        if "flash" in blob.lower():
+        if _match_method(blob) == "FLASH":
             return True
     return False
 
@@ -326,8 +334,9 @@ def _annotation_is_eclip(annotation, matrix_data: dict[str, Any] | None = None) 
             str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
         )
         series_title = str(matrix_data.get("series", {}).get("title", ""))
-        blob = f"{blob} {series_title}".lower()
-        if "eclip" in blob:
+        if _match_method(series_title) in {"eCLIP", "seCLIP"} or (
+            not _match_method(series_title) and _match_method(blob) in {"eCLIP", "seCLIP"}
+        ):
             return True
     return False
 
@@ -617,6 +626,7 @@ def run_pipeline(
     geo_cache_dir: Path | None = None,
     fetch_geo: bool = False,
     accept_proposals: Path | None = None,
+    accept_metadata: bool = False,
     require_confirmation: bool = True,
     fastq_dir: Path | None = None,
     reads_per_file: int = 5,
@@ -700,12 +710,62 @@ def run_pipeline(
     annotation = build_annotation_table(matrix_data, srr_map, barcode_by_gsm)
     stages["flow_annotate"] = f"{len(annotation)} rows; Organism ∈ {{Hs, Mm, Gg}}"
 
+    paper_blob = ""
+    if paper_texts:
+        paper_blob = "\n\n".join(p.read_text(encoding="utf-8", errors="replace") for _, p in paper_texts)
+    if pmid:
+        annotation, paper_meta, ann_warnings = enrich_annotation_from_paper(
+            annotation, pmid, paper_text=paper_blob
+        )
+        warn_path = write_annotation_warnings(output_dir, ann_warnings, paper_meta)
+        stages["paper_metadata"] = (
+            f"Scientist={paper_meta.first_author or '?'}; PI={paper_meta.last_author or '?'}; "
+            f"{len(ann_warnings)} warning(s) → {warn_path.name}"
+        )
+    else:
+        # No PMID means no paper enrichment, but the field checks must still run —
+        # otherwise a series without !Series_pubmed_id gets no validation at all.
+        ann_warnings = collect_annotation_field_warnings(annotation)
+        warn_path = write_annotation_warnings(output_dir, ann_warnings, None)
+        stages["paper_metadata"] = (
+            f"skipped — no PubMed ID on series matrix; "
+            f"{len(ann_warnings)} field warning(s) → {warn_path.name}"
+        )
+
+    # HARD STOP #3 — metadata accuracy gate (antibody / source / target+tag / barcode).
+    metadata_issues = validate_annotation_table(annotation)
+    metadata_hook = write_metadata_hook(output_dir, metadata_issues)
+    blocking = [i for i in metadata_issues if i.severity == METADATA_ERROR]
+    stages["metadata_validate"] = (
+        f"{len(blocking)} error(s), {len(metadata_issues) - len(blocking)} warning(s) "
+        f"→ {metadata_hook.name}"
+    )
+    if blocking and not accept_metadata:
+        pause_report = {
+            "status": "paused_for_metadata_confirmation",
+            "gse": gse,
+            "pmid": pmid,
+            "stages": stages,
+            "errors": [asdict(i) for i in blocking],
+            "next_step": (
+                "Correct the annotation (see CONFIRM_METADATA.md and "
+                "reference/metadata-accuracy-checklist.md), then re-run with --accept-metadata"
+            ),
+        }
+        (output_dir / "result.json").write_text(json.dumps(pause_report, indent=2))
+        (output_dir / "report.md").write_text(
+            "# Flow Compile — paused for metadata confirmation\n\n"
+            f"{len(blocking)} blocking metadata issue(s). Review "
+            f"`{metadata_hook}` then re-run with `--accept-metadata`.\n"
+        )
+        return None, True
+
     flash_study = _annotation_is_flash(annotation, matrix_data)
     uvclap_study = _annotation_is_uvclap(annotation, matrix_data)
     eclip_study = _annotation_is_eclip(annotation, matrix_data)
     if eclip_study:
-        annotation = apply_eclip_r1_only_filenames(annotation)
-        stages["flow_annotate"] += " (eCLIP read 1 only — R2 demux only)"
+        annotation = apply_eclip_crosslink_mate_filenames(annotation)
+        stages["flow_annotate"] += " (eCLIP: read 2 = crosslink mate)"
     if flash_study:
         annotation = apply_umi_extracted_filenames(annotation)
         stale_clean = output_dir / "clean_fastq.sh"
@@ -750,7 +810,7 @@ def run_pipeline(
     if use_cleaned_names:
         annotation, _ = _apply_cleaned_filenames(annotation)
     if eclip_study:
-        annotation = apply_eclip_r1_only_filenames(annotation)
+        annotation = apply_eclip_crosslink_mate_filenames(annotation)
 
     flash_umi_stage = ""
     uvclap_umi_stage = ""
@@ -881,6 +941,7 @@ def _build_pipeline_kwargs(
         "geo_cache_dir": geo_cache_dir,
         "fetch_geo": args.fetch_geo,
         "accept_proposals": args.accept_proposals,
+        "accept_metadata": args.accept_metadata,
         "require_confirmation": not args.no_require_confirmation,
         "fastq_dir": args.fastq_dir,
         "reads_per_file": args.header_reads,
@@ -971,6 +1032,15 @@ def run(args: argparse.Namespace) -> int:
 
     result, paused = run_pipeline(**pipeline_kwargs)
 
+    if paused and (output_dir / "result.json").exists() and json.loads(
+        (output_dir / "result.json").read_text()
+    ).get("status") == "paused_for_metadata_confirmation":
+        print("⏸ Paused — metadata accuracy gate")
+        print(f"  Review: {output_dir / 'CONFIRM_METADATA.md'}")
+        print("  Rules:  reference/metadata-accuracy-checklist.md")
+        print("  Then:   re-run with --accept-metadata")
+        return EXIT_PAUSED
+
     if paused:
         print("⏸ Paused — barcode proposals need human confirmation")
         print(f"  Review: {output_dir / 'CONFIRM_BARCODES.md'}")
@@ -1054,6 +1124,14 @@ def main() -> int:
     parser.add_argument("--geo-cache-dir", type=Path, help="Cached GEO sample text files geo_GSM*.txt")
     parser.add_argument("--fetch-geo", action="store_true", help="Live-fetch GEO sample pages")
     parser.add_argument("--accept-proposals", type=Path, help="Confirmed barcode_proposals.json")
+    parser.add_argument(
+        "--accept-metadata",
+        action="store_true",
+        help=(
+            "Release the metadata accuracy gate after reviewing CONFIRM_METADATA.md "
+            "(see reference/metadata-accuracy-checklist.md)"
+        ),
+    )
     parser.add_argument(
         "--no-require-confirmation",
         action="store_true",

@@ -38,12 +38,51 @@ ANNOTATION_COLUMNS = [
 ]
 
 
+#: Cell lines that routinely lead a GEO title — never a purification target.
+CELL_LINE_TOKENS = frozenset(
+    {
+        "HELA", "HEK293", "HEK293T", "293T", "HEK", "K562", "HEPG2", "MCF7", "U2OS",
+        "SH-SY5Y", "SHSY5Y", "NIH3T3", "3T3", "JURKAT", "A549", "U87", "HCT116",
+        "MEF", "ESC", "HESC", "MESC", "IPSC", "CCE", "2102EP", "H9",
+    }
+)
+#: Antibody host species — `infer_protein_target` used to return these verbatim.
+SPECIES_TOKENS = frozenset(
+    {"RABBIT", "MOUSE", "GOAT", "RAT", "HUMAN", "SHEEP", "DONKEY", "CHICKEN", "LLAMA"}
+)
+#: Size-matched input / control markers. eCLIP inputs are their own target.
+_INPUT_RE = re.compile(r"\b(sm[\s_-]?input|size[\s_-]?matched\s+input|input)\b", re.I)
+_IGG_RE = re.compile(r"\b(igg|mock|beads?[\s_-]only|no[\s_-]antibody)\b", re.I)
+#: A plausible gene symbol: starts with a letter, mostly alphanumeric, not too long.
+_GENE_SYMBOL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9\-]{1,14}$")
+
+
+def _is_plausible_target(token: str) -> bool:
+    """Reject cell lines, host species and antibody fragments posing as gene symbols."""
+    candidate = (token or "").strip().upper()
+    if not candidate or not _GENE_SYMBOL_RE.match(candidate):
+        return False
+    if candidate in CELL_LINE_TOKENS or candidate in SPECIES_TOKENS:
+        return False
+    if candidate.startswith("ANTI"):
+        return False
+    return True
+
+
 def infer_protein_target(title: str, characteristics: list[str] | None = None) -> str:
-    # GEO titles like "CPSF5, HEK293T, input, replicate 1 eCLIP"
-    if "," in (title or ""):
-        lead = title.split(",", 1)[0].strip()
-        if lead and re.match(r"^[A-Za-z0-9][A-Za-z0-9-]*$", lead):
-            return lead.upper()
+    title = title or ""
+    # Controls first — an input row must never inherit the IP's protein.
+    if _INPUT_RE.search(title):
+        return "SMInput"
+    if _IGG_RE.search(title):
+        return "IgG"
+
+    # GEO titles like "CPSF5, HEK293T, replicate 1 eCLIP"
+    if "," in title:
+        for field in title.split(","):
+            lead = field.strip()
+            if _is_plausible_target(lead):
+                return lead.upper()
     upper_title = title.upper()
     if "GFP" in upper_title.split():
         return "GFP"
@@ -68,8 +107,14 @@ def infer_protein_target(title: str, characteristics: list[str] | None = None) -
         if "antibody:" in lower or "purification" in lower:
             if ":" in item:
                 agent = item.split(":", 1)[1].strip()
-                if agent:
-                    return agent.split()[0].upper()
+                # "rabbit anti-PARP13 (Thermo …)" — skip the host species and the
+                # anti- prefix rather than returning RABBIT or ANTI-PARP13.
+                for word in agent.replace("(", " ").split():
+                    token = word.strip(",;()").upper()
+                    if token.startswith("ANTI-") and _is_plausible_target(token[5:]):
+                        return token[5:]
+                    if _is_plausible_target(token):
+                        return token
     return ""
 
 
@@ -101,25 +146,57 @@ def _cell_from_characteristics(characteristics: list[str]) -> str:
     return ""
 
 
+def resolve_source(*, source_name: str, characteristics: list[str] | None) -> str:
+    """Cell or tissue for the annotation sheet.
+
+    An explicit `cell line:` / `cell type:` characteristic wins over
+    `!Sample_source_name_ch1`, which is often a supplier phrase ("ATCC Cell Lines") or a
+    generic descriptor ("human embryonic kidney") rather than the actual line.
+    """
+    return _cell_from_characteristics(characteristics or []) or (source_name or "").strip()
+
+
 def build_sample_name(protein: str, cell: str, org: str, title: str, srr: str) -> str:
     return build_flow_sample_name(protein, cell, org, title, srr)
 
 
+#: "cells were flash-frozen in liquid nitrogen" is boilerplate in extract protocols and
+#: must not be read as the FLASH protocol.
+_FLASH_FROZEN_RE = re.compile(r"flash[\s-]*fro(?:zen|ze)", re.I)
+
+#: (regex, method) in specificity order. Word boundaries stop prose mentions misfiring.
+_METHOD_PATTERNS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"\biclip2\b", re.I), "iCLIP2"),
+    (re.compile(r"\bse[\s-]?clip\b", re.I), "seCLIP"),
+    (re.compile(r"\buvclap\b", re.I), "uvCLAP"),
+    (re.compile(r"\bpar[\s-]?clip\b", re.I), "PAR-CLIP"),
+    (re.compile(r"\bhits[\s-]?clip\b", re.I), "HITS-CLIP"),
+    (re.compile(r"\biclap\b", re.I), "iCLAP"),
+    (re.compile(r"\bflash\b", re.I), "FLASH"),
+    (re.compile(r"\beclip\b", re.I), "eCLIP"),
+    (re.compile(r"\biclip\b", re.I), "iCLIP"),
+]
+
+
+def _match_method(text: str) -> str:
+    blob = _FLASH_FROZEN_RE.sub(" ", text or "")
+    for pattern, method in _METHOD_PATTERNS:
+        if pattern.search(blob):
+            return method
+    return ""
+
+
 def infer_experimental_method(protocol: str, series_title: str = "") -> str:
-    blob = f"{protocol} {series_title}".lower()
-    if "iclip2" in blob:
-        return "iCLIP2"
-    if "flash" in blob:
-        return "FLASH"
-    if "iclip" in blob:
-        return "iCLIP"
-    if "eclip" in blob:
-        return "eCLIP"
-    if "par-clip" in blob or "parclip" in blob:
-        return "PAR-CLIP"
-    if "uvclap" in blob:
-        return "uvCLAP"
-    return "iCLIP"
+    """Resolve the CLIP protocol, preferring the series title over protocol prose.
+
+    The title names the assay; extract protocols routinely cite *other* protocols
+    ("as described for eCLIP…", "FLASH is a variant of iCLIP"), so matching the protocol
+    blob first mislabels studies. `flash-frozen` is stripped before any FLASH match.
+
+    Unknown protocols still fall back to iCLIP — the most common CLIP flavour — but that
+    fallback is a guess and is surfaced in the metadata hook rather than trusted silently.
+    """
+    return _match_method(series_title) or _match_method(protocol) or "iCLIP"
 
 
 def load_srr_map(path) -> pd.DataFrame:
@@ -151,11 +228,33 @@ def _fastq_paths_for_gsm(
     return file1, file2
 
 
-def apply_eclip_r1_only_filenames(annotation: pd.DataFrame) -> pd.DataFrame:
-    """eCLIP/seCLIP: upload read 1 only (R2 was for sequencing-center demultiplexing)."""
+def apply_eclip_crosslink_mate_filenames(annotation: pd.DataFrame) -> pd.DataFrame:
+    """eCLIP: upload the mate that carries the crosslink.
+
+    Paired-end eCLIP puts the randomer on read 2's 5′ end and the crosslink immediately
+    after it, so **read 2 is the crosslink read** — the Yeo pipeline extracts it with
+    ``samtools view -f 128`` and ``eclipdemux`` trims the randomer from "the front of 2nd
+    read in pair". Read 1 only carries the 7 nt inline demultiplexing barcode, which is
+    not needed once multi-barcode libraries are merged.
+
+    seCLIP is genuinely single-end: read 1 is the only read and already carries the
+    crosslink, so there is nothing to promote.
+
+    Non-eCLIP rows are left alone — iCLIP has its crosslink on read 1.
+
+    See ``reference/eclip-analysis-params.md``.
+    """
     updated = annotation.copy()
-    if "File 2" in updated.columns:
-        updated["File 2"] = ""
+    if "File 2" not in updated.columns or "Experimental Method" not in updated.columns:
+        return updated
+
+    for index, row in updated.iterrows():
+        if not is_eclip_method(str(row.get("Experimental Method", ""))):
+            continue
+        mate2 = str(row.get("File 2", "") or "").strip()
+        if mate2:
+            updated.at[index, "File"] = mate2
+        updated.at[index, "File 2"] = ""
     return updated
 
 
@@ -185,8 +284,9 @@ def build_annotation_table(
             continue
         srr_rows = srr_rows.sort_values("mate")
         title = sample.get("title", "")
-        cell = sample.get("source_name_ch1", "") or _cell_from_characteristics(
-            sample.get("characteristics", [])
+        cell = resolve_source(
+            source_name=sample.get("source_name_ch1", ""),
+            characteristics=sample.get("characteristics", []),
         )
         org = normalize_organism(sample.get("organism_ch1", ""))
         characteristics = sample.get("characteristics", [])
@@ -201,8 +301,9 @@ def build_annotation_table(
                 + "; ".join(name_errors)
             )
 
-        eclip_r1_only = is_eclip_method(method)
-        file1, file2 = _fastq_paths_for_gsm(srr_rows, r1_only=eclip_r1_only)
+        # Keep both mates here; apply_eclip_crosslink_mate_filenames picks the
+        # crosslink read (R2 for paired-end eCLIP) once the method is known.
+        file1, file2 = _fastq_paths_for_gsm(srr_rows)
         row = {col: "" for col in ANNOTATION_COLUMNS}
         row["File"] = file1
         if file2:

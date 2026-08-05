@@ -7,8 +7,8 @@ Flow.bio CLIP-Seq execution. This is the sibling of the GEO/SRA path in
 come from and (2) that reads are pulled from the **ENA FASTQ FTP** instead of
 `prefetch`.
 
-Worked example: **E-MTAB-432** — Huppertz *et al.* 2010, *PLOS Biology*
-([PMID 20544596](https://pubmed.ncbi.nlm.nih.gov/20544596/)) — 24 TIA1 / TIAL1
+Worked example: **E-MTAB-432** — Wang *et al.* 2010, *PLOS Biology*
+([PMID 21048981](https://pubmed.ncbi.nlm.nih.gov/21048981/)) — 24 TIA1 / TIAL1
 iCLIP + iCLAP samples in HeLa. Full metadata:
 [E-MTAB-432 SDRF (full)](https://www.ebi.ac.uk/biostudies/ArrayExpress/studies/E-MTAB-432/sdrf?full=true).
 
@@ -48,6 +48,22 @@ flow-compile consumes a GEO-style series matrix + `srr_map.tsv`. For ENA, map:
 
 > The `ERS*`→`ERR*` mapping plays the role of GSM→SRR. Everything downstream
 > (`flow_annotate`, naming, params) is accession-agnostic.
+
+### Paper metadata (mandatory)
+
+After the annotation table is built, `flow_compile.py` always runs
+`lib/paper_metadata_enrich.py` when a PubMed ID is present:
+
+1. **Scientist** — first author full name from PubMed (not ArrayExpress contact).
+2. **PI** — last author full name from PubMed (not ArrayExpress contact / iCLIP method developer).
+3. **Purification Agent** — vendor + catalog from paper Methods (Europe PMC full text, or `--paper-text`).
+4. **Warnings** — `ANNOTATION_WARNINGS.md` lists any row where tracked fields stay empty or generic.
+
+**E-MTAB-432 caveat:** the curated series matrix initially carried PMID `20544596`
+(wrong paper). The linked publication is PMID **[21048981](https://pubmed.ncbi.nlm.nih.gov/21048981/)**
+(Wang *et al.* 2010). SDRF `Factor Value[IMMUNOPRECIPITATE]` only has
+`anti-TIA1 antibody` / `anti-TIAL1 antibody` — too vague for Flow; the paper Methods specify
+Santa Cruz C-20 / C-18.
 
 ---
 
