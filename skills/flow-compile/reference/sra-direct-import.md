@@ -25,6 +25,17 @@ These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
 | 1 | **The accession must be an experiment — `SRX`/`ERX`/`DRX`, never a run (`SRR`/`ERR`)** | `HTTP 500 internal_error`, no diagnostic |
 | 2 | **The sheet has no `project` column** — flowbio's `RESERVED_COLUMNS` is `(accession, name, organism, sample_type)` | Import succeeds; every sample lands **unattached** and the project shows 0 samples |
 | 3 | **`strandedness` is rejected for CLIP** — it is an RNA-Seq field | `422 … Not a valid attribute for this sample type` |
+| 4 | **Deleting a sample is `POST /samples/{id}/delete`** — the `DELETE` verb returns `200` with the sample body but **does nothing** | You believe a sample is gone; it is still in the project and still matches your execution filters |
+
+Fact 4 belongs to a family worth knowing: several Flow write endpoints return `200` while
+silently ignoring the request. Confirmed no-ops are `DELETE /samples/{id}` and
+`POST /data/{id}/edit {"filename": …}`. **Always re-read the resource after a mutation**
+rather than trusting the status code — `flow_edit_samples.py`'s verification step exists for
+exactly this reason (though it reads a top-level key while metadata is nested under
+`metadata.<key>.value`, so its warnings are noisy).
+
+Note that `samples upload` (unlike `samples import`) **does** honour `--project`, so a
+locally-uploaded sample needs no separate assignment step.
 
 Fact 3 has an upstream inconsistency worth knowing: `flowbio samples batch-template
 --sample-type CLIP` still lists `strandedness` among the **required** columns, while the
