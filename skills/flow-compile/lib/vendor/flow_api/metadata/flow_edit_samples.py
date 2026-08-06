@@ -66,6 +66,12 @@ WHITELIST_EDIT_FIELDS: Tuple[str, ...] = (
     "experimental_method",
     "purification_agent",
     "purification_target",
+    # Attribution fields. Omitted originally, which left no way to repair the common
+    # `pi = scientist.split()[-1]` fallback (PI recorded as the first author's surname)
+    # without hand-written REST calls. Verified accepted by POST /samples/{id}/edit.
+    "scientist",
+    "pi",
+    "organisation",
     "source",
     "sequencer",
 )
