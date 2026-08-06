@@ -5,16 +5,55 @@ single-end eCLIP (seCLIP) have *different read structures*, and the mate that ca
 crosslink is **not** the same in both. Getting this wrong silently analyses the wrong end
 of the molecule.
 
-> **Correction (2026-08):** an earlier version of this document stated that the crosslink
-> is at the 5′ end of read 1 and that read 2 should never be uploaded. That is true for
-> **seCLIP only**. For **paired-end eCLIP the crosslink is on read 2** — confirmed by the
-> Yeo lab's own processing (`samtools view -f 128`, i.e. second-in-pair) and by
-> `eclipdemux`. Any PE eCLIP project uploaded with read 1 is analysing the wrong mate and
-> should be re-uploaded with read 2; the metadata is otherwise fine.
+> **Correction (2026-08):** an earlier version of this document said the crosslink is always
+> at the 5′ end of read 1. For **ENCODE3 / Van Nostrand 2016 paired-end eCLIP the crosslink
+> is on read 2** — confirmed by the Yeo lab's own processing (`samtools view -f 128`) and by
+> `eclipdemux`. A first revision then over-corrected to "PE eCLIP → read 2" for all eCLIP;
+> that is also wrong. **ENCODE4 / Blue 2022 libraries are single-end and use read 1** even
+> when deposited as PAIRED. Establish the SOP era first — see §0.
 
 ---
 
-## 1. Which mate carries what
+## 0. First decide which SOP era the study is — it flips the answer
+
+**Do not apply a blanket "eCLIP → read 2" rule.** Which mate carries the crosslink depends
+on the protocol generation, and the two are easy to tell apart.
+
+| SOP | Skipper `protocol` | Layout | Crosslink read | Worked example |
+|-----|--------------------|--------|----------------|----------------|
+| **Van Nostrand 2016** | `ENCODE3` | paired-end | **read 2** | GSE215250 (PARP13) |
+| **Blue 2022** | `ENCODE4` | single-end | **read 1** | GSE290281 (tethered RBP screen) |
+
+[Skipper](https://github.com/YeoLab/skipper) — the Yeo lab's own pipeline — makes this
+explicit. Its **default** config (both `example/Example_config.yaml` and the lab-internal
+example) reads:
+
+```yaml
+protocol: ENCODE4   # ENCODE4 for single end, ENCODE3 for paired end.
+UMI_SIZE: 10
+INFORMATIVE_READ: 1
+```
+
+So a GEO record saying *"analyzed using Skipper with **default parameters**"* is telling you
+`INFORMATIVE_READ = 1` — **read 1**, with a 10 nt UMI. A study citing Blue 2022 that is
+deposited as PAIRED in SRA is still an ENCODE4 single-end library; the second mate is not
+used.
+
+### Free empirical test (no protocol text needed)
+
+Sample a few thousand read-1 sequences and take per-position base composition:
+
+| Read 1 positions 1–7 | Meaning | Use |
+|----------------------|---------|-----|
+| **Low entropy** (collapses to 1–2 bases, e.g. `AAGCAAT`/`GGCTTGT`) | inline demux barcode → **ENCODE3** | **read 2** |
+| **High entropy** (~1.9–2.0, no fixed prefix) | no inline barcode → **ENCODE4** | **read 1** |
+
+GSE290281 read 2 additionally begins with a constant `TCGATATC` and carries ~16% poly-G
+(NovaSeq dark reads) — the signature of a mate that is not informative.
+
+---
+
+## 1. Which mate carries what (ENCODE3 / paired-end)
 
 | | Paired-end eCLIP | seCLIP (single-end) |
 |---|---|---|
