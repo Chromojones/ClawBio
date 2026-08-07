@@ -158,11 +158,35 @@ Timing: ~3 min for a single sample, ~30 min for 8.
 
 ---
 
-## 5b. Paired-end eCLIP — keeping read 2 only
+## 5b. Never delete a mate — upload only the read you want
+
+> **Deleting a mate from an existing Flow sample is destructive, in both directions.**
+> Afterwards the sample, fileset and data endpoints all report a single read and look
+> completely correct, but the samplesheet generator still emits the *other* slot, so every
+> execution containing that sample breaks. There is no API-visible trace of the problem and
+> no way to clear it. The only remedy is to delete the sample and upload the wanted read with
+> `flowbio samples upload --reads1 <file>` (no `--reads2`), which creates a sample that was
+> never paired.
+
+Observed both ways:
+
+| Deleted | Survivor | Symptom |
+|---------|----------|---------|
+| read 1 (GSE215250, keeping read 2) | `…_2.fastq.gz` | stays in `fastq_2`, `fastq_1` empty → `Invalid combination of columns` |
+| read 2 (GSE290281, keeping read 1) | `…_1.fastq.gz` | `fastq_2` still emitted, pointing at the **deleted upload id** → row looks paired; check passes, run dies staging a missing file. Mixed with genuine single-end rows it fails as `Mixture of paired-end and single-end reads!` |
+
+The second case is the nastier one: a batch made *entirely* of such samples passes the
+samplesheet check and then stalls silently.
+
+**Diagnostic:** submit one suspect sample alone. A genuine single-end sample reaches
+`UMITOOLS_EXTRACT`; a mate-deleted one finishes with only `REMOVE_GTF_BRACKETS` and
+`SAMPLE_BASE_SAMPLESHEET_CHECK`.
+
+### The original PARP13 case (read 2 only)
 
 `samples import` pulls **whole runs**, so a PE study arrives with both mates attached. For
-eCLIP the crosslink is on read 2 (`reference/eclip-analysis-params.md`), so read 1 must be
-removed — but deleting it is not sufficient on its own.
+ENCODE3 eCLIP the crosslink is on read 2 (`reference/eclip-analysis-params.md`), so read 1
+must be removed — but deleting it is not sufficient on its own.
 
 **The trap:** Flow's samplesheet generator assigns the mate slot from the **filename
 suffix**. A lone `…_2.fastq.gz` is still placed in `fastq_2`, leaving `fastq_1` empty, and
