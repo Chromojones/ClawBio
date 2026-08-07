@@ -158,6 +158,42 @@ Timing: ~3 min for a single sample, ~30 min for 8.
 
 ---
 
+## 5a. Choosing which mate to analyse — `csv_params.samplesheet.paired`
+
+**A sample with both mates does not have to be analysed as paired-end.** The samplesheet
+`csv` param accepts a `paired` key that selects the mate:
+
+```json
+{"csv_params": {"samplesheet": {"rows": [...], "paired": "first"}}}
+```
+
+| Value | Effect |
+|-------|--------|
+| `"both"` | **default** — both mates go to the samplesheet; the row is paired-end (`single_end=0`) |
+| `"first"` | only mate 1 reaches the samplesheet — a genuine single-end row |
+| `"second"` | only mate 2 reaches the samplesheet — a genuine single-end row |
+
+Verified on GSE290281 `LGALS3_HEK293T_Hs_IP_rep1_SRR32456801` (both mates attached), same
+params, only `paired` changed — `UMITOOLS_EXTRACT` consumed:
+
+| `paired` | input file |
+|----------|-----------|
+| `"first"` | `SRX27771258_SRR32456801_1.fastq.gz` |
+| `"second"` | `SRX27771258_SRR32456801_2.fastq.gz` |
+
+**This is the supported way to run a mate-selected analysis, and it removes the main reason
+to ever prune a mate.** Import both reads and pick the informative one at submission time:
+`"second"` for ENCODE3 paired-end eCLIP, `"first"` for seCLIP.
+
+> **Only these three values are valid.** An unrecognised value such as `"single"` is silently
+> ignored and the default (`"both"`) applies — which is why an earlier attempt with
+> `paired: "single"` appeared to have no effect and led to a needless re-upload.
+
+The vendored `flowrunanalysis_flowbio.py` hardcodes `"paired": "both"`; override it when a
+study needs a specific mate.
+
+---
+
 ## 5b. Never delete a mate — upload only the read you want
 
 > **Deleting a mate from an existing Flow sample is destructive, in both directions.**
@@ -202,7 +238,7 @@ and none produces a usable single-end row:
 
 | Attempt | Result |
 |---------|--------|
-| `csv_params.samplesheet.paired = "single"` | No effect — slot still derived from the filename |
+| `csv_params.samplesheet.paired = "single"` | No effect — **`"single"` is not a valid value** and is silently ignored. The real control is `"first"`/`"second"` (§5a), which does work — but only for samples that still have both mates |
 | `POST /data/{id}/edit {"filename": …}` | Returns 200 but the rename is **silently ignored** |
 | `POST /data/{id}/edit {"paired": 1}` | `400 — "You can only pair multiplexed data"` |
 | Row `values` with `fastq_1: <data id>`, `fastq_2: ""` | Check *passes*, but `fastq_2` is still auto-filled from the filename, so the **same file occupies both slots** → classified paired-end (`single_end=0`) with identical mates; the run stops after the check |

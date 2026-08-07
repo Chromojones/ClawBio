@@ -222,6 +222,11 @@ Resulting params: `move_umi_to_header=true`, `umi_separator=_`,
 attached to the sample, with a mate association Flow derives from the filename and which
 cannot be changed afterwards.
 
+**First: if the sample has both mates, you can just select one at submission time** with
+`csv_params.samplesheet.paired` = `"first"` / `"second"` — see
+`reference/sra-direct-import.md` §5a. That is the supported way to analyse one mate and it
+avoids mate surgery entirely. The rest of this section applies when that is not an option.
+
 **Which path you need depends on the SOP era.**
 
 **seCLIP (post-2024 / ENCODE4), including seCLIP sequenced paired-end — use the import.**
