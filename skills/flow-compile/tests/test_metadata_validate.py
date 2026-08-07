@@ -88,7 +88,17 @@ class TestPurificationAgentValidation:
         assert issues and issues[0][0] == ERROR
 
     def test_control_target_requires_no_antibody(self):
-        assert validate_purification_agent("no antibody", target="SMInput") == []
+        # Convention: controls carry an EMPTY agent. `no antibody` is tolerated as legacy
+        # input but warned, so existing rows are not hard-failed.
+        assert validate_purification_agent("", target="SMInput") == []
+        assert validate_purification_agent("", target="IgG") == []
+
+    def test_control_with_legacy_no_antibody_warns_not_errors(self):
+        checks = validate_purification_agent("no antibody", target="SMInput")
+        assert checks, "legacy literal should be surfaced"
+        assert all(c.severity != ERROR for c in checks)
+
+    def test_control_carrying_a_real_antibody_is_an_error(self):
         issues = validate_purification_agent(
             "Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)", target="SMInput"
         )
@@ -197,7 +207,8 @@ class TestAnnotationTableValidation:
                 },
                 {
                     "Sample Name": "SMInput_HEK293T_Hs_basal_rep1",
-                    "Purification Agent": "no antibody",
+                    # Convention: controls carry an empty agent, not "no antibody".
+                    "Purification Agent": "",
                     "Cell or Tissue": "HEK293T",
                     "Protein (Purification Target)": "SMInput",
                     "Purification Target Annotation": "",

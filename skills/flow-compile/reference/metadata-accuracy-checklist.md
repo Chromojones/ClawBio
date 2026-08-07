@@ -63,8 +63,13 @@ catalog, or it is rejected.
 
 | Value | When |
 |-------|------|
-| `no antibody` | Size-matched input (SMInput), bead-only, and IgG controls |
+| *(empty)* | **Size-matched input (SMInput), bead-only and IgG controls.** No antibody was used, and this database records that as an empty field rather than a literal string |
 | `Strep/His affinity tag purification` | iCLAP (tag pulldown, not an antibody) |
+
+> **Convention:** inputs carry an **empty** `purification_agent`. An earlier revision of this
+> page prescribed the literal `no antibody`; that was reconciled to empty so IP rows are the
+> only ones with a value, making "has an agent" a clean proxy for "is an IP". Applied across
+> GSE290281 and GSE215250.
 
 ### Never
 
@@ -133,9 +138,9 @@ own target — **never the IP's protein**:
 
 | Library | `purification_target` | `purification_agent` |
 |---------|----------------------|----------------------|
-| eCLIP/seCLIP size-matched input | `SMInput` | `no antibody` |
-| Bead-only / no-antibody control | `SMInput` | `no antibody` |
-| IgG control | `IgG` | `no antibody` |
+| eCLIP/seCLIP size-matched input | `SMInput` | *(empty)* |
+| Bead-only / no-antibody control | `SMInput` | *(empty)* |
+| IgG control | `IgG` | *(empty)* |
 | GFP-only control construct | `GFP` | anti-GFP antibody |
 
 The validator flags any row whose **name** contains `INPUT`/`SMINPUT` while its target is a
@@ -199,7 +204,7 @@ Run through this before releasing the metadata gate.
 | ☐ | Every value traces to a quotable GEO field, SDRF column, or paper sentence |
 | ☐ | Antibody came from the sentence naming the CLIP assay, not the first Key Resources row |
 | ☐ | Antibody has species (if stated), target, vendor **and** catalog number |
-| ☐ | Input / IgG rows have target `SMInput`/`IgG` and agent `no antibody` |
+| ☐ | Input / IgG rows have target `SMInput`/`IgG` and an **empty** purification agent |
 | ☐ | Source is a specific line, not a supplier phrase or generic descriptor |
 | ☐ | HEK293 vs HEK293T (and similar pairs) confirmed against the paper |
 | ☐ | Tag annotation empty for endogenous IPs; correct `c`/`n` grammar when tagged |
@@ -217,7 +222,7 @@ What a naive GEO-only scrape produces versus the correct answer:
 | Field | Naive | Correct | Why |
 |-------|-------|---------|-----|
 | Purification Agent (IP) | *(empty)* or `Rabbit Anti-PARP13 (ProteinTech 16820-1-AP)` | `Anti-PARP13 (Thermo Fisher PA5-31650)` | ProteinTech antibody was used for **Western blot**; the eCLIP sentence names the Thermo one |
-| Purification Agent (input) | copies the IP antibody | `no antibody` | Size-matched input |
+| Purification Agent (input) | copies the IP antibody | *(empty)* | Size-matched input |
 | Cell or Tissue | `human embryonic kidney` | `HEK293T` | GEO descriptor; Key Resources gives ATCC CRL-3216 |
 | Target (IP) | `PARP13` | `PARP13` | ✔ |
 | Target (input) | `PARP13` | `SMInput` | Inputs never carry the IP protein |

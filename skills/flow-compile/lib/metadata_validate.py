@@ -150,15 +150,26 @@ def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
     field = "Purification Agent"
 
     if target_upper in CONTROL_TARGETS:
-        if value.lower() != "no antibody":
+        # Convention: controls carry an EMPTY agent, so "has an agent" is a clean proxy for
+        # "is an IP". The literal "no antibody" is tolerated as legacy data but warned.
+        if not value:
+            return []
+        if value.lower() == "no antibody":
             return [
                 Check(
-                    ERROR,
-                    f"control target {target} must use 'no antibody', got {value!r}",
+                    WARNING,
+                    f"control target {target} uses the legacy literal 'no antibody'; "
+                    "the convention is an empty purification agent",
                     field,
                 )
             ]
-        return []
+        return [
+            Check(
+                ERROR,
+                f"control target {target} must have an empty purification agent, got {value!r}",
+                field,
+            )
+        ]
 
     if not value:
         return [Check(ERROR, "purification agent is empty", field)]
