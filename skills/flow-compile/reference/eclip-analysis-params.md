@@ -5,12 +5,12 @@ single-end eCLIP (seCLIP) have *different read structures*, and the mate that ca
 crosslink is **not** the same in both. Getting this wrong silently analyses the wrong end
 of the molecule.
 
-> **Correction (2026-08):** an earlier version of this document said the crosslink is always
-> at the 5′ end of read 1. For **ENCODE3 / Van Nostrand 2016 paired-end eCLIP the crosslink
-> is on read 2** — confirmed by the Yeo lab's own processing (`samtools view -f 128`) and by
-> `eclipdemux`. A first revision then over-corrected to "PE eCLIP → read 2" for all eCLIP;
-> that is also wrong. **ENCODE4 / Blue 2022 libraries are single-end and use read 1** even
-> when deposited as PAIRED. Establish the SOP era first — see §0.
+> **Correction history (2026-08).** This page has been wrong twice, in opposite directions.
+> First it said the crosslink is always at the 5′ end of read 1 — untrue for **ENCODE3 /
+> Van Nostrand 2016 paired-end eCLIP**, where it is on **read 2** (`samtools view -f 128`,
+> `eclipdemux`). The fix then over-corrected to "PE eCLIP → read 2" for *all* eCLIP — also
+> untrue. **Post-2024 studies are seCLIP and use read 1**, even when sequenced and deposited
+> as PAIRED. Establish the SOP era first (§0); do not infer from the SRA layout field.
 
 ---
 
@@ -19,10 +19,31 @@ of the molecule.
 **Do not apply a blanket "eCLIP → read 2" rule.** Which mate carries the crosslink depends
 on the protocol generation, and the two are easy to tell apart.
 
-| SOP | Skipper `protocol` | Layout | Crosslink read | Worked example |
-|-----|--------------------|--------|----------------|----------------|
-| **Van Nostrand 2016** | `ENCODE3` | paired-end | **read 2** | GSE215250 (PARP13) |
-| **Blue 2022** | `ENCODE4` | single-end | **read 1** | GSE290281 (tethered RBP screen) |
+> **Rule of thumb: studies published from 2024 onwards are seCLIP.** The Yeo lab moved to the
+> single-end protocol, so a modern deposit should be treated as seCLIP — **read 1 carries the
+> crosslink** — unless there is positive evidence of the older paired-end design. Reach for
+> the ENCODE3 / read-2 rules only for the earlier generation.
+
+| SOP | Skipper `protocol` | Library | Crosslink read | Worked example |
+|-----|--------------------|---------|----------------|----------------|
+| **Van Nostrand 2016** | `ENCODE3` | paired-end eCLIP | **read 2** | GSE215250 (PARP13) |
+| **Blue 2022 / post-2024** | `ENCODE4` | **seCLIP** | **read 1** | GSE290281 (tethered RBP screen) |
+
+### Edge case: seCLIP sequenced paired-end
+
+A seCLIP library can still be **sequenced** paired-end and deposited as `PAIRED` in SRA. That
+does not make it ENCODE3. **Treat it as seCLIP and use read 1 for crosslinks** — the second
+mate is a sequencing artefact of the run, not part of the library design.
+
+Practical consequence: **both reads may be uploaded.** There is no need to strip read 2, and
+no need for the local-download dance — `flowbio samples import` (whole runs, both mates) is
+fine. The CLIP-Seq pipeline anchors the crosslink on read 1 via `crosslink_position=start`
+and `--alignEndsType Extend5pOfRead1`, so read 2 does not shift the crosslink. Note it *does*
+still participate in alignment, so a both-mates run is classified `single_end=0` and its BAM
+is not bit-identical to a read-1-only run — the crosslink positions are what matter.
+
+GSE290281 is exactly this case: Blue 2022 seCLIP, deposited PAIRED (2×101 nt on NovaSeq),
+and the authors' own Skipper manifest lists only `*_R1_001.fastq.gz`.
 
 [Skipper](https://github.com/YeoLab/skipper) — the Yeo lab's own pipeline — makes this
 explicit. Its **default** config (both `example/Example_config.yaml` and the lab-internal
@@ -36,8 +57,8 @@ INFORMATIVE_READ: 1
 
 So a GEO record saying *"analyzed using Skipper with **default parameters**"* is telling you
 `INFORMATIVE_READ = 1` — **read 1**, with a 10 nt UMI. A study citing Blue 2022 that is
-deposited as PAIRED in SRA is still an ENCODE4 single-end library; the second mate is not
-used.
+deposited as PAIRED in SRA is still an ENCODE4 seCLIP library; the second mate carries no
+crosslink information.
 
 ### Free empirical test (no protocol text needed)
 
@@ -61,7 +82,7 @@ GSE290281 read 2 additionally begins with a constant `TCGATATC` and carries ~16%
 | **Read 2** | `[randomer N5/N10][insert starting at the crosslink]` | *(none)* |
 | **Crosslink** | **5′ end of read 2** | 5′ end of read 1 |
 | **UMI / dedup** | randomer on **read 2** | randomer on read 1 |
-| **Upload to Flow** | **read 2** | read 1 |
+| **Upload to Flow** | **read 2** only | read 1 (both mates fine if sequenced PE) |
 
 The RT stops one nucleotide 3′ of the crosslinked base; the ssDNA adapter (`rand3Tr3`)
 carrying the randomer is ligated to the cDNA 3′ end, so the mate that reads *from the
@@ -201,15 +222,23 @@ Resulting params: `move_umi_to_header=true`, `umi_separator=_`,
 attached to the sample, with a mate association Flow derives from the filename and which
 cannot be changed afterwards.
 
-**Deleting read 1 does not yield a single-end sample.** The surviving `_2` file stays in the
-`fastq_2` slot, `fastq_1` comes up empty, and the nf-core samplesheet check rejects the row.
-Forcing `fastq_1` at submission time only puts the same file in *both* slots, which is then
-classified paired-end with identical mates and stalls. The full list of failed workarounds
-is in `reference/sra-direct-import.md` §5b.
+**Which path you need depends on the SOP era.**
 
-**So paired-end eCLIP must use the local-download path:** fetch the read-2 FASTQs from ENA
-FTP and upload them with `flowbio samples upload --reads1 <read2 file>` (omitting
-`--reads2`), which assigns slot 1 explicitly and produces a genuine single-end sample.
+**seCLIP (post-2024 / ENCODE4), including seCLIP sequenced paired-end — use the import.**
+Read 1 carries the crosslink and is already `fastq_1`, so both mates can simply be imported
+and left alone. This is the cheap path: no download, no mate surgery.
+
+**Genuine ENCODE3 paired-end eCLIP — use the local-download path.** The crosslink is on read
+2, and *deleting read 1 does not yield a single-end sample*: the surviving `_2` file stays in
+the `fastq_2` slot, `fastq_1` comes up empty, and the samplesheet check rejects the row.
+Forcing `fastq_1` at submission time only puts the same file in *both* slots, which is then
+classified paired-end with identical mates and stalls. The full list of failed workarounds is
+in `reference/sra-direct-import.md` §5b. Instead fetch the read-2 FASTQs from ENA FTP and
+upload them with `flowbio samples upload --reads1 <read2 file>` (omitting `--reads2`), which
+assigns slot 1 explicitly.
+
+**Never delete a mate from an existing sample** to convert between the two — it breaks the
+sample silently in both directions (`reference/sra-direct-import.md` §5b).
 
 Record the choice in the sample `Comments` — that read 2 is the uploaded read is not
 recoverable from the Flow record otherwise.
