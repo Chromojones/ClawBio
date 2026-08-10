@@ -66,6 +66,10 @@ WHITELIST_EDIT_FIELDS: Tuple[str, ...] = (
     "experimental_method",
     "purification_agent",
     "purification_target",
+    # Annotation sub-fields (Flow renders them as `value:annotation`). Needed to set a
+    # construct tag such as `cV5` or a cell-line lineage after upload.
+    "purification_target__annotation",
+    "source__annotation",
     # Attribution fields. Omitted originally, which left no way to repair the common
     # `pi = scientist.split()[-1]` fallback (PI recorded as the first author's surname)
     # without hand-written REST calls. Verified accepted by POST /samples/{id}/edit.

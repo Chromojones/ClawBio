@@ -167,6 +167,44 @@ Known tags: `3xFLAG-HBH`, `3xFLAG`, `FLAG`, `GFP`, `V5`, `HA`, `MYC`, `HBH`, `HI
 Rejected: `GFP` (no terminal prefix), `3xFLAG` (no prefix), `C-3xFLAG` (uppercase +
 hyphen), `flag` (lowercase, no prefix).
 
+### Terminal default: TAG-eCLIP is **C-terminal**
+
+**When a tagged-RBP CLIP experiment does not state the terminus, assume C-terminal** — that
+is the original TAG-eCLIP design, and the ORF libraries these screens draw on are cloned
+without stop codons, which forces a C-terminal fusion. So the default tag string is
+`cV5`, `c3xFLAG`, `cGFP` … and an N-terminal value (`nV5`) should only be written when the
+paper says so.
+
+The terminus is often unrecoverable from GEO and frequently absent from the paper too —
+GSE290281's Methods say only *"V5-tagged eCLIP … following overexpression of each protein by
+transfecting the protein expression plasmid as described previously"*, with no orientation
+anywhere in the deposit, the supplementary manifest, or the abstract. Applying the
+C-terminal default is what lets the field be filled at all.
+
+### Tag the pulldown, not the cell line
+
+**Only rows whose antibody is the anti-tag antibody carry the tag annotation.** In a study
+that mixes tagged and endogenous pulldowns, every sample may come from tagged cells, but the
+annotation describes *what was purified*:
+
+| Row | Agent | `purification_target__annotation` |
+|-----|-------|-----------------------------------|
+| V5 pulldown of a tagged RBP | `… Anti-V5 (…)` | `cV5` |
+| RBP-specific antibody, endogenous protein | `… Anti-RBM22 (…)` | **empty** |
+| Size-matched input | *(empty)* | **empty** — target is `SMInput`, there is no construct to describe |
+
+GSE290281 had `cV5` on RBM10 and RBM22, which were pulled down with their own antibodies
+(`Anti-RBM10`, `Anti-RBM22`) — the tag was applied study-wide instead of per pulldown. Nine
+rows were corrected: 8 cleared, 1 added.
+
+### Where the annotation actually lives
+
+Flow stores it **nested on the annotated field**, at
+`metadata.purification_target.annotation` — *not* at a top-level
+`metadata.purification_target__annotation` key. Write it with
+`{"purification_target__annotation": "cV5"}` but **read it back from the nested location**,
+or every row will look empty. Setting the value to `""` clears it.
+
 ### Deciding endogenous vs tagged
 
 | Evidence | Conclusion |
