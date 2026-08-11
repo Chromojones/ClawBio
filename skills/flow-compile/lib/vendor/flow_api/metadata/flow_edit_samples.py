@@ -83,6 +83,30 @@ WHITELIST_EDIT_FIELDS: Tuple[str, ...] = (
 DEFAULT_ACCESSION_RE = r"(ERR\d+|SRR\d+|DRR\d+|GSM\d+)"
 
 
+def live_value(live: dict, key: str) -> object:
+    """Read an edited field back out of a GET /samples/{id} payload.
+
+    Flow nests metadata — ``{"metadata": {"source": {"value": ..., "annotation": ...}}}`` —
+    so a flat ``live.get("source__annotation")`` is always None and ``live.get("source")`` is
+    a dict. Verifying against those produced a "verify mismatch" warning on every metadata
+    edit that had in fact applied cleanly.
+
+    Returns ``""`` for an annotation slot that is absent (no annotation *is* empty), and
+    ``None`` for a field that does not exist at all.
+    """
+    metadata = live.get("metadata") or {}
+    base, is_annotation, _ = key.partition("__annotation")
+    if is_annotation:
+        entry = metadata.get(base)
+        return (entry.get("annotation") or "") if isinstance(entry, dict) else ""
+    if key in live and not isinstance(live.get(key), dict):
+        return live.get(key)
+    entry = metadata.get(key)
+    if isinstance(entry, dict):
+        return entry.get("value")
+    return entry if entry is not None else live.get(key)
+
+
 def _norm(value: object) -> str:
     if value is None:
         return ""
@@ -276,7 +300,7 @@ def main() -> int:
         if not args.no_verify:
             live = fetch_sample(session, token, sid)
             mismatches = [
-                k for k, v in body.items() if _norm(live.get(k)) != _norm(v)
+                k for k, v in body.items() if _norm(live_value(live, k)) != _norm(v)
             ]
             if mismatches:
                 logging.warning("%s: verify mismatch on %s", sid, ",".join(mismatches))
