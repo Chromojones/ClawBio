@@ -7,7 +7,12 @@ import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-RBC_TAG = re.compile(r":rbc:", re.I)
+#: The `rbc:` UMI tag is not always colon-delimited on the left. GSE297587 (LARP6 iCLIP)
+#: appends it straight onto the index field — `…:N:0:1rbc:TAGGATAAA` — so a `:rbc:` pattern
+#: reports "no UMI in header" and the pipeline is told to extract it again, stripping bases
+#: that were already removed. Accept any non-alphabetic left delimiter (`:`, digit, `_`,
+#: start of string) while still refusing `rbc` embedded in a word such as `sorbc:`.
+RBC_TAG = re.compile(r"(?<![A-Za-z])rbc:", re.I)
 UNDERSCORE_BARCODE = re.compile(r"_([ACGTNacgtn]+)(?:/|\s|$)")
 
 
