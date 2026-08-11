@@ -362,57 +362,65 @@ class TestMutationTagAnnotation:
         issues = validate_target_and_annotation(target="LARP6", annotation="dNTR", agent="")
         assert issues and issues[0][0] == ERROR
 
+class TestAntibodyWithoutAVendor:
+    """When no catalog reagent exists, the agent is the bare canonical form.
 
-class TestGiftAntibody:
-    """An antibody shared by another lab has no vendor and no catalog number.
+    E-MTAB-1008 (Sugimoto 2012) immunoprecipitated Nova with an antibody the paper
+    acknowledges as shared by Robert B Darnell. There is nothing to buy and no catalog to
+    cite. Researcher convention: the agent stays `<Species> Anti-<TARGET>` and the
+    provenance ("gift from X") is recorded in **Comments**, not inside the agent string.
 
-    E-MTAB-1008 (Sugimoto 2012, Genome Biol 13:R67) immunoprecipitated Nova from mouse
-    brain with "an anti-Nova antibody", acknowledging "Robert B Darnell for sharing the
-    anti-Nova antibody". There is nothing to buy and no catalog to cite, so the canonical
-    `<Vendor> <Catalog>` shape is unsatisfiable — yet the value is fully documented and
-    correct. Older studies and tissue CLIP hit this routinely.
-
-    The escape hatch is deliberately narrow: the provenance must NAME someone, so a model
-    cannot write a bare "(gift)" to dodge the vendor requirement, and every gift antibody
-    warns so the researcher confirms no purchasable reagent was actually used.
+    The vendor-less *prose* forms stay rejected — `NOVA antibody`, `anti-NOVA antibody`,
+    `V5-antibody` are scraped phrasings that identify no reagent and signal an unfinished
+    lookup, which is a different failure from a genuine gift antibody.
     """
 
-    def test_gift_antibody_is_resolvable(self):
-        """Target is upper-cased exactly as the vendor form does — one canonical spelling."""
-        assert (
-            normalize_purification_agent("Anti-Nova (gift: Darnell lab)")
-            == "Anti-NOVA (gift: Darnell lab)"
-        )
+    def test_bare_canonical_form_is_resolvable(self):
+        assert normalize_purification_agent("Anti-Nova") == "Anti-NOVA"
 
-    def test_gift_from_phrasing_is_normalized_onto_the_colon_form(self):
-        assert (
-            normalize_purification_agent("Rabbit Anti-Nova (gift from R. Darnell)")
-            == "Rabbit Anti-NOVA (gift: R. Darnell)"
-        )
+    def test_species_is_kept_and_title_cased(self):
+        assert normalize_purification_agent("rabbit anti-nova") == "Rabbit Anti-NOVA"
 
-    def test_gift_antibody_passes_validation_but_warns(self):
-        issues = validate_purification_agent("Anti-Nova (gift: Darnell lab)", target="Nova")
+    def test_it_warns_so_the_researcher_confirms_no_catalog_reagent_exists(self):
+        issues = validate_purification_agent("Anti-NOVA", target="Nova")
         assert not any(c.severity == ERROR for c in issues)
-        assert any(c.severity == WARNING and "gift" in c.message.lower() for c in issues)
+        assert any(c.severity == WARNING and "comment" in c.message.lower() for c in issues)
 
-    def test_bare_gift_names_nobody_and_is_rejected(self):
-        """The whole point of the parenthetical is provenance — 'gift' alone has none."""
-        assert normalize_purification_agent("Anti-Nova (gift)") == ""
-        issues = validate_purification_agent("Anti-Nova (gift)", target="Nova")
-        assert any(c.severity == ERROR for c in issues)
+    def test_a_gift_parenthetical_is_migrated_out_of_the_agent(self):
+        """One convention only: strip it, and say where provenance belongs."""
+        assert normalize_purification_agent("Anti-Nova (gift: Robert B Darnell)") == "Anti-NOVA"
+        issues = validate_purification_agent(
+            "Anti-Nova (gift: Robert B Darnell)", target="Nova"
+        )
+        assert any(c.severity == WARNING and "comment" in c.message.lower() for c in issues)
 
-    def test_gift_with_empty_provenance_is_rejected(self):
-        assert normalize_purification_agent("Anti-Nova (gift: )") == ""
-
-    def test_gift_does_not_suppress_the_target_agreement_check(self):
-        issues = validate_purification_agent("Anti-Nova (gift: Darnell lab)", target="NSUN2")
+    def test_target_agreement_still_applies(self):
+        issues = validate_purification_agent("Anti-NOVA", target="NSUN2")
         assert any(c.severity == WARNING and "NSUN2" in c.message for c in issues)
 
-    def test_vendor_antibodies_are_unaffected(self):
+    def test_tagged_pulldown_agreement_still_applies(self):
+        """`Anti-Myc` against LARP6:nMYC is correct by construction — no MISMATCH warning.
+
+        The vendor-less warning is still expected here; only the target-disagreement one
+        must be absent.
+        """
+        issues = validate_purification_agent("Anti-Myc", target="LARP6", annotation="nMYC")
+        assert not any("purification target is" in c.message for c in issues)
+
+    def test_vendor_antibodies_are_unaffected_and_do_not_warn(self):
         assert (
             normalize_purification_agent("Rabbit Anti-PARP13 (Thermo Fisher, cat# PA5-31650)")
             == "Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)"
         )
+        assert validate_purification_agent(
+            "Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)", target="PARP13"
+        ) == []
 
-    def test_vendorless_generic_is_still_rejected(self):
-        assert normalize_purification_agent("Nova antibody") == ""
+    def test_vendorless_prose_forms_are_still_rejected(self):
+        for bad in ("Nova antibody", "anti-NOVA antibody", "V5-antibody", "DHX9-mAb"):
+            assert normalize_purification_agent(bad) == "", bad
+
+    def test_empty_agent_on_an_ip_row_is_still_an_error(self):
+        assert any(
+            c.severity == ERROR for c in validate_purification_agent("", target="NOVA")
+        )

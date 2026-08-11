@@ -59,25 +59,34 @@ never states it: `Anti-PARP13 (Thermo Fisher PA5-31650)`.
 spelling, so it does not matter how the model types it — but it **must** include vendor and
 catalog, or it is rejected.
 
-### Gift antibodies — `Anti-<TARGET> (gift: <Source>)`
+### When no catalog reagent exists — the bare form, provenance in Comments
 
 Some antibodies cannot be bought. Tissue CLIP and pre-2015 studies routinely use reagents
-shared between labs, so there is no vendor and no catalog number to cite — yet the value is
-fully documented. For these, and **only** these, provenance replaces the vendor/catalog
-parenthetical:
+shared between labs, so there is no vendor and no catalog number to cite. For these the agent
+is the **bare canonical form** and the provenance is recorded in **Comments**:
 
-| Study | Evidence | Value |
-|-------|----------|-------|
-| E-MTAB-1008 (Sugimoto 2012) | Methods: *"immunoprecipitated Nova protein using an anti-Nova antibody"*; Acknowledgements: *"thank **Robert B Darnell** for sharing the anti-Nova antibody"* | `Anti-NOVA (gift: Robert B Darnell)` |
+| Study | Evidence | Agent | Comments carry |
+|-------|----------|-------|----------------|
+| E-MTAB-1008 (Sugimoto 2012) | Methods: *"immunoprecipitated Nova protein using an anti-Nova antibody"*; Acknowledgements: *"thank **Robert B Darnell** for sharing the anti-Nova antibody"* | `Anti-NOVA` | `gift from Robert B Darnell` |
 
-`gift from <source>` is accepted and normalised onto the `gift:` form. Two deliberate
-constraints keep this from becoming an escape hatch:
+Keeping provenance out of the agent keeps that field a controlled vocabulary — one spelling
+per reagent — while losing nothing. A `(gift: X)` parenthetical typed into the agent is
+**migrated out** by `normalize_purification_agent()` rather than accepted, so there is exactly
+one convention on Flow.
 
-1. **The provenance must name someone.** A bare `(gift)` or `(gift: )` is rejected — it is
-   not provenance, it is an excuse for a missing lookup.
-2. **Every gift antibody warns.** The researcher confirms at the hook that the Methods and
-   Acknowledgements really name no purchasable reagent. Reach for this only after the search
-   order above has genuinely come up empty.
+Two things still hold:
+
+1. **Every vendor-less agent warns.** The researcher confirms at the hook that the Methods and
+   Acknowledgements really name no purchasable reagent. Reach for the bare form only after the
+   search order above has genuinely come up empty.
+2. **The vendor-less *prose* forms stay rejected** — `NOVA antibody`, `anti-NOVA antibody`,
+   `V5-antibody`, `DHX9-mAb`. Those are scraped phrasings that identify no reagent and signal
+   an unfinished lookup, which is a different failure from a genuine gift antibody.
+
+**Species:** include it when the paper states it (`Rabbit Anti-NOVA`); omit it when it does
+not. E-MTAB-1008 never states the host species of the anti-Nova antibody — Nova is a POMA
+autoantigen, which makes "human" *plausible*, and that is precisely why it must not be
+guessed. `Anti-NOVA` unqualified is the correct value.
 
 ### Allowed literals
 
@@ -95,12 +104,14 @@ constraints keep this from becoming an escape hatch:
 
 - **Never take the first antibody listed for the protein.** A Key Resources table that
   lists two anti-PARP13 antibodies is listing one for Western blot and one for the IP.
-- **Never emit a vendor-less string.** `PARP13 antibody`, `anti-PARP13 antibody`,
-  `V5-antibody`, `DHX9-mAb` are all rejected — they identify no reagent.
+- **Never emit a vendor-less prose string.** `PARP13 antibody`, `anti-PARP13 antibody`,
+  `V5-antibody`, `DHX9-mAb` are all rejected — they identify no reagent. (The bare canonical
+  `Anti-PARP13` is a different thing and is allowed, with a warning, per above.)
 - **Never invent a vendor to satisfy the format.** If the paper names no supplier, either the
-  antibody is a gift (use the `gift:` form, with the source named) or the lookup is not
-  finished. Guessing a plausible catalog number is the worst possible failure here: it is
-  unverifiable, looks authoritative, and silently points at the wrong reagent.
+  antibody is shared/in-house (use the bare form and put provenance in Comments) or the lookup
+  is not finished. Guessing a plausible catalog number is the worst possible failure here: it
+  is unverifiable, looks authoritative, and silently points at the wrong reagent.
+- **Never guess the host species.** Omit it unless the paper states it.
 - **Never copy the IP antibody onto the input row.**
 
 ---

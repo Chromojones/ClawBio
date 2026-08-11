@@ -76,10 +76,15 @@ ALLOWED_AGENT_LITERALS = {
     "strep/his affinity tag purification": "Strep/His affinity tag purification",
 }
 
+#: The parenthetical is OPTIONAL. When no catalog reagent exists (an antibody shared between
+#: labs, common in tissue CLIP and pre-2015 studies) the agent is the bare canonical form and
+#: the provenance goes in **Comments**. Requiring `anti-` still rejects the vendor-less prose
+#: forms — `NOVA antibody`, `anti-NOVA antibody`, `V5-antibody` — because the trailing word
+#: leaves the pattern unanchored; those signal an unfinished lookup, not a gift antibody.
 _AGENT_RE = re.compile(
     rf"^(?:(?P<species>{'|'.join(SPECIES)})\s+)?"
     r"anti[-\s]?(?P<target>[A-Za-z0-9][A-Za-z0-9./-]*)"
-    r"\s*\((?P<inner>[^()]+)\)$",
+    r"(?:\s*\((?P<inner>[^()]+)\))?$",
     re.I,
 )
 #: An antibody shared by another lab has no vendor and no catalog number — there is nothing
@@ -104,7 +109,7 @@ def gift_provenance(value: str) -> str:
     match = _AGENT_RE.match(re.sub(r"\s+", " ", str(value or "")).strip())
     if not match:
         return ""
-    gift = _GIFT_INNER_RE.match(match.group("inner").strip())
+    gift = _GIFT_INNER_RE.match((match.group("inner") or "").strip())
     if not gift:
         return ""
     source = gift.group("source").strip().strip(",").strip()
@@ -156,16 +161,15 @@ def normalize_purification_agent(value: str) -> str:
         return ""
     species = (match.group("species") or "").strip().title()
     target = match.group("target").strip().upper()
+    prefix = f"{species} " if species else ""
+    inner = (match.group("inner") or "").strip()
 
-    # A lab gift has no vendor/catalog to parse — provenance replaces them entirely.
-    gift = gift_provenance(collapsed)
-    if gift:
-        prefix = f"{species} " if species else ""
-        return f"{prefix}Anti-{target} (gift: {gift})"
-    if _GIFT_INNER_RE.match(match.group("inner").strip()) or match.group("inner").strip().lower() == "gift":
-        return ""  # 'gift' with no named source is not provenance
+    # No parenthetical, or a gift provenance that belongs in Comments rather than the agent:
+    # both resolve to the bare canonical form so there is exactly one convention on Flow.
+    if not inner or inner.lower() == "gift" or _GIFT_INNER_RE.match(inner):
+        return f"{prefix}Anti-{target}"
 
-    vendor, catalog = split_vendor_catalog(match.group("inner"))
+    vendor, catalog = split_vendor_catalog(inner)
     if not vendor or not looks_like_catalog(catalog):
         return ""
     if species:
@@ -245,15 +249,17 @@ def _validate_agent_string(
         ]
 
     checks: list[Check] = []
-    gift = gift_provenance(value)
-    if gift:
-        # Legitimate, but unverifiable and unpurchasable — the researcher must confirm the
-        # study really used a shared antibody rather than a catalog reagent we failed to find.
+    if "(" not in normalized and normalized not in ALLOWED_AGENT_LITERALS.values():
+        # Legitimate (a shared or in-house antibody), but unverifiable and unpurchasable, so
+        # the researcher confirms no catalog reagent was simply missed. Provenance is not
+        # discarded — it belongs in Comments, where it does not pollute the agent vocabulary.
+        gift = gift_provenance(value)
+        origin = f" (provenance found: {gift!r})" if gift else ""
         checks.append(
             Check(
                 WARNING,
-                f"{normalized!r} records a gift antibody from {gift!r} with no catalog "
-                "number; confirm the Methods/Acknowledgements name no purchasable reagent",
+                f"{normalized!r} names no vendor or catalog{origin}; confirm the study used a "
+                "shared/in-house antibody and record its provenance in the sample comments",
                 field,
             )
         )
