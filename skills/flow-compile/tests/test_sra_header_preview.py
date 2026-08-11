@@ -95,3 +95,43 @@ class TestInspectionFromRecords:
         inspection = inspection_from_header_records({})
         assert inspection.has_rbc is False
         assert inspection.sample_headers == []
+
+
+class TestUmiInHeaderBlocksSraDirect:
+    """A UMI already in the header cannot survive SRA-direct import.
+
+    ENA's defline prepends `<run>.<n> `, pushing the ORIGINAL header — which carries the
+    `rbc:` UMI — into the comment field. Aligners drop the comment, so the BAM read name has
+    no UMI and UMICollapse fails with `No match found` (GSE297587, execution
+    971697795553261239). The preview sees these headers, so it must refuse the path up front
+    rather than let the study reach a failed execution.
+    """
+
+    ENA_UMI_IN_COMMENT = [
+        "@SRR33628723.1 NS500784:933:H5W2CBGXN:1:11101:8390:10741:N:0:1rbc:TAGGATAAA/1",
+        "NAGCAATGGCGCG", "+", "#AAFFJJJ",
+    ]
+    CLEAN_UMI_IN_NAME = [
+        "@SRR33628723.1_NS500784:933:H5W2CBGXN:1:11101:8390:10741:N:0:1rbc:TAGGATAAA_1",
+        "NAGCAATGGCGCG", "+", "#AAFFJJJ",
+    ]
+    NO_UMI = [
+        "@SRR21863801.1 K00180:212:H7VCTBBXX:5:1101:20598:1033/1",
+        "NAGCAATGGCGCG", "+", "#AAFFJJJ",
+    ]
+
+    def test_umi_stranded_in_comment_is_flagged(self):
+        insp = inspection_from_header_records({"SRR33628723": self.ENA_UMI_IN_COMMENT})
+        assert insp.has_rbc is True
+        assert insp.umi_in_comment is True
+        assert "comment" in insp.notes.lower()
+
+    def test_umi_already_in_read_name_is_not_flagged(self):
+        insp = inspection_from_header_records({"SRR33628723": self.CLEAN_UMI_IN_NAME})
+        assert insp.has_rbc is True
+        assert insp.umi_in_comment is False
+
+    def test_header_without_a_umi_is_not_flagged(self):
+        insp = inspection_from_header_records({"SRR21863801": self.NO_UMI})
+        assert insp.has_rbc is False
+        assert insp.umi_in_comment is False

@@ -25,6 +25,10 @@ class HeaderInspection:
     sample_headers: list[str]
     fastq_files: list[str]
     notes: str = ""
+    #: True when the UMI tag sits in the header's COMMENT (after the first space) rather
+    #: than the read name. Aligners drop the comment, so the UMI never reaches the BAM and
+    #: dedup fails — the study cannot use SRA-direct import.
+    umi_in_comment: bool = False
 
     @property
     def barcode_already_extracted(self) -> bool:

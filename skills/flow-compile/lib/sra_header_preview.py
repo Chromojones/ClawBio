@@ -25,7 +25,12 @@ import urllib.request
 import zlib
 from pathlib import Path
 
-from lib.fastq_headers import HeaderInspection, build_headers_txt, inspect_header_lines
+from lib.fastq_headers import (
+    RBC_TAG,
+    HeaderInspection,
+    build_headers_txt,
+    inspect_header_lines,
+)
 
 ENA_FILEREPORT = (
     "https://www.ebi.ac.uk/ena/portal/api/filereport"
@@ -125,6 +130,20 @@ def preview_run(
         return [], "unavailable"
 
 
+def umi_is_stranded_in_comment(header: str) -> bool:
+    """True when a `rbc:` UMI sits after the first space, i.e. in the comment field.
+
+    SRA/ENA rewrite the defline as ``@<run>.<n> <original header>``. If the original header
+    carried the UMI, it is now in the comment — which every aligner discards — so the BAM
+    read name has no UMI and UMICollapse fails with "No match found".
+    """
+    body = str(header or "").lstrip("@")
+    name, sep, comment = body.partition(" ")
+    if not sep:
+        return False
+    return RBC_TAG.search(comment) is not None and RBC_TAG.search(name) is None
+
+
 def inspection_from_header_records(records_by_run: dict[str, list[str]]) -> HeaderInspection:
     """Build a HeaderInspection from remote snippets, with no local FASTQ on disk.
 
@@ -136,7 +155,16 @@ def inspection_from_header_records(records_by_run: dict[str, list[str]]) -> Head
         flat.extend(records)
 
     has_rbc, has_underscore = inspect_header_lines(flat)
-    if has_rbc:
+    at_lines = [h for h in flat if h.startswith("@")]
+    umi_in_comment = any(umi_is_stranded_in_comment(h) for h in at_lines)
+    if umi_in_comment:
+        notes = (
+            "UMI tag is in the header COMMENT (after the first space), not the read name. "
+            "Aligners drop the comment, so the UMI will not reach the BAM and dedup will "
+            "fail — SRA-direct import cannot be used. Download locally and fold the comment "
+            "into the read name (removespace.py) before uploading."
+        )
+    elif has_rbc:
         notes = "Headers contain :rbc: — barcode already in read name."
     elif has_underscore:
         notes = "Headers contain underscore-suffixed barcode (not rbc: tag)."
@@ -147,6 +175,7 @@ def inspection_from_header_records(records_by_run: dict[str, list[str]]) -> Head
         )
     return HeaderInspection(
         has_rbc=has_rbc,
+        umi_in_comment=umi_in_comment,
         barcode_in_header=has_underscore or has_rbc,
         sample_headers=flat,
         fastq_files=[f"sra:{run}" for run in records_by_run],
