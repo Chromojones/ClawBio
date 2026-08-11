@@ -52,8 +52,8 @@ antibodies found anywhere else**.
 ### Format
 
 Canonical: `<Species> Anti-<TARGET> (<Vendor> <Catalog>)` — e.g.
-`Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)`. Species is omitted only when the paper
-never states it: `Anti-PARP13 (Thermo Fisher PA5-31650)`.
+`Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)`. Species is omitted when neither the paper nor
+the vendor catalog gives it (see *Host species* below): `Anti-PARP13 (Thermo Fisher PA5-31650)`.
 
 `normalize_purification_agent()` collapses casing, comma, and `cat#` variants onto this one
 spelling, so it does not matter how the model types it — but it **must** include vendor and
@@ -83,10 +83,25 @@ Two things still hold:
    `V5-antibody`, `DHX9-mAb`. Those are scraped phrasings that identify no reagent and signal
    an unfinished lookup, which is a different failure from a genuine gift antibody.
 
-**Species:** include it when the paper states it (`Rabbit Anti-NOVA`); omit it when it does
-not. E-MTAB-1008 never states the host species of the anti-Nova antibody — Nova is a POMA
-autoantigen, which makes "human" *plausible*, and that is precisely why it must not be
-guessed. `Anti-NOVA` unqualified is the correct value.
+### Host species — from the paper, else the vendor catalog
+
+Species precedence, and the distinction that matters is **quotable source vs plausibility**:
+
+| # | Source | Example |
+|---|--------|---------|
+| 1 | The paper states it | *"mouse anti-myc-tag antibody (Cell Signalling, 9B11)"* → `Mouse Anti-Myc` |
+| 2 | **The vendor's catalog entry for the cited catalog number** | Bethyl `A300-864A` is a rabbit polyclonal → `Rabbit Anti-RBFOX2 (Bethyl A300-864A)` |
+| 3 | Neither — **omit it** | `Anti-NOVA`, `Anti-RBFOX1` |
+
+A catalog lookup is *not* a guess: the vendor record is a named source you can quote, which
+is what §0 asks for. Inferring from plausibility is still forbidden — Nova is a POMA
+autoantigen, which makes "human" tempting for E-MTAB-1008's anti-Nova, and with no vendor
+there is nothing to check it against, so `Anti-NOVA` stays unqualified.
+
+> **Reactivity is not host species.** Vendor pages advertise *species reactivity* far more
+> prominently than host. Millipore `MAB377` both reacts with mouse and is raised in mouse, but
+> Bethyl `A300-864A` reacts with human/mouse/rat and is raised in **rabbit** — reading the
+> wrong field yields `Mouse Anti-RBFOX2`, which is wrong. Confirm the *host*.
 
 ### Allowed literals
 
@@ -111,7 +126,8 @@ guessed. `Anti-NOVA` unqualified is the correct value.
   antibody is shared/in-house (use the bare form and put provenance in Comments) or the lookup
   is not finished. Guessing a plausible catalog number is the worst possible failure here: it
   is unverifiable, looks authoritative, and silently points at the wrong reagent.
-- **Never guess the host species.** Omit it unless the paper states it.
+- **Never infer the host species from plausibility.** Take it from the paper or the
+  vendor's catalog entry, or omit it — and never from the antibody's *reactivity* list.
 - **Never copy the IP antibody onto the input row.**
 
 ---
