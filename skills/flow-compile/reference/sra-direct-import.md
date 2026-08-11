@@ -149,6 +149,11 @@ Never emitted: `project`, `strandedness`, `reads1`, `reads2`.
 >
 > Seen on GSE297587: 18 rows imported with the tag and cell-line annotation missing; a
 > follow-up edit pass restored `LARP6:dNTR-nMYC` and `U87:Glioblastoma`.
+>
+> **`samples upload` does not have this problem.** Uploading the same sample locally with
+> `--metadata-json` including `purification_target__annotation` and `source__annotation`
+> stores both correctly, so the local path needs no second pass. The gap is specific to
+> `samples import`.
 
 ---
 
