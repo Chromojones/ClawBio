@@ -149,7 +149,9 @@ def agent_target(value: str) -> str:
     return match.group("target").upper() if match else ""
 
 
-def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
+def validate_purification_agent(
+    value: str, *, target: str = "", annotation: str = ""
+) -> list[Check]:
     value = str(value or "").strip()
     target_upper = str(target or "").strip().upper()
     field = "Purification Agent"
@@ -164,7 +166,7 @@ def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
                     field,
                 )
             ]
-        return _validate_agent_string(value, target=target, field=field)
+        return _validate_agent_string(value, target=target, field=field, annotation=annotation)
 
     if target_upper in CONTROL_TARGETS:
         # Convention: controls carry an EMPTY agent, so "has an agent" is a clean proxy for
@@ -191,10 +193,12 @@ def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
     if not value:
         return [Check(ERROR, "purification agent is empty", field)]
 
-    return _validate_agent_string(value, target=target, field=field)
+    return _validate_agent_string(value, target=target, field=field, annotation=annotation)
 
 
-def _validate_agent_string(value: str, *, target: str, field: str) -> list[Check]:
+def _validate_agent_string(
+    value: str, *, target: str, field: str, annotation: str = ""
+) -> list[Check]:
     """Shape + target-agreement checks for a non-empty antibody string."""
     target_upper = str(target or "").strip().upper()
     normalized = normalize_purification_agent(value)
@@ -219,6 +223,11 @@ def _validate_agent_string(value: str, *, target: str, field: str) -> list[Check
     # An antibody control is *defined* by the antibody naming something other than the row's
     # target (a myc IP on untransfected cells), so the agreement check does not apply.
     if target_upper in ANTIBODY_CONTROL_TARGETS:
+        return checks
+    # A tagged pulldown's antibody names the TAG, not the protein: `Anti-Myc` against target
+    # LARP6 with annotation `nMYC` is correct by construction, not a mismatch.
+    tag = re.sub(r"^[cn]", "", str(annotation or "").strip(), count=1).upper()
+    if tag and named and named == tag:
         return checks
     if named and target_upper and named != target_upper:
         checks.append(
@@ -421,14 +430,15 @@ def validate_annotation_table(
         sample = str(row.get("Sample Name", "")).strip()
         target = str(row.get("Protein (Purification Target)", "")).strip()
         agent = str(row.get("Purification Agent", "")).strip()
+        annotation = str(row.get("Purification Target Annotation", "")).strip()
         row_no = int(idx) + 2
 
         checks: list[Check] = []
-        checks += validate_purification_agent(agent, target=target)
+        checks += validate_purification_agent(agent, target=target, annotation=annotation)
         checks += validate_source(str(row.get("Cell or Tissue", "")))
         checks += validate_target_and_annotation(
             target=target,
-            annotation=str(row.get("Purification Target Annotation", "")),
+            annotation=annotation,
             agent=agent,
             sample_name=sample,
         )

@@ -289,3 +289,36 @@ class TestAbControl:
             target="AbControl", annotation="", agent="Mouse Anti-Myc (Abcam ab32)",
             sample_name="AbControl_U87_Hs_Rep1",
         ) == []
+
+
+class TestTaggedPulldownAgreement:
+    """A tag pulldown's antibody names the TAG, not the protein — that is not a mismatch.
+
+    `Mouse Anti-Myc (Cell Signaling 9B11)` against target `LARP6` with annotation `nMYC` is
+    correct by construction. Warning on it produced 15 false positives on GSE297587 and
+    would have fired on every anti-V5 row of GSE290281 too.
+    """
+
+    def test_antibody_matching_the_tag_is_not_a_mismatch(self):
+        assert validate_purification_agent(
+            "Mouse Anti-Myc (Cell Signaling 9B11)", target="LARP6", annotation="nMYC"
+        ) == []
+
+    def test_v5_pulldown_of_tagged_rbp_is_not_a_mismatch(self):
+        assert validate_purification_agent(
+            "Rabbit Anti-V5 (Bethyl A190-120A)", target="LGALS3", annotation="cV5"
+        ) == []
+
+    def test_genuine_mismatch_still_warns(self):
+        """No tag annotation → the antibody really should name the target."""
+        issues = validate_purification_agent(
+            "Rabbit Anti-TRIM25 (Thermo Fisher PA5-31650)", target="PARP13", annotation=""
+        )
+        assert issues and any(c.severity == WARNING for c in issues)
+
+    def test_antibody_disagreeing_with_the_tag_still_warns(self):
+        """Tagged row, but the antibody names neither the target nor the tag."""
+        issues = validate_purification_agent(
+            "Mouse Anti-FLAG (Sigma F1804)", target="LARP6", annotation="nMYC"
+        )
+        assert issues and any(c.severity == WARNING for c in issues)
