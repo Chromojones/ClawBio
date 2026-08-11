@@ -55,6 +55,10 @@ COLUMN_MAP: list[tuple[str, str]] = [
     ("Comments", "comments"),
 ]
 
+#: Flow rejects the whole import batch if any single `comments` value exceeds this.
+#: Discovered on GSE76475: 11 rows refused because one was 1025 characters.
+MAX_COMMENTS_CHARS = 1000
+
 REQUIRED_CLIP_COLUMNS = (
     "accession",
     "sample_type",
@@ -122,6 +126,15 @@ def build_import_sheet(
         if column in sheet.columns:
             sheet = sheet.drop(columns=[column])
 
+    return validate_import_sheet(sheet)
+
+
+def validate_import_sheet(sheet: pd.DataFrame) -> pd.DataFrame:
+    """Refuse a sheet the import endpoint would reject, before the network call.
+
+    One bad row fails the *whole* batch, and the API names the offender only by position
+    (``7.metadata.comments``), so checking locally is much cheaper than decoding that.
+    """
     missing = [c for c in REQUIRED_CLIP_COLUMNS if c not in sheet.columns]
     if missing:
         raise ValueError(
@@ -129,6 +142,21 @@ def build_import_sheet(
             "CLIP imports require accession, sample_type, name, "
             "five_prime_barcode_sequence and purification_target"
         )
+
+    if "comments" in sheet.columns:
+        # Comments are where this skill records the evidence behind every judgement call, so
+        # they grow naturally. Truncating would silently discard provenance — fail loudly and
+        # name the rows so the author decides what to cut.
+        over = [
+            f"{row.get('name', f'row {position}')} ({len(str(row['comments']))} chars)"
+            for position, (_, row) in enumerate(sheet.iterrows(), start=1)
+            if len(str(row.get("comments") or "")) > MAX_COMMENTS_CHARS
+        ]
+        if over:
+            raise ValueError(
+                f"comments exceed Flow's {MAX_COMMENTS_CHARS}-character limit for: "
+                f"{'; '.join(over)} — shorten them; one long row rejects the entire import"
+            )
     return sheet
 
 

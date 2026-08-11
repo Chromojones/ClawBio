@@ -20,6 +20,7 @@ from lib.sra_import import (  # noqa: E402
     FORBIDDEN_SHEET_COLUMNS,
     build_import_sheet,
     is_experiment_accession,
+    validate_import_sheet,
     write_import_scripts,
     write_import_sheet,
 )
@@ -139,3 +140,37 @@ class TestWriteArtifacts:
         assert "import-status" in body
         assert "550540342405942387" in body
         assert script.name == "sra_import.sh"
+
+
+class TestCommentsLengthLimit:
+    """Flow caps `comments` at 1000 characters; the import rejects the whole batch over it.
+
+    GSE76475 hit this: an 11-row sheet was refused outright with
+
+        validation_error … 7.metadata.comments … at most 1000 characters (it has 1025)
+
+    One long row kills the entire import, and the message identifies the row only by
+    position, so the sheet must be checked locally before the call. Comments are where this
+    skill records the evidence for every judgement call, so they grow naturally — truncating
+    silently would discard provenance, hence a loud error naming the offending samples.
+    """
+
+    def _sheet(self, comment: str) -> pd.DataFrame:
+        return pd.DataFrame([{
+            "accession": "SRX1122756", "sample_type": "CLIP", "name": "RBFOX1_Mm_Forebrain_HMW",
+            "five_prime_barcode_sequence": "NNNNNNNNN", "purification_target": "RBFOX1",
+            "comments": comment,
+        }])
+
+    def test_comment_at_the_limit_is_accepted(self):
+        assert validate_import_sheet(self._sheet("x" * 1000)) is not None
+
+    def test_comment_over_the_limit_raises_naming_the_sample(self):
+        with pytest.raises(ValueError) as exc:
+            validate_import_sheet(self._sheet("x" * 1001))
+        assert "RBFOX1_Mm_Forebrain_HMW" in str(exc.value)
+        assert "1001" in str(exc.value)
+
+    def test_sheet_without_a_comments_column_is_unaffected(self):
+        sheet = self._sheet("ok").drop(columns=["comments"])
+        assert validate_import_sheet(sheet) is not None
