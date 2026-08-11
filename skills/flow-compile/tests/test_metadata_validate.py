@@ -262,3 +262,30 @@ class TestMetadataHook:
     def test_clean_table_reports_no_issues(self, tmp_path):
         path = write_metadata_hook(tmp_path, [])
         assert "No metadata issues" in path.read_text(encoding="utf-8")
+
+
+class TestAbControl:
+    """`AbControl` — an antibody pulldown on cells lacking the target.
+
+    Distinct from SMInput: the antibody *was* used, so the agent must be kept, not blanked.
+    GSE297587's `U87 Control` rows are a myc IP on untransfected cells.
+    """
+
+    def test_abcontrol_keeps_its_antibody(self):
+        assert validate_purification_agent(
+            "Mouse Anti-Myc (Abcam ab32)", target="AbControl"
+        ) == []
+
+    def test_abcontrol_with_empty_agent_is_flagged(self):
+        """Unlike SMInput, an antibody control without an antibody is incoherent."""
+        issues = validate_purification_agent("", target="AbControl")
+        assert issues and issues[0][0] == ERROR
+
+    def test_sminput_still_requires_empty_agent(self):
+        assert validate_purification_agent("", target="SMInput") == []
+
+    def test_abcontrol_row_is_not_treated_as_the_ip_protein(self):
+        assert validate_target_and_annotation(
+            target="AbControl", annotation="", agent="Mouse Anti-Myc (Abcam ab32)",
+            sample_name="AbControl_U87_Hs_Rep1",
+        ) == []

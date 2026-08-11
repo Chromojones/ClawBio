@@ -141,7 +141,16 @@ own target — **never the IP's protein**:
 | eCLIP/seCLIP size-matched input | `SMInput` | *(empty)* |
 | Bead-only / no-antibody control | `SMInput` | *(empty)* |
 | IgG control | `IgG` | *(empty)* |
+| **Antibody pulldown on cells lacking the target** | **`AbControl`** | **the antibody used** |
 | GFP-only control construct | `GFP` | anti-GFP antibody |
+
+**`AbControl` vs `SMInput`** — the distinction is whether an antibody was used. A
+size-matched input has none, so its agent is empty. An `AbControl` is the *same*
+immunoprecipitation performed on cells that do not express the tagged protein (GSE297587's
+`U87 Control` rows are a myc IP on untransfected U87), so the antibody is real and must be
+recorded. The validator enforces the opposite rules for the two: an `AbControl` with an
+empty agent is an error, and its antibody naturally names the **tag** rather than the row's
+target, so the agent/target agreement check is skipped.
 
 The validator flags any row whose **name** contains `INPUT`/`SMINPUT` while its target is a
 real protein — the single most common eCLIP annotation error.
@@ -166,6 +175,19 @@ Known tags: `3xFLAG-HBH`, `3xFLAG`, `FLAG`, `GFP`, `V5`, `HA`, `MYC`, `HBH`, `HI
 
 Rejected: `GFP` (no terminal prefix), `3xFLAG` (no prefix), `C-3xFLAG` (uppercase +
 hyphen), `flag` (lowercase, no prefix).
+
+### Terminus: read the construct name first, then default to C-terminal
+
+| # | Evidence | Example |
+|---|----------|---------|
+| 1 | **Paper states the terminus** | "C-terminally V5-tagged" → `cV5` |
+| 2 | **Construct name order** — tag before the gene is N-terminal, after it is C-terminal | `myc-LARP6` → `nMYC`; `LARP6-myc` → `cMYC` |
+| 3 | **C-terminal default** (below) | no name, no statement → `cV5` |
+
+Step 2 is the useful one in practice, because a construct name almost always appears in the
+GEO sample titles even when the Methods never state a terminus. `terminus_from_construct_name()`
+implements it against the title, the `expression vector:` characteristic and the protocol
+text. GSE297587's titles (`Full-length mycLARP6-1`, …) resolve to **`nMYC`** this way.
 
 ### Terminal default: TAG-eCLIP is **C-terminal**
 

@@ -46,3 +46,43 @@ class TestPurificationTargetAnnotation:
             protein_target="",
         )
         assert ann == ""
+
+
+class TestTerminusFromConstructName:
+    """Construct name order is the first fallback when the paper does not state a terminus.
+
+    `myc-LARP6` (tag first) is N-terminal; `LARP6-myc` (tag last) is C-terminal. Only when
+    neither ordering is present does the C-terminal TAG-eCLIP default apply.
+    """
+
+    def test_tag_first_is_n_terminal(self):
+        assert infer_purification_target_annotation(
+            title="Full-length mycLARP6-1",
+            characteristics=["antibody: myc-tag"],
+            experimental_method="iCLIP",
+            protein_target="LARP6",
+        ) == "nMYC"
+
+    def test_hyphenated_tag_first_is_n_terminal(self):
+        assert infer_purification_target_annotation(
+            title="iCLIP of myc-LARP6",
+            characteristics=["antibody: myc-tag"],
+            experimental_method="iCLIP",
+            protein_target="LARP6",
+        ) == "nMYC"
+
+    def test_tag_last_is_c_terminal(self):
+        assert infer_purification_target_annotation(
+            title="iCLIP of LARP6-myc",
+            characteristics=["antibody: myc-tag"],
+            experimental_method="iCLIP",
+            protein_target="LARP6",
+        ) == "cMYC"
+
+    def test_gfp_construct_order_also_works(self):
+        assert infer_purification_target_annotation(
+            title="GFP-LARP6 iCLIP",
+            characteristics=["antibody: GFP"],
+            experimental_method="iCLIP",
+            protein_target="LARP6",
+        ) == "nGFP"

@@ -63,7 +63,12 @@ SPECIES = (
 SPECIES_UPPER = {s.upper() for s in SPECIES}
 
 #: Targets that denote a control library rather than an immunoprecipitated protein.
+#: Controls whose defining feature is that **no antibody was used** — agent stays empty.
 CONTROL_TARGETS = {"SMINPUT", "INPUT", "IGG"}
+
+#: An antibody pulldown performed on cells lacking the target (e.g. a myc IP on
+#: untransfected cells). The antibody *was* used, so unlike SMInput the agent must be kept.
+ANTIBODY_CONTROL_TARGETS = {"ABCONTROL"}
 
 #: Agent values that are correct as literals (no vendor/catalog applies).
 ALLOWED_AGENT_LITERALS = {
@@ -149,6 +154,18 @@ def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
     target_upper = str(target or "").strip().upper()
     field = "Purification Agent"
 
+    if target_upper in ANTIBODY_CONTROL_TARGETS:
+        # The antibody was applied to cells lacking the target — it is still the agent.
+        if not value:
+            return [
+                Check(
+                    ERROR,
+                    f"{target} is an antibody control and must record the antibody used",
+                    field,
+                )
+            ]
+        return _validate_agent_string(value, target=target, field=field)
+
     if target_upper in CONTROL_TARGETS:
         # Convention: controls carry an EMPTY agent, so "has an agent" is a clean proxy for
         # "is an IP". The literal "no antibody" is tolerated as legacy data but warned.
@@ -174,6 +191,12 @@ def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
     if not value:
         return [Check(ERROR, "purification agent is empty", field)]
 
+    return _validate_agent_string(value, target=target, field=field)
+
+
+def _validate_agent_string(value: str, *, target: str, field: str) -> list[Check]:
+    """Shape + target-agreement checks for a non-empty antibody string."""
+    target_upper = str(target or "").strip().upper()
     normalized = normalize_purification_agent(value)
     if not normalized:
         return [
@@ -193,6 +216,10 @@ def validate_purification_agent(value: str, *, target: str = "") -> list[Check]:
         )
         return checks
     named = agent_target(value)
+    # An antibody control is *defined* by the antibody naming something other than the row's
+    # target (a myc IP on untransfected cells), so the agreement check does not apply.
+    if target_upper in ANTIBODY_CONTROL_TARGETS:
+        return checks
     if named and target_upper and named != target_upper:
         checks.append(
             Check(
