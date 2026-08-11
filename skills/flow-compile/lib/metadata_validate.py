@@ -82,11 +82,33 @@ _AGENT_RE = re.compile(
     r"\s*\((?P<inner>[^()]+)\)$",
     re.I,
 )
+#: An antibody shared by another lab has no vendor and no catalog number — there is nothing
+#: to buy. E-MTAB-1008 immunoprecipitated Nova with an antibody acknowledged as shared by
+#: Robert B Darnell; tissue CLIP and pre-2015 studies hit this routinely. The provenance must
+#: NAME a source, so a bare `(gift)` cannot be used to dodge the vendor requirement.
+_GIFT_INNER_RE = re.compile(r"^gift\s*(?::|from\b)\s*(?P<source>.+)$", re.I)
+
 _CATALOG_PREFIX_RE = re.compile(r"^(?:cat(?:alogue|alog)?\.?\s*#?|#)\s*", re.I)
 #: Antibody dilutions (`1:500`, `1:1,000`) live in the same sentence as the antibody and
 #: parse as a "catalog" unless explicitly rejected.
 _DILUTION_RE = re.compile(r"^\d+\s*:\s*[\d,]+$")
 _DILUTION_ANYWHERE_RE = re.compile(r"\b\d+\s*:\s*\d[\d,]*\b")
+
+
+def gift_provenance(value: str) -> str:
+    """The named source of a gift antibody, or ``""``.
+
+    ``Anti-Nova (gift: Darnell lab)`` → ``Darnell lab``. A parenthetical that names nobody
+    (``(gift)``, ``(gift: )``) yields ``""`` and is therefore not a valid agent.
+    """
+    match = _AGENT_RE.match(re.sub(r"\s+", " ", str(value or "")).strip())
+    if not match:
+        return ""
+    gift = _GIFT_INNER_RE.match(match.group("inner").strip())
+    if not gift:
+        return ""
+    source = gift.group("source").strip().strip(",").strip()
+    return source if any(ch.isalpha() for ch in source) else ""
 
 
 def looks_like_catalog(value: str) -> bool:
@@ -132,11 +154,20 @@ def normalize_purification_agent(value: str) -> str:
     match = _AGENT_RE.match(collapsed)
     if not match:
         return ""
+    species = (match.group("species") or "").strip().title()
+    target = match.group("target").strip().upper()
+
+    # A lab gift has no vendor/catalog to parse — provenance replaces them entirely.
+    gift = gift_provenance(collapsed)
+    if gift:
+        prefix = f"{species} " if species else ""
+        return f"{prefix}Anti-{target} (gift: {gift})"
+    if _GIFT_INNER_RE.match(match.group("inner").strip()) or match.group("inner").strip().lower() == "gift":
+        return ""  # 'gift' with no named source is not provenance
+
     vendor, catalog = split_vendor_catalog(match.group("inner"))
     if not vendor or not looks_like_catalog(catalog):
         return ""
-    species = (match.group("species") or "").strip().title()
-    target = match.group("target").strip().upper()
     if species:
         return format_agent(species, target, vendor, catalog)
     return f"Anti-{target} ({vendor} {catalog})"
@@ -214,6 +245,18 @@ def _validate_agent_string(
         ]
 
     checks: list[Check] = []
+    gift = gift_provenance(value)
+    if gift:
+        # Legitimate, but unverifiable and unpurchasable — the researcher must confirm the
+        # study really used a shared antibody rather than a catalog reagent we failed to find.
+        checks.append(
+            Check(
+                WARNING,
+                f"{normalized!r} records a gift antibody from {gift!r} with no catalog "
+                "number; confirm the Methods/Acknowledgements name no purchasable reagent",
+                field,
+            )
+        )
     if normalized in ALLOWED_AGENT_LITERALS.values():
         checks.append(
             Check(WARNING, f"target {target} has agent {normalized!r}; confirm this is a control", field)

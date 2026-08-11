@@ -361,3 +361,58 @@ class TestMutationTagAnnotation:
         """An untagged mutant carries no tag annotation at all; use Condition instead."""
         issues = validate_target_and_annotation(target="LARP6", annotation="dNTR", agent="")
         assert issues and issues[0][0] == ERROR
+
+
+class TestGiftAntibody:
+    """An antibody shared by another lab has no vendor and no catalog number.
+
+    E-MTAB-1008 (Sugimoto 2012, Genome Biol 13:R67) immunoprecipitated Nova from mouse
+    brain with "an anti-Nova antibody", acknowledging "Robert B Darnell for sharing the
+    anti-Nova antibody". There is nothing to buy and no catalog to cite, so the canonical
+    `<Vendor> <Catalog>` shape is unsatisfiable — yet the value is fully documented and
+    correct. Older studies and tissue CLIP hit this routinely.
+
+    The escape hatch is deliberately narrow: the provenance must NAME someone, so a model
+    cannot write a bare "(gift)" to dodge the vendor requirement, and every gift antibody
+    warns so the researcher confirms no purchasable reagent was actually used.
+    """
+
+    def test_gift_antibody_is_resolvable(self):
+        """Target is upper-cased exactly as the vendor form does — one canonical spelling."""
+        assert (
+            normalize_purification_agent("Anti-Nova (gift: Darnell lab)")
+            == "Anti-NOVA (gift: Darnell lab)"
+        )
+
+    def test_gift_from_phrasing_is_normalized_onto_the_colon_form(self):
+        assert (
+            normalize_purification_agent("Rabbit Anti-Nova (gift from R. Darnell)")
+            == "Rabbit Anti-NOVA (gift: R. Darnell)"
+        )
+
+    def test_gift_antibody_passes_validation_but_warns(self):
+        issues = validate_purification_agent("Anti-Nova (gift: Darnell lab)", target="Nova")
+        assert not any(c.severity == ERROR for c in issues)
+        assert any(c.severity == WARNING and "gift" in c.message.lower() for c in issues)
+
+    def test_bare_gift_names_nobody_and_is_rejected(self):
+        """The whole point of the parenthetical is provenance — 'gift' alone has none."""
+        assert normalize_purification_agent("Anti-Nova (gift)") == ""
+        issues = validate_purification_agent("Anti-Nova (gift)", target="Nova")
+        assert any(c.severity == ERROR for c in issues)
+
+    def test_gift_with_empty_provenance_is_rejected(self):
+        assert normalize_purification_agent("Anti-Nova (gift: )") == ""
+
+    def test_gift_does_not_suppress_the_target_agreement_check(self):
+        issues = validate_purification_agent("Anti-Nova (gift: Darnell lab)", target="NSUN2")
+        assert any(c.severity == WARNING and "NSUN2" in c.message for c in issues)
+
+    def test_vendor_antibodies_are_unaffected(self):
+        assert (
+            normalize_purification_agent("Rabbit Anti-PARP13 (Thermo Fisher, cat# PA5-31650)")
+            == "Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)"
+        )
+
+    def test_vendorless_generic_is_still_rejected(self):
+        assert normalize_purification_agent("Nova antibody") == ""

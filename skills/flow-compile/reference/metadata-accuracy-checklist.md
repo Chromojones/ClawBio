@@ -59,6 +59,26 @@ never states it: `Anti-PARP13 (Thermo Fisher PA5-31650)`.
 spelling, so it does not matter how the model types it — but it **must** include vendor and
 catalog, or it is rejected.
 
+### Gift antibodies — `Anti-<TARGET> (gift: <Source>)`
+
+Some antibodies cannot be bought. Tissue CLIP and pre-2015 studies routinely use reagents
+shared between labs, so there is no vendor and no catalog number to cite — yet the value is
+fully documented. For these, and **only** these, provenance replaces the vendor/catalog
+parenthetical:
+
+| Study | Evidence | Value |
+|-------|----------|-------|
+| E-MTAB-1008 (Sugimoto 2012) | Methods: *"immunoprecipitated Nova protein using an anti-Nova antibody"*; Acknowledgements: *"thank **Robert B Darnell** for sharing the anti-Nova antibody"* | `Anti-NOVA (gift: Robert B Darnell)` |
+
+`gift from <source>` is accepted and normalised onto the `gift:` form. Two deliberate
+constraints keep this from becoming an escape hatch:
+
+1. **The provenance must name someone.** A bare `(gift)` or `(gift: )` is rejected — it is
+   not provenance, it is an excuse for a missing lookup.
+2. **Every gift antibody warns.** The researcher confirms at the hook that the Methods and
+   Acknowledgements really name no purchasable reagent. Reach for this only after the search
+   order above has genuinely come up empty.
+
 ### Allowed literals
 
 | Value | When |
@@ -77,6 +97,10 @@ catalog, or it is rejected.
   lists two anti-PARP13 antibodies is listing one for Western blot and one for the IP.
 - **Never emit a vendor-less string.** `PARP13 antibody`, `anti-PARP13 antibody`,
   `V5-antibody`, `DHX9-mAb` are all rejected — they identify no reagent.
+- **Never invent a vendor to satisfy the format.** If the paper names no supplier, either the
+  antibody is a gift (use the `gift:` form, with the source named) or the lookup is not
+  finished. Guessing a plausible catalog number is the worst possible failure here: it is
+  unverifiable, looks authoritative, and silently points at the wrong reagent.
 - **Never copy the IP antibody onto the input row.**
 
 ---
