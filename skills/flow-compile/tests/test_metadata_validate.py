@@ -322,3 +322,42 @@ class TestTaggedPulldownAgreement:
             "Mouse Anti-FLAG (Sigma F1804)", target="LARP6", annotation="nMYC"
         )
         assert issues and any(c.severity == WARNING for c in issues)
+
+
+class TestMutationTagAnnotation:
+    """Protein alterations belong in the annotation, ahead of the tag.
+
+    Flow renders `purification_target` + annotation as `TARGET:annotation`, so a
+    myc-tagged LARP6 lacking its N-terminal region reads `LARP6:dNTR-nMYC`. Order is
+    fixed: mutation first, tag last, hyphen-separated.
+    """
+
+    @pytest.mark.parametrize(
+        "ann", ["dNTR-nMYC", "dNTD-nMYC", "dLaMod-nMYC", "dCTR-cV5", "R123A-c3xFLAG"]
+    )
+    def test_mutation_plus_tag_is_valid(self, ann):
+        assert validate_target_and_annotation(target="LARP6", annotation=ann, agent="") == []
+
+    def test_tag_only_still_valid(self):
+        assert validate_target_and_annotation(target="LARP6", annotation="nMYC", agent="") == []
+
+    def test_composite_tag_without_mutation_still_valid(self):
+        """`c3xFLAG-HBH` is one tag, not mutation `c3xFLAG` plus tag `HBH`."""
+        assert validate_target_and_annotation(
+            target="QKI", annotation="c3xFLAG-HBH", agent=""
+        ) == []
+
+    def test_mutation_plus_composite_tag_is_valid(self):
+        assert validate_target_and_annotation(
+            target="QKI", annotation="dNTR-c3xFLAG-HBH", agent=""
+        ) == []
+
+    def test_tag_before_mutation_is_rejected(self):
+        """Order is part of the convention — the tag must come last."""
+        issues = validate_target_and_annotation(target="LARP6", annotation="nMYC-dNTR", agent="")
+        assert issues and issues[0][0] == ERROR
+
+    def test_mutation_without_a_tag_is_rejected(self):
+        """An untagged mutant carries no tag annotation at all; use Condition instead."""
+        issues = validate_target_and_annotation(target="LARP6", annotation="dNTR", agent="")
+        assert issues and issues[0][0] == ERROR

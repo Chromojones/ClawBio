@@ -313,7 +313,13 @@ TAGS = (
     "3xFLAG-HBH", "3xFLAG", "FLAG", "GFP", "V5", "HA", "MYC", "HBH", "HIS", "TAP",
     "SNAP", "HALO", "MS2",
 )
-_TAG_RE = re.compile(rf"^[cn](?:{'|'.join(re.escape(t) for t in TAGS)})$")
+#: Annotation grammar: an optional protein alteration, then the tag — mutation first, tag
+#: last, hyphen-separated. Flow renders it as `TARGET:annotation`, so a myc-tagged LARP6
+#: missing its N-terminal region reads `LARP6:dNTR-nMYC`.
+#: The tag alternation is longest-first and anchored at the end, so `c3xFLAG-HBH` parses as
+#: one composite tag rather than mutation `c3xFLAG` plus tag `HBH`.
+_TAG_ALT = "|".join(re.escape(t) for t in TAGS)
+_TAG_RE = re.compile(rf"^(?:(?P<mutation>[A-Za-z0-9_.]+)-)?(?P<tag>[cn](?:{_TAG_ALT}))$")
 _GENE_RE = re.compile(r"^[A-Z][A-Z0-9-]{1,15}$")
 
 

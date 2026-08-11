@@ -158,7 +158,37 @@ real protein — the single most common eCLIP annotation error.
 Rejected targets: anything not gene-symbol shaped, plus antibody fragments (`ANTI-FLAG`) and
 species names (`RABBIT`) that the title-parsing fallback can otherwise emit.
 
-### Annotation (tag) grammar
+### Annotation grammar: `[<mutation>-]<terminus><tag>`
+
+Flow renders `purification_target` and its annotation as **`TARGET:annotation`**, so the
+annotation carries everything that describes *the protein that was purified*.
+
+**Order is fixed: alteration first, tag last, hyphen-separated.**
+
+| Rendered | Meaning |
+|----------|---------|
+| `LARP6:nMYC` | full-length LARP6, N-terminal myc tag |
+| `LARP6:dNTR-nMYC` | LARP6 lacking the N-terminal region, N-terminal myc tag |
+| `QKI:c3xFLAG-HBH` | full-length QKI, C-terminal 3xFLAG-HBH — **one composite tag**, not a mutation |
+| `QKI:dNTR-c3xFLAG-HBH` | deletion mutant *and* composite tag |
+
+Rules:
+
+- **Record a protein alteration here when the construct is also tagged.** A deletion or
+  point mutation is a property of the purified protein, so it belongs with the target — not
+  only in `Condition`.
+- **The unaltered construct takes no mutation prefix** — full-length is `nMYC`, not
+  `FL-nMYC`.
+- **A mutation alone is rejected.** An untagged mutant has no tag annotation; put the
+  variant in `Condition` instead.
+- **Reversed order is rejected** (`nMYC-dNTR`), because the tag must be identifiable as the
+  trailing component.
+
+Worked example — GSE297587 has five myc-LARP6 constructs plus a parental control:
+`LARP6:nMYC`, `LARP6:dNTR-nMYC`, `LARP6:dNTD-nMYC`, `LARP6:dLaMod-nMYC`, `LARP6:dCTR-nMYC`,
+and `AbControl` with no annotation.
+
+### Tag vocabulary
 
 **Terminal prefix + tag**, no separator: `c` = C-terminal, `n` = N-terminal.
 
