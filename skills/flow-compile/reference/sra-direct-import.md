@@ -137,6 +137,19 @@ blank — an endogenous IP's empty tag annotation must not become an empty field
 
 Never emitted: `project`, `strandedness`, `reads1`, `reads2`.
 
+> **`samples import` silently drops the `__annotation` columns.**
+> `purification_target__annotation` and `source__annotation` are accepted in the sheet
+> without any error, but the created samples come back with `annotation=''` on both fields.
+> Every ordinary column imports fine — only the annotation sub-fields are lost.
+>
+> **Always set annotations in a second pass** with `flow_edit_samples.py`
+> (`POST /samples/{id}/edit`), which does apply them, and verify by re-reading the **nested**
+> location `metadata.<field>.annotation` — not a top-level `<field>__annotation` key, which
+> never exists. Reading the wrong place makes every row look correctly empty.
+>
+> Seen on GSE297587: 18 rows imported with the tag and cell-line annotation missing; a
+> follow-up edit pass restored `LARP6:dNTR-nMYC` and `U87:Glioblastoma`.
+
 ---
 
 ## 5. Import, poll, assign
