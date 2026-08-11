@@ -250,6 +250,33 @@ recoverable from the Flow record otherwise.
 
 ---
 
+## Out of scope — crosslinking assays this pipeline does not handle
+
+The CLIP-Seq pipeline assumes **truncation-based** crosslinking: the crosslink is the 5′ end
+of the aligned read (`crosslink_position=start`, `--alignEndsType Extend5pOfRead1`). Two
+common assay families break that assumption and must not be pushed through it.
+
+| Assay | Why it does not fit | How to spot it |
+|-------|---------------------|----------------|
+| **PAR-CLIP / fPAR-CLIP** | Crosslinks are **T→C transitions distributed through the read**, not a 5′ truncation. Sites are called from conversion rates (PARalyzer / PARpipe), so `crosslink_position=start` is meaningless | **365 nm** UV (not 254 nm); **s⁴U / 4SU** or 6SG labelling; `PARalyzer`, `PARpipe`, `T>C` in `data_processing` |
+| **m⁶ACE / miCLIP / modification mapping** | The antibody targets an **RNA modification**, not an RBP. `purification_target` has no gene symbol, and there is no IP/SMInput pairing in the RBP sense | Antibody against `m6A` / `m6Am` / `m1A`; series titled `[m6ACE]`, `miCLIP`, `MeRIP` |
+
+Worked example: **GSE266116** (m⁶Am/PCF11, PMID 39481383) is a single `WT_fPAR-CLIP` sample —
+365 nm UV, s⁴U, analysed with PARpipe/PARalyzer. Its sibling series `GSE254149` is m⁶ACE
+(36 samples). Neither belongs in this pipeline.
+
+**Method names carry lab-specific prefixes.** `fPAR-CLIP`, `irCLIP`, `seCLIP` all put a
+lowercase letter immediately before the method token, which defeats a plain `\b` boundary —
+`\bpar[\s-]?clip\b` cannot match `fPAR-CLIP`. `_METHOD_PATTERNS` therefore allows a short
+lowercase prefix. FLASH deliberately keeps the strict boundary, because `flash-frozen` is
+boilerplate in extract protocols.
+
+**Look in `data_processing`, not only `extract_protocol`.** GEO's `library_strategy` is
+often the useless `OTHER`, with the real method recorded as free text — GSE266116 states
+`Library strategy: fPAR-CLIP` in `data_processing` and nowhere else structured.
+
+---
+
 ## References
 
 - Van Nostrand *et al.* 2016, *Nat. Methods* — eCLIP ([PMC4887338](https://pmc.ncbi.nlm.nih.gov/articles/PMC4887338/), [doi:10.1038/nmeth.3810](https://doi.org/10.1038/nmeth.3810))

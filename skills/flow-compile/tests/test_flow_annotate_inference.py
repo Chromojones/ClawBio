@@ -100,5 +100,25 @@ class TestExperimentalMethod:
     def test_iclip2_still_wins(self):
         assert infer_experimental_method("iCLIP2 protocol was used") == "iCLIP2"
 
+
+    def test_prefixed_method_names_are_recognised(self):
+        """Lab-specific prefixes must not hide the method behind a word boundary.
+
+        `\bpar[\s-]?clip\b` cannot match `fPAR-CLIP` because `f` and `P` are both word
+        characters — so GSE266116 resolved to the silent `iCLIP` default on every field.
+        """
+        assert infer_experimental_method("", "m6Am … [fPAR-CLIP]") == "PAR-CLIP"
+        assert infer_experimental_method("WT_fPAR-CLIP") == "PAR-CLIP"
+        assert infer_experimental_method("Library strategy: fPAR-CLIP") == "PAR-CLIP"
+
+    def test_irclip_prefix_is_recognised(self):
+        assert infer_experimental_method("irCLIP libraries were prepared") == "irCLIP"
+
+    def test_flash_frozen_still_does_not_match_after_prefix_support(self):
+        """Regression: loosening the boundary must not resurrect the flash-frozen misfire."""
+        assert infer_experimental_method(
+            "Cells were flash-frozen in liquid nitrogen. iCLIP was performed."
+        ) == "iCLIP"
+
     def test_unknown_protocol_still_defaults_to_iclip(self):
         assert infer_experimental_method("some unrelated protocol") == "iCLIP"

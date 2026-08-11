@@ -164,17 +164,29 @@ def build_sample_name(protein: str, cell: str, org: str, title: str, srr: str) -
 #: must not be read as the FLASH protocol.
 _FLASH_FROZEN_RE = re.compile(r"flash[\s-]*fro(?:zen|ze)", re.I)
 
-#: (regex, method) in specificity order. Word boundaries stop prose mentions misfiring.
+#: Methods are frequently written with a lab-specific lowercase prefix — `fPAR-CLIP`,
+#: `irCLIP`, `seCLIP`. A plain `\b` before the token cannot match those, because the prefix
+#: letter and the first method letter are both word characters, so the method silently fell
+#: through to the `iCLIP` default (GSE266116 did exactly this on every field).
+#: `_PFX` allows up to three lowercase letters, itself anchored on a non-letter, so prose
+#: words cannot bleed in.
+_PFX = r"(?<![A-Za-z])[a-z]{0,3}"
+
+#: (regex, method) in specificity order — more specific names first, since a prefixed token
+#: can otherwise be claimed by a shorter pattern.
 _METHOD_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"\biclip2\b", re.I), "iCLIP2"),
-    (re.compile(r"\bse[\s-]?clip\b", re.I), "seCLIP"),
-    (re.compile(r"\buvclap\b", re.I), "uvCLAP"),
-    (re.compile(r"\bpar[\s-]?clip\b", re.I), "PAR-CLIP"),
-    (re.compile(r"\bhits[\s-]?clip\b", re.I), "HITS-CLIP"),
-    (re.compile(r"\biclap\b", re.I), "iCLAP"),
+    (re.compile(rf"{_PFX}iclip2\b", re.I), "iCLIP2"),
+    (re.compile(r"(?<![A-Za-z])ir[\s-]?clip\b", re.I), "irCLIP"),
+    (re.compile(r"(?<![A-Za-z])se[\s-]?clip\b", re.I), "seCLIP"),
+    (re.compile(rf"{_PFX}uvclap\b", re.I), "uvCLAP"),
+    (re.compile(rf"{_PFX}par[\s-]?clip\b", re.I), "PAR-CLIP"),
+    (re.compile(rf"{_PFX}hits[\s-]?clip\b", re.I), "HITS-CLIP"),
+    (re.compile(rf"{_PFX}iclap\b", re.I), "iCLAP"),
+    # FLASH keeps a strict boundary: "flash-frozen" is boilerplate in extract protocols and
+    # a prefix-tolerant pattern would reintroduce that misfire.
     (re.compile(r"\bflash\b", re.I), "FLASH"),
-    (re.compile(r"\beclip\b", re.I), "eCLIP"),
-    (re.compile(r"\biclip\b", re.I), "iCLIP"),
+    (re.compile(rf"{_PFX}eclip\b", re.I), "eCLIP"),
+    (re.compile(rf"{_PFX}iclip\b", re.I), "iCLIP"),
 ]
 
 
