@@ -174,3 +174,42 @@ class TestCommentsLengthLimit:
     def test_sheet_without_a_comments_column_is_unaffected(self):
         sheet = self._sheet("ok").drop(columns=["comments"])
         assert validate_import_sheet(sheet) is not None
+
+
+class TestRunAccessionIsSilentlyExpanded:
+    """An SRR is accepted by the import — and silently expanded to its parent experiment.
+
+    The docstring long said run accessions "fail with HTTP 500". Re-tested 2026-08-12 against
+    GSE78030 and that is no longer true, but the real behaviour is worse than an error:
+    importing `SRR3175580` produced ONE sample carrying all four runs of SRX1590001 —
+
+        SRX1590001_SRR3175580.fastq.gz   2.2 GB
+        SRX1590001_SRR3175581.fastq.gz   2.8 GB
+        SRX1590001_SRR3175582.fastq.gz   2.4 GB
+        SRX1590001_SRR3175583.fastq.gz   2.6 GB
+
+    A study whose replicates are separate runs of one experiment therefore cannot be imported
+    per replicate: 26 SRRs would yield 26 samples each holding its whole experiment, ~250 GB
+    of duplication, every sample mixing all four barcodes. The job reports COMPLETED, so
+    nothing surfaces the problem downstream.
+
+    The accession check stays, but the reason it gives must match reality — an operator who
+    reads "HTTP 500" and sees a successful import will reasonably conclude the rule is stale.
+    """
+
+    def test_run_accession_is_still_rejected(self):
+        assert not is_experiment_accession("SRR3175580")
+        assert not is_experiment_accession("ERR102558")
+
+    def test_experiment_accessions_are_accepted(self):
+        for acc in ("SRX1590001", "ERX079997", "DRX000001"):
+            assert is_experiment_accession(acc), acc
+
+    def test_the_error_explains_the_silent_expansion_not_a_500(self):
+        annotation = pd.DataFrame([{"Sample Name": "YTHDF1_rep1", "SRX": "SRR3175580"}])
+        with pytest.raises(ValueError) as exc:
+            build_import_sheet(annotation)
+        message = str(exc.value)
+        assert "SRR3175580" in message
+        assert "500" not in message, "the HTTP 500 claim is stale and misleads"
+        assert "experiment" in message.lower()

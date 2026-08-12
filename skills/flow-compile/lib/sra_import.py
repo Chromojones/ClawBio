@@ -3,8 +3,13 @@
 Three constraints are hard-won from the live API (GSE215250, flowbio 0.10.0) and are
 enforced here rather than left to the caller:
 
-1. **The accession must be an experiment (SRX/ERX/DRX), not a run.** A run accession
-   returns ``HTTP 500`` with no diagnostic, despite the docs listing both.
+1. **The accession must be an experiment (SRX/ERX/DRX), not a run.** A run accession is
+   *accepted* and then **silently expanded to its parent experiment** — importing
+   ``SRR3175580`` yielded one sample holding all four runs of ``SRX1590001`` (10 GB), and
+   the job reported ``COMPLETED``. A study whose replicates are separate runs of one
+   experiment therefore cannot be imported per replicate by this route at all.
+   (An earlier revision of this file claimed ``HTTP 500``; re-tested 2026-08-12 on
+   GSE78030, that is no longer the behaviour.)
 2. **There is no ``project`` column.** flowbio's ``RESERVED_COLUMNS`` is
    ``(accession, name, organism, sample_type)``; anything else is treated as metadata and
    a stray ``project`` key is silently ignored, leaving samples unattached. Project
@@ -103,8 +108,11 @@ def build_import_sheet(
             name = str(row.get("Sample Name", "")).strip() or f"row {position}"
             raise ValueError(
                 f"{name}: {accession or '(missing)'!r} is not an experiment accession — "
-                "flowbio samples import requires SRX/ERX/DRX (run accessions such as SRR "
-                "fail with HTTP 500). Populate the 'SRX' column of srr_map.tsv."
+                "flowbio samples import requires SRX/ERX/DRX. A run accession is ACCEPTED "
+                "but silently expanded to its parent experiment: importing SRR3175580 "
+                "produced one sample carrying all four runs of SRX1590001. The job reports "
+                "COMPLETED, so the duplication surfaces nowhere. Populate the 'SRX' column "
+                "of srr_map.tsv."
             )
         record: dict[str, str] = {"accession": accession, "sample_type": sample_type}
         for source_col, target_col in COLUMN_MAP:
