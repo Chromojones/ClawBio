@@ -424,3 +424,77 @@ class TestAntibodyWithoutAVendor:
         assert any(
             c.severity == ERROR for c in validate_purification_agent("", target="NOVA")
         )
+
+
+class TestReplicateCollision:
+    """Two rows sharing target + condition + replicate number means a distinction was lost.
+
+    GSE290281's first batch uploaded all 4 runs of each protein as IPs, so the pair that were
+    size-matched INPUTS carried the IP's target and antibody:
+
+        RNPS1_Hs_HEK293T_Rep1_SRR32456785   <- IP        rep 1
+        RNPS1_Hs_HEK293T_Rep1_SRR32456787   <- **input** rep 1, mislabelled
+
+    The existing control check could not see this: it keys off the sample NAME containing
+    'input'/'SMInput', and the naming step had failed in exactly the same way. A guardrail
+    that depends on the field which is also wrong catches nothing.
+
+    Replicate collision is name-independent evidence — two samples cannot both be replicate 1
+    of the same target under the same condition. Condition must match too, or legitimate
+    designs (GSE76475's RBFOX1 Rep1 in HMW *and* soluble fractions) would false-positive.
+    """
+
+    def _rows(self, specs):
+        return pd.DataFrame([{
+            "Sample Name": n, "Protein (Purification Target)": t, "Purification Agent": a,
+            "Purification Target Annotation": "", "Cell or Tissue": "HEK293T",
+            "Condition": c, "5' Barcode Sequence": "NNNNNNNNNN",
+        } for n, t, a, c in specs])
+
+    AGENT = "Rabbit Anti-V5 (Bethyl A190-120A)"
+
+    def test_same_target_and_replicate_collides(self):
+        df = self._rows([
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456785", "RNPS1", self.AGENT, ""),
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456787", "RNPS1", self.AGENT, ""),
+        ])
+        issues = validate_annotation_table(df)
+        assert any(i.severity == ERROR and "replicate" in i.message.lower() for i in issues)
+
+    def test_distinct_replicates_do_not_collide(self):
+        df = self._rows([
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456785", "RNPS1", self.AGENT, ""),
+            ("RNPS1_Hs_HEK293T_Rep2_SRR32456784", "RNPS1", self.AGENT, ""),
+        ])
+        assert not any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_same_replicate_under_different_conditions_is_legitimate(self):
+        """GSE76475: RBFOX1 Rep1 exists in both nuclear fractions — not a collision."""
+        df = self._rows([
+            ("RBFOX1_Mm_Forebrain_Rep1", "RBFOX1", "Anti-RBFOX1", "HMW nuclear"),
+            ("RBFOX1_Mm_Forebrain_Rep1_b", "RBFOX1", "Anti-RBFOX1", "Soluble nucleoplasm"),
+        ])
+        assert not any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_an_ip_and_its_properly_labelled_input_do_not_collide(self):
+        """Once the input carries target SMInput, the targets differ, so no collision."""
+        df = self._rows([
+            ("RNPS1_HEK293T_Hs_IP_rep1", "RNPS1", self.AGENT, ""),
+            ("RNPS1_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
+        ])
+        assert not any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_rows_without_a_replicate_token_are_ignored(self):
+        df = self._rows([
+            ("RBFOX1_Mm_Forebrain_HMW_SRR1", "RBFOX1", "Anti-RBFOX1", "HMW nuclear"),
+            ("RBFOX1_Mm_Hindbrain_HMW_SRR2", "RBFOX1", "Anti-RBFOX1", "HMW nuclear"),
+        ])
+        assert not any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_the_message_names_the_colliding_samples(self):
+        df = self._rows([
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456785", "RNPS1", self.AGENT, ""),
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456787", "RNPS1", self.AGENT, ""),
+        ])
+        msgs = " ".join(i.message for i in validate_annotation_table(df))
+        assert "SRR32456787" in msgs or "SRR32456785" in msgs

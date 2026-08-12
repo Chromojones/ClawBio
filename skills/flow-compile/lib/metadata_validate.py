@@ -471,6 +471,66 @@ def validate_five_prime_barcode(value: str, *, umi_header_format: str = "") -> l
 # ----------------------------------------------------------------------- table level
 
 
+#: A replicate label in a sample name: `Rep1`, `rep_2`, `REP 3`.
+_REPLICATE_RE = re.compile(r"(?<![A-Za-z])rep[\s_-]?(\d+)", re.I)
+
+
+def replicate_token(sample_name: str) -> str:
+    """The replicate number in a sample name, or ``""`` if it carries none."""
+    match = _REPLICATE_RE.search(str(sample_name or ""))
+    return match.group(1) if match else ""
+
+
+def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
+    """Two rows sharing target + condition + replicate number lost a distinction.
+
+    Nothing can be replicate 1 of the same target under the same condition twice. When it
+    happens, some variable that separates the two samples was dropped — overwhelmingly, an
+    eCLIP size-matched input recorded as though it were the IP.
+
+    This exists because the control check in `validate_target_and_annotation` keys off the
+    sample **name** containing `input`/`SMInput`. On GSE290281's first batch the naming step
+    had failed in exactly the same way, so that check saw nothing and 8 mislabelled inputs
+    passed clean. A guardrail must not depend solely on the field that is also wrong.
+
+    Condition participates in the key so legitimate designs survive: GSE76475 has RBFOX1
+    replicate 1 in both the HMW and soluble fractions, which is not a collision.
+    """
+    groups: dict[tuple[str, str, str], list[str]] = {}
+    for _, row in annotation.iterrows():
+        name = str(row.get("Sample Name", "")).strip()
+        replicate = replicate_token(name)
+        if not replicate:
+            continue
+        key = (
+            str(row.get("Protein (Purification Target)", "")).strip().upper(),
+            str(row.get("Condition", "") or "").strip().lower(),
+            replicate,
+        )
+        groups.setdefault(key, []).append(name)
+
+    issues: list[MetadataIssue] = []
+    for (target, condition, replicate), names in groups.items():
+        if len(names) < 2:
+            continue
+        where = f" under condition {condition!r}" if condition else ""
+        issues.append(
+            MetadataIssue(
+                row=0,
+                sample_name=", ".join(sorted(names)),
+                field="Sample Name",
+                severity=ERROR,
+                message=(
+                    f"{len(names)} samples share target {target} and replicate {replicate}"
+                    f"{where}: {', '.join(sorted(names))} — a distinction was lost. If one is "
+                    "a size-matched input it must carry target 'SMInput' with an empty "
+                    "purification agent; otherwise set Condition to separate them"
+                ),
+            )
+        )
+    return issues
+
+
 def validate_annotation_table(
     annotation: pd.DataFrame,
     *,
@@ -485,15 +545,17 @@ def validate_annotation_table(
         sample = str(row.get("Sample Name", "")).strip()
         target = str(row.get("Protein (Purification Target)", "")).strip()
         agent = str(row.get("Purification Agent", "")).strip()
-        annotation = str(row.get("Purification Target Annotation", "")).strip()
+        # NB: named `tag_annotation`, not `annotation` — the latter is this function's
+        # DataFrame parameter, and shadowing it broke the cross-row check below.
+        tag_annotation = str(row.get("Purification Target Annotation", "")).strip()
         row_no = int(idx) + 2
 
         checks: list[Check] = []
-        checks += validate_purification_agent(agent, target=target, annotation=annotation)
+        checks += validate_purification_agent(agent, target=target, annotation=tag_annotation)
         checks += validate_source(str(row.get("Cell or Tissue", "")))
         checks += validate_target_and_annotation(
             target=target,
-            annotation=annotation,
+            annotation=tag_annotation,
             agent=agent,
             sample_name=sample,
         )
@@ -511,6 +573,9 @@ def validate_annotation_table(
                     message=check.message,
                 )
             )
+
+    # Cross-row check: needs the whole table, so it cannot live in the per-row loop.
+    issues.extend(find_replicate_collisions(annotation))
     return issues
 
 
