@@ -502,8 +502,16 @@ def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
         replicate = replicate_token(name)
         if not replicate:
             continue
+        target = str(row.get("Protein (Purification Target)", "")).strip().upper()
+        # Control targets are shared placeholders, not proteins: every IP's size-matched
+        # input carries SMInput, so `SMInput + rep1` collides across unrelated proteins by
+        # design. Exempting them keeps the check silent on correct studies — and detection
+        # is unaffected, since the bug this was built for had two rows carrying a real
+        # protein target.
+        if target in CONTROL_TARGETS or target in ANTIBODY_CONTROL_TARGETS:
+            continue
         key = (
-            str(row.get("Protein (Purification Target)", "")).strip().upper(),
+            target,
             str(row.get("Condition", "") or "").strip().lower(),
             replicate,
         )

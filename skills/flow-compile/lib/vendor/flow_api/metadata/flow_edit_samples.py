@@ -181,8 +181,24 @@ def load_edits(path: Path) -> List[Dict[str, str]]:
     return rows
 
 
+#: Write this in an edits CSV cell to CLEAR a field. A blank cell cannot mean "clear" —
+#: sparse sheets leave most cells blank and must not wipe those columns — so removing a
+#: value has to be explicit. Needed because "empty" is a real value here: controls carry an
+#: empty `purification_agent`, and a size-matched input carries no tag.
+CLEAR_SENTINEL = "__CLEAR__"
+
+
 def build_edit_body(row: Dict[str, str]) -> Dict[str, str]:
-    return {c: row[c] for c in WHITELIST_EDIT_FIELDS if c in row and row[c] != ""}
+    body: Dict[str, str] = {}
+    for column in WHITELIST_EDIT_FIELDS:
+        if column not in row:
+            continue
+        value = row[column]
+        if str(value).strip().upper() == CLEAR_SENTINEL:
+            body[column] = ""
+        elif value != "":
+            body[column] = value
+    return body
 
 
 def resolve_by_name(

@@ -19,7 +19,11 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL_DIR))
 
-from lib.vendor.flow_api.metadata.flow_edit_samples import live_value  # noqa: E402
+from lib.vendor.flow_api.metadata.flow_edit_samples import (  # noqa: E402
+    CLEAR_SENTINEL,
+    build_edit_body,
+    live_value,
+)
 
 # Shape returned by GET /samples/{id}, trimmed to what verification touches.
 LIVE = {
@@ -58,3 +62,38 @@ class TestLiveValue:
     def test_sample_without_a_metadata_block_does_not_crash(self):
         assert live_value({"name": "x"}, "source") is None
         assert live_value({"name": "x"}, "source__annotation") == ""
+
+
+class TestClearingAField:
+    """A field must be clearable, because "empty" is a real value in this database.
+
+    Controls carry an EMPTY `purification_agent` by convention, and a size-matched input
+    carries no tag. Correcting GSE290281's 8 mislabelled inputs therefore means *removing*
+    the IP's antibody and its `cV5` tag — but `row_to_body` dropped every empty value, so
+    those two edits vanished silently and the dry run showed only the name change.
+
+    Blanket-dropping empties is the right default (a sparse CSV must not wipe columns it
+    leaves blank), so clearing needs to be explicit rather than inferred from "".
+    """
+
+    def test_blank_cell_is_still_ignored(self):
+        """Sparse CSVs stay safe — this is why "" cannot itself mean 'clear'."""
+        assert build_edit_body({"name": "x", "purification_agent": ""}) == {"name": "x"}
+
+    def test_sentinel_clears_the_field(self):
+        body = build_edit_body({"name": "x", "purification_agent": CLEAR_SENTINEL})
+        assert body == {"name": "x", "purification_agent": ""}
+
+    def test_sentinel_is_case_insensitive_and_trimmed(self):
+        assert build_edit_body({"purification_agent": "  __clear__ "}) == {"purification_agent": ""}
+
+    def test_sentinel_works_for_annotation_fields(self):
+        body = build_edit_body({"purification_target__annotation": CLEAR_SENTINEL})
+        assert body == {"purification_target__annotation": ""}
+
+    def test_ordinary_values_are_untouched(self):
+        body = build_edit_body({"purification_target": "SMInput", "name": "RNPS1_INPUT_rep1"})
+        assert body == {"purification_target": "SMInput", "name": "RNPS1_INPUT_rep1"}
+
+    def test_non_whitelisted_columns_are_still_excluded(self):
+        assert "sample_id" not in build_edit_body({"sample_id": "123", "name": "x"})

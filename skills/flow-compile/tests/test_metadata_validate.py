@@ -498,3 +498,40 @@ class TestReplicateCollision:
         ])
         msgs = " ".join(i.message for i in validate_annotation_table(df))
         assert "SRR32456787" in msgs or "SRR32456785" in msgs
+
+    def test_control_targets_are_exempt_from_collision(self):
+        """SMInput is a shared placeholder, not a protein — every IP's input carries it.
+
+        Without this exemption the check fires on every correctly-labelled study: GSE290281
+        has 9 inputs, all target SMInput, so `SMInput + rep1` collides 5 ways in one batch.
+        A guardrail that screams on correct data gets switched off, so the exemption matters
+        as much as the check. Detection is unaffected — the bug it was written for had two
+        rows carrying target RNPS1, not SMInput.
+        """
+        df = self._rows([
+            ("CPSF5_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
+            ("CPSF6_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
+            ("EIF4B_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
+        ])
+        assert not any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_igg_and_input_are_exempt_too(self):
+        for control in ("IgG", "INPUT"):
+            df = self._rows([
+                (f"A_{control}_rep1", control, "", ""),
+                (f"B_{control}_rep1", control, "", ""),
+            ])
+            assert not any(
+                "replicate" in i.message.lower() for i in validate_annotation_table(df)
+            ), control
+
+    def test_real_ip_collision_still_detected_alongside_controls(self):
+        """The exemption must not mask the bug it was built for."""
+        df = self._rows([
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456785", "RNPS1", self.AGENT, ""),
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456787", "RNPS1", self.AGENT, ""),
+            ("CPSF5_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
+            ("CPSF6_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
+        ])
+        hits = [i for i in validate_annotation_table(df) if "replicate" in i.message.lower()]
+        assert len(hits) == 1 and "RNPS1" in hits[0].message
