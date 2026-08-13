@@ -340,6 +340,35 @@ useful discriminator in the protocol text: 254 nm is conventional CLIP/iCLIP, 36
 
 ---
 
+## 3c. PubMed ID — a sample property, not a metadata attribute
+
+`pubmed` does **not** appear in `flowbio samples batch-template --sample-type CLIP`, because
+that lists metadata attributes only. It is nevertheless a real, editable field — it sits at
+the **top level** of the sample, beside `name`:
+
+```
+POST /samples/{id}/edit  {"pubmed": "31216479"}     -> 200
+GET  /samples/{id}                                   -> {"name": ..., "pubmed": "31216479", ...}
+                                                        (NOT under "metadata")
+```
+
+Its absence from the template is why PMIDs were previously written into `comments`. That is
+not merely untidy — **setting `pubmed` populates the owning project's `papers`** with a
+resolved citation:
+
+```json
+"papers": [{"id": "31216479", "year": 2019, "journal": "Cell Rep",
+            "title": "Genome-wide Integrative Analysis of Zika-Virus-Infected ..."}]
+```
+
+A project whose samples carry no PMID has `papers: []`. So a PMID left in `comments` loses
+the paper linkage entirely, and the study becomes unfindable by publication.
+
+**Always set it**, and remember it is verified from the top level — `live_value()` handles
+that, but a hand-rolled check reading `metadata.pubmed` will always see nothing.
+
+---
+
 ## 4. 5′ Barcode Sequence
 
 Already gated by `CONFIRM_BARCODES.md`; two format rules belong here.

@@ -78,6 +78,11 @@ WHITELIST_EDIT_FIELDS: Tuple[str, ...] = (
     "organisation",
     "source",
     "sequencer",
+    # A sample PROPERTY, not a metadata attribute — it lands beside `name`, which is why it
+    # is absent from `samples batch-template` (that lists metadata columns only). Setting it
+    # populates the owning project's `papers` with a resolved citation, so a PMID left in
+    # `comments` loses the paper linkage entirely.
+    "pubmed",
 )
 
 DEFAULT_ACCESSION_RE = r"(ERR\d+|SRR\d+|DRR\d+|GSM\d+)"

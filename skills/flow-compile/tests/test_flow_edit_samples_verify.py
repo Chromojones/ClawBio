@@ -21,6 +21,7 @@ sys.path.insert(0, str(SKILL_DIR))
 
 from lib.vendor.flow_api.metadata.flow_edit_samples import (  # noqa: E402
     CLEAR_SENTINEL,
+    WHITELIST_EDIT_FIELDS,
     build_edit_body,
     live_value,
 )
@@ -97,3 +98,30 @@ class TestClearingAField:
 
     def test_non_whitelisted_columns_are_still_excluded(self):
         assert "sample_id" not in build_edit_body({"sample_id": "123", "name": "x"})
+
+
+class TestPubmedIsATopLevelField:
+    """`pubmed` is a sample PROPERTY, not a metadata attribute — and it must be editable.
+
+    It is absent from `samples batch-template --sample-type CLIP`, whose column list covers
+    only metadata attributes, which is why it looked as though Flow had no PubMed field and
+    PMIDs went into `comments` instead. `POST /samples/{id}/edit {"pubmed": "31216479"}`
+    returns 200 and the value lands at the TOP level of the sample, beside `name`.
+
+    It is not cosmetic: setting it populates the owning project's `papers` with a resolved
+    citation (title, year, journal). A PMID buried in comments loses that linkage.
+    """
+
+    def test_pubmed_is_whitelisted_for_editing(self):
+        assert "pubmed" in WHITELIST_EDIT_FIELDS
+
+    def test_pubmed_survives_body_building(self):
+        assert build_edit_body({"pubmed": "31216479"}) == {"pubmed": "31216479"}
+
+    def test_pubmed_can_be_cleared(self):
+        assert build_edit_body({"pubmed": CLEAR_SENTINEL}) == {"pubmed": ""}
+
+    def test_pubmed_verifies_from_the_top_level_not_metadata(self):
+        """`live_value` must find it beside `name`, not under `metadata`."""
+        live = {"name": "x", "pubmed": "31216479", "metadata": {"source": {"value": "hNSC"}}}
+        assert live_value(live, "pubmed") == "31216479"
