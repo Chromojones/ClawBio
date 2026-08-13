@@ -321,6 +321,25 @@ is empty on all four IP rows and all four SMInput rows.
 
 ---
 
+## 3b. Experimental Method — ignore `library_strategy`
+
+GEO's `!Sample_library_strategy` is chosen from a **fixed submission vocabulary** that has no
+iCLIP/eCLIP entry, so submitters pick the nearest match. `RIP-Seq` on a CLIP study is the
+normal outcome, not a discrepancy to investigate:
+
+| Study | `library_strategy` | Actual method (from the protocol) |
+|-------|--------------------|-----------------------------------|
+| GSE76475 (Rbfox) | `RIP-Seq` | iCLIP — `data_processing` even says `library strategy: iCLIP-seq` |
+| GSE113638 (AGO) | `RIP-Seq` | iCLIP, König 2011, UV 254 nm 150 mJ/cm² |
+| GSE78030 (m6A readers) | `OTHER` | iCLIP, Huppertz 2014 |
+
+**Take the method from the extraction protocol**, which names the published procedure and the
+crosslinking chemistry, and treat `library_strategy` as uninformative. UV wavelength is the
+useful discriminator in the protocol text: 254 nm is conventional CLIP/iCLIP, 365 nm with
+4SU is PAR-CLIP.
+
+---
+
 ## 4. 5′ Barcode Sequence
 
 Already gated by `CONFIRM_BARCODES.md`; two format rules belong here.
