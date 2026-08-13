@@ -535,3 +535,73 @@ class TestReplicateCollision:
         ])
         hits = [i for i in validate_annotation_table(df) if "replicate" in i.message.lower()]
         assert len(hits) == 1 and "RNPS1" in hits[0].message
+
+    def test_same_target_different_tag_is_not_a_collision(self):
+        """E-MTAB-2700 expresses each target as BOTH a T7- and a GFP-tagged construct.
+
+        `APOBEC3G` + `producer cell` + replicate 1 exists twice — once as `nT7`, once as
+        `nGFP`. Nothing is lost: Flow renders `TARGET:annotation`, so the tag is part of the
+        sample's identity and the two rows are fully distinguishable. Keying the check on
+        target+condition+replicate alone flagged all 12 of them, which would have pushed the
+        tag into `Condition` purely to satisfy the check — contorting the data around a
+        guardrail instead of fixing it.
+        """
+        df = self._rows([
+            ("APOBEC3G_T7_rep1", "APOBEC3G", "Anti-T7", "producer cell"),
+            ("APOBEC3G_GFP_rep1", "APOBEC3G", "Anti-GFP", "producer cell"),
+        ])
+        df["Purification Target Annotation"] = ["nT7", "nGFP"]
+        assert not any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_same_target_same_tag_still_collides(self):
+        """The tag must discriminate only when it actually differs."""
+        df = self._rows([
+            ("APOBEC3G_T7_rep1_a", "APOBEC3G", "Anti-T7", "producer cell"),
+            ("APOBEC3G_T7_rep1_b", "APOBEC3G", "Anti-T7", "producer cell"),
+        ])
+        df["Purification Target Annotation"] = ["nT7", "nT7"]
+        assert any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+    def test_gse290281_inputs_still_collide_with_their_ips(self):
+        """Regression: the bug this check was built for shared a tag, so it must still fire."""
+        df = self._rows([
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456785", "RNPS1", self.AGENT, ""),
+            ("RNPS1_Hs_HEK293T_Rep1_SRR32456787", "RNPS1", self.AGENT, ""),
+        ])
+        df["Purification Target Annotation"] = ["cV5", "cV5"]
+        assert any("replicate" in i.message.lower() for i in validate_annotation_table(df))
+
+
+class TestT7Tag:
+    """T7 is a standard epitope tag and must be in the vocabulary.
+
+    E-MTAB-2700 (Apolonia 2015) expresses APOBEC3G/3F as both T7- and GFP-tagged
+    constructs, immunoprecipitated with anti-T7 (Novagen) or anti-GFP (Roche). Half the
+    study is T7-tagged, and `nT7` was rejected as invalid tag grammar purely because the
+    vocabulary listed FLAG/GFP/V5/HA/MYC/HBH/HIS/TAP/SNAP/HALO/MS2 but not T7.
+
+    The tag is the T7 gene 10 leader peptide (MASMTGGQQMG) — as standard as FLAG.
+    """
+
+    def test_t7_is_valid_at_either_terminus(self):
+        for ann in ("nT7", "cT7"):
+            assert validate_target_and_annotation(
+                target="APOBEC3G", annotation=ann, agent="Anti-T7"
+            ) == [], ann
+
+    def test_t7_composes_with_a_mutation_prefix(self):
+        assert validate_target_and_annotation(
+            target="APOBEC3G", annotation="dCTD-nT7", agent="Anti-T7"
+        ) == []
+
+    def test_an_anti_t7_pulldown_of_a_t7_tagged_target_is_not_a_mismatch(self):
+        issues = validate_purification_agent("Anti-T7", target="APOBEC3G", annotation="nT7")
+        assert not any("purification target is" in c.message for c in issues)
+
+    def test_bare_t7_without_a_terminus_is_still_rejected(self):
+        issues = validate_target_and_annotation(target="APOBEC3G", annotation="T7", agent="")
+        assert issues and issues[0][0] == ERROR
+
+    def test_existing_tags_still_work(self):
+        for ann in ("cV5", "nMYC", "c3xFLAG-HBH", "nGFP"):
+            assert validate_target_and_annotation(target="QKI", annotation=ann, agent="") == [], ann

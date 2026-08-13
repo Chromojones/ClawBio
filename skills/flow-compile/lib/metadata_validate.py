@@ -361,6 +361,9 @@ def validate_source(value: str) -> list[Check]:
 TAGS = (
     "3xFLAG-HBH", "3xFLAG", "FLAG", "GFP", "V5", "HA", "MYC", "HBH", "HIS", "TAP",
     "SNAP", "HALO", "MS2",
+    # T7 gene 10 leader peptide (MASMTGGQQMG) — as standard as FLAG, and half of
+    # E-MTAB-2700's design (APOBEC3G/3F expressed as both T7- and GFP-tagged constructs).
+    "T7",
 )
 #: Annotation grammar: an optional protein alteration, then the tag — mutation first, tag
 #: last, hyphen-separated. Flow renders it as `TARGET:annotation`, so a myc-tagged LARP6
@@ -510,18 +513,25 @@ def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
         # protein target.
         if target in CONTROL_TARGETS or target in ANTIBODY_CONTROL_TARGETS:
             continue
+        # The tag annotation is part of the sample's identity — Flow renders the pair as
+        # `TARGET:annotation`. E-MTAB-2700 expresses each target as both a T7- and a
+        # GFP-tagged construct, so APOBEC3G + producer cell + replicate 1 legitimately
+        # exists twice, distinguished only by `nT7` vs `nGFP`. Excluding it from the key
+        # would flag 12 correct rows and push the tag into Condition to appease the check.
         key = (
             target,
+            str(row.get("Purification Target Annotation", "") or "").strip().upper(),
             str(row.get("Condition", "") or "").strip().lower(),
             replicate,
         )
         groups.setdefault(key, []).append(name)
 
     issues: list[MetadataIssue] = []
-    for (target, condition, replicate), names in groups.items():
+    for (target, tag, condition, replicate), names in groups.items():
         if len(names) < 2:
             continue
         where = f" under condition {condition!r}" if condition else ""
+        where += f" with tag {tag!r}" if tag else ""
         issues.append(
             MetadataIssue(
                 row=0,
