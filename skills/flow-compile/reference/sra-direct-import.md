@@ -26,6 +26,8 @@ These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
 | 2 | **The sheet has no `project` column** — flowbio's `RESERVED_COLUMNS` is `(accession, name, organism, sample_type)` | Import succeeds; every sample lands **unattached** and the project shows 0 samples |
 | 3 | **`strandedness` is rejected for CLIP** — it is an RNA-Seq field | `422 … Not a valid attribute for this sample type` |
 | 4 | **Deleting a sample is `POST /samples/{id}/delete`** — the `DELETE` verb returns `200` with the sample body but **does nothing** | You believe a sample is gone; it is still in the project and still matches your execution filters |
+| 5 | **The import silently drops `__annotation` columns** — `purification_target__annotation` and `source__annotation` are accepted and stored nowhere | Job `COMPLETED`, every read attached, and every tag and cell-line detail gone. GSE252683 lost `nFLAG` / `Flp-In T-REx` / `neuroblastoma` on all 12 samples with no error anywhere |
+| 6 | **`GET /projects/{id}/samples` returns trimmed samples whose `metadata` is `{}`** — not absent, *empty* | Verifying against the listing reports every field of every sample as dropped. Fetch each sample with `GET /samples/{id}` |
 
 Fact 4 belongs to a family worth knowing: several Flow write endpoints return `200` while
 silently ignoring the request. Confirmed no-ops are `DELETE /samples/{id}` and
@@ -173,6 +175,25 @@ to no project**. `flow_project_assign.py` is idempotent: samples already in the 
 project are skipped, and one failure does not abort the batch.
 
 Timing: ~3 min for a single sample, ~30 min for 8.
+
+### 5b. Verify the import before submitting anything
+
+**A `COMPLETED` job is not evidence the metadata arrived** (fact 5). Read the samples back
+and diff them against the sheet that produced them:
+
+```python
+from lib.import_verify import find_import_discrepancies, format_report
+# one GET /samples/{id} per sample — NOT the project listing, see fact 6
+found = find_import_discrepancies(sheet_rows, live_samples,
+                                  project_id=PID, expect_pubmed="38182429")
+print(format_report(found, total_rows=len(sheet_rows)))
+```
+
+It checks every non-blank sheet column plus the three attachments the sheet cannot carry —
+`project`, `pubmed`, and whether any reads landed at all. Repair whatever it reports with
+`POST /samples/{id}/edit`, which *does* honour the `__annotation` columns, then re-run it to
+0 before launching the execution. Blank sheet cells are skipped, so a sparse sheet does not
+demand that Flow invent values.
 
 ---
 
