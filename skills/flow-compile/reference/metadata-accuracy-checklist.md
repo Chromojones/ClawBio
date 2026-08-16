@@ -456,3 +456,25 @@ are listed for contrast — they now fail loudly instead of silently.
 
 **Rule of thumb:** if a field is in the lower table, do not trust it from a single model
 pass — check it against the paper before releasing the metadata gate.
+
+---
+
+## Organism is a code, not a name
+
+`Organism` takes Flow's **two-letter code**. The Latin and common names that
+`GET /api/organisms` returns alongside it are for display and are rejected on submission.
+
+| Use | Not |
+|---|---|
+| `Hs` | `Homo sapiens`, `Human` |
+| `Mm` | `Mus musculus`, `Mouse` |
+| `Rn` `Dr` `Dm` `Sc` `Ec` `Gg` `At` `Vf` | their Latin or common names |
+
+GSE159997's upload sheet carried `Mus musculus` and all 18 rows failed with
+`{'organism': ['Does not exist.']}` — after 12.8 GB had been downloaded, rewritten and
+staged. Nothing partial was created, but it is a long way to travel for a vocabulary error.
+
+It is tempting to conclude that `samples import` and `samples upload` take different
+vocabularies. **They do not** — every sheet that has ever worked, on either path, uses the
+code. `validate_organism()` is case-sensitive because the API is; accepting `mm` would only
+move the failure downstream.

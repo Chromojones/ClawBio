@@ -443,6 +443,65 @@ def validate_target_and_annotation(
 _BARCODE_RE = re.compile(r"^[ACGTN]+$")
 
 
+#: Flow's organism vocabulary, from `GET /api/organisms`. The API takes the CODE; the
+#: `name` and `latin_name` it returns are for display and are rejected on submission.
+ORGANISM_CODES: dict[str, str] = {
+    "Hs": "Homo sapiens",
+    "Mm": "Mus musculus",
+    "Rn": "Rattus norvegicus",
+    "Dr": "Danio rerio",
+    "Dm": "Drosophila melanogaster",
+    "Sc": "Saccharomyces cerevisiae",
+    "Ec": "Escherichia coli",
+    "Gg": "Gallus gallus",
+    "At": "Arabidopsis thaliana",
+    "Vf": "Vibrio fischeri",
+}
+
+#: Latin and common names mapped back to the code, so the error can say what to use instead.
+_ORGANISM_ALIASES: dict[str, str] = {
+    **{latin.lower(): code for code, latin in ORGANISM_CODES.items()},
+    "human": "Hs", "mouse": "Mm", "rat": "Rn", "zebrafish": "Dr",
+    "drosophila": "Dm", "yeast": "Sc", "e. coli": "Ec", "chicken": "Gg",
+    "arabidopsis": "At", "v. fischeri": "Vf",
+}
+
+
+def validate_organism(value: str) -> list[Check]:
+    """Organism must be Flow's two-letter code, not a Latin or common name.
+
+    GSE159997's upload sheet carried ``Mus musculus`` and every row was rejected with
+    ``{'organism': ['Does not exist.']}`` — after the FASTQs had been staged and the
+    uploader had started walking rows. Both the import and the upload path take the code;
+    there is no asymmetry between them, the Latin name is simply wrong everywhere.
+
+    Case-sensitive, because the API is: accepting ``mm`` here would only move the failure
+    downstream.
+    """
+    field = "Organism"
+    raw = str(value or "").strip()
+    if not raw:
+        return [Check(ERROR, "organism is empty", field)]
+    if raw in ORGANISM_CODES:
+        return []
+    suggestion = _ORGANISM_ALIASES.get(raw.lower()) or _ORGANISM_ALIASES.get(raw.strip().lower())
+    if suggestion is None and raw.lower() in {c.lower() for c in ORGANISM_CODES}:
+        suggestion = next(c for c in ORGANISM_CODES if c.lower() == raw.lower())
+    if suggestion:
+        return [Check(
+            ERROR,
+            f"organism {raw!r} is not a Flow code — use {suggestion!r} "
+            f"({ORGANISM_CODES[suggestion]}). The API accepts the code only; the Latin and "
+            f"common names it returns are for display.",
+            field,
+        )]
+    return [Check(
+        ERROR,
+        f"organism {raw!r} is not one of Flow's codes ({', '.join(sorted(ORGANISM_CODES))})",
+        field,
+    )]
+
+
 def validate_five_prime_barcode(value: str, *, umi_header_format: str = "") -> list[Check]:
     value = str(value or "").strip()
     field = "5' Barcode Sequence"
@@ -580,6 +639,9 @@ def validate_annotation_table(
         checks += validate_five_prime_barcode(
             str(row.get("5' Barcode Sequence", "")), umi_header_format=umi_header_format
         )
+        # Only when the sheet carries the column — edit sheets legitimately omit it.
+        if "Organism" in annotation.columns:
+            checks += validate_organism(str(row.get("Organism", "")))
 
         for check in checks:
             issues.append(
