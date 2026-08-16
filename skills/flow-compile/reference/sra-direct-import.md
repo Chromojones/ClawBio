@@ -33,6 +33,19 @@ protein in human neural progenitors, three accessions named in the paper — and
 abstract, Europe PMC, PMC efetch, bioRxiv full text, methods extraction. Every minute of it
 was wasted work that one lookup would have prevented.
 
+Then ask the **project** what it already holds — not a status note, not even your own:
+
+```python
+from lib.import_preflight import find_already_present, names_from_listing
+present = find_already_present(sheet_rows, names_from_listing(listing))   # GET /projects/{id}/samples?count=100
+```
+
+E-MTAB-2700's status file said *BLOCKED — a retry cannot duplicate*, which was true when
+written and false two days later: the original imports had completed and nothing updated the
+note. Re-importing on its word produced **48 samples in a 24-sample project**, untangled
+afterwards by creation timestamp. The trimmed listing is the right endpoint here — a
+pre-flight needs only names.
+
 Three outcomes, three different next moves:
 
 | Outcome | What to do |
