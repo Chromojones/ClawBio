@@ -16,7 +16,39 @@ Worked example throughout: **GSE215250** — Busa *et al.* 2024, *iScience*
 
 ---
 
-## 0. The three non-obvious API facts
+## 0. Before anything else — is the data public?
+
+**A Data Availability statement is a promise, not a fact.** Accessions are routinely reserved
+at submission and released at publication, so a named `GSE` proves only that the authors
+intend to deposit. Check first; it is one request and it ends the question:
+
+```python
+from lib.accession_availability import geo_url, parse_geo_response
+print(parse_geo_response(acc, fetch(geo_url(acc))).describe())
+```
+
+AUTS2 (PMID 41278797) is why this is step 0 rather than a footnote. eCLIP of a genuinely new
+protein in human neural progenitors, three accessions named in the paper — and all three
+**private until 07 Aug 2029**. The embargo was discovered only after the full literature dig:
+abstract, Europe PMC, PMC efetch, bioRxiv full text, methods extraction. Every minute of it
+was wasted work that one lookup would have prevented.
+
+Three outcomes, three different next moves:
+
+| Outcome | What to do |
+|---|---|
+| released | proceed to step 1 |
+| private, weeks away | wait, or request a reviewer token from the authors |
+| private, years away | drop the study, or email the authors — do not start on the metadata |
+| not found | a typo, or the accession was withdrawn |
+
+Note the signal is the **response format**, not its wording: GEO answers in SOFT for a
+released series and in HTML for an embargoed one. Sniffing for the word "private" would
+misread a public series whose summary happens to discuss private data.
+
+---
+
+## 0a. The non-obvious API facts
 
 These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
 
