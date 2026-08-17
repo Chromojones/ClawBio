@@ -64,7 +64,12 @@ SPECIES_UPPER = {s.upper() for s in SPECIES}
 
 #: Targets that denote a control library rather than an immunoprecipitated protein.
 #: Controls whose defining feature is that **no antibody was used** — agent stays empty.
-CONTROL_TARGETS = {"SMINPUT", "INPUT", "IGG"}
+#:
+#: `NOABCTRL` is beads with no antibody, which is NOT the same as `SMINPUT`: an input is
+#: material carried through the protocol, a no-antibody control is an IP performed without
+#: an antibody. GSE75418's yielded 595,480 reads against 14-40M for its IPs (~0.08% of the
+#: SAFB1 read count). They answer different questions, so they stay distinct terms.
+CONTROL_TARGETS = {"SMINPUT", "INPUT", "IGG", "NOABCTRL"}
 
 #: An antibody pulldown performed on cells lacking the target (e.g. a myc IP on
 #: untransfected cells). The antibody *was* used, so unlike SMInput the agent must be kept.

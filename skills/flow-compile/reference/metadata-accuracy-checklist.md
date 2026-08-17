@@ -478,3 +478,40 @@ It is tempting to conclude that `samples import` and `samples upload` take diffe
 vocabularies. **They do not** — every sheet that has ever worked, on either path, uses the
 code. `validate_organism()` is case-sensitive because the API is; accepting `mm` would only
 move the failure downstream.
+
+---
+
+## A stated barcode may be the RT primer, not the read
+
+Papers often give the barcode as the **RT-primer sequence**. The read carries its **reverse
+complement** — and reverse-complementing swaps the flanking random lengths:
+
+```
+primer   NN | XXXX | NNN          (2 random + 4 fixed + 3 random)
+read     NNN | revcomp(XXXX) | NN (3 random + 4 fixed + 2 random)
+```
+
+GSE75418 (PMID 26694817) states `5'-phosphate-NNXXXXNNNAGATCGG…` with identifiers
+`AACC, ACAC, AGGT, CGAC`. Entropy put the fixed bases at positions **4–7**, not 3–6, and the
+observed barcodes were `GGTT, GTGT, ACCT, GTCG`. Reverse-complementing the paper's four
+values reproduces the observed four **exactly, 4/4** — the paper is right, it is simply
+describing the primer.
+
+So a mismatch against a stated barcode has two candidate explanations, and they need
+different responses:
+
+| Observation | Meaning |
+|---|---|
+| revcomp matches, flanks swapped | the paper states the primer — record the **read** form |
+| nothing matches under either orientation | the deposit is wrong (E-MTAB-2700) — trust the entropy |
+
+Check the reverse complement before concluding a deposit is wrong.
+
+## `noAbCtrl` is not `SMInput`
+
+A **size-matched input** is material carried through the protocol. A **no-antibody control**
+is an IP performed with beads and no antibody. Both take an empty `purification_agent`, and
+they answer different questions — do not collapse them.
+
+GSE75418's `noAbCtrl` yielded 595,480 reads against 14–40 M for its IPs, which the paper
+reports as ~0.08% of the SAFB1 read count.
