@@ -45,6 +45,30 @@ _DATA_BUCKETS = ("projects", "samples", "data", "executions")
 _GENERIC_TARGETS = {"SMINPUT", "INPUT", "IGG", "GFP", "CONTROL", "NO ANTIBODY"}
 
 
+def query_kinds(sheet_rows: list[dict], *, extra: list[str] | None = None) -> dict[str, str]:
+    """Label each query by how much weight its match carries.
+
+    Only an ``accession`` match proves this exact data is already on the platform. A
+    ``target`` match means some study of that protein exists, which may well be a different
+    paper — two labs CLIPping the same protein is normal and must not be blocked. ``extra``
+    terms (cell lines, title words) match almost anything.
+    """
+    kinds: dict[str, str] = {}
+    for row in sheet_rows:
+        accession = str(row.get("accession", "")).strip()
+        if accession:
+            kinds[accession] = "accession"
+    for row in sheet_rows:
+        target = str(row.get("purification_target", "")).strip()
+        if target and target.upper() not in _GENERIC_TARGETS:
+            kinds.setdefault(target, "target")
+    for term in extra or []:
+        term = str(term).strip()
+        if term:
+            kinds.setdefault(term, "extra")
+    return kinds
+
+
 @dataclass
 class Hits:
     """What a database-wide search found."""
@@ -56,6 +80,10 @@ class Hits:
     data: list[dict] = field(default_factory=list)
     failed_queries: list[str] = field(default_factory=list)
     total_queries: int = 0
+    #: queries that matched, split by weight — only `decisive` blocks an import
+    decisive_matches: list[str] = field(default_factory=list)
+    related_matches: list[str] = field(default_factory=list)
+    inconclusive: bool = False
 
     def describe(self) -> str:
         lines: list[str] = []
@@ -70,16 +98,29 @@ class Hits:
                 "Build queries from the sheet's accessions and targets."
             )
             return "\n".join(lines)
+        if self.inconclusive:
+            lines.append(
+                "INCONCLUSIVE — an accession query failed, and accessions are the only "
+                "decisive evidence. Re-run before importing."
+            )
         if not self.already_present:
             lines.append(
-                f"no match across {self.total_queries} quer(y/ies) — the study does not "
-                f"appear to be on the platform."
+                f"no accession match across {self.total_queries} quer(y/ies) — this study "
+                f"does not appear to be on the platform; proceed."
             )
+            if self.related_matches:
+                lines.append(
+                    f"  related hits worth a look (not duplicates): "
+                    f"{', '.join(self.related_matches)} — review the project(s) below."
+                )
+                for project in self.projects:
+                    lines.append(f"    project {project.get('id')}  {project.get('name','')}")
+                for sample in self.samples[:5]:
+                    lines.append(f"    sample  {sample.get('id')}  {sample.get('name','')}")
             return "\n".join(lines)
 
         lines.append(
-            f"ALREADY PRESENT — {len(self.matched_queries)} of {self.total_queries} "
-            f"quer(y/ies) matched: {', '.join(self.matched_queries)}"
+            f"ALREADY PRESENT — accession(s) matched: {', '.join(self.decisive_matches)}"
         )
         for project in self.projects:
             lines.append(f"  project {project.get('id')}  {project.get('name','')}")
@@ -119,7 +160,7 @@ def build_search_queries(sheet_rows: list[dict], *, extra: list[str] | None = No
     return queries
 
 
-def summarise_hits(results: dict[str, dict | None]) -> Hits:
+def summarise_hits(results: dict[str, dict | None], *, kinds: dict[str, str] | None = None) -> Hits:
     """Fold ``{query: search_response}`` into a verdict.
 
     A ``None`` response marks a query that errored. That is the opposite of an empty result
@@ -143,7 +184,14 @@ def summarise_hits(results: dict[str, dict | None]) -> Hits:
                     hits.data.append(item)
         if matched:
             hits.matched_queries.append(query)
-    hits.already_present = bool(hits.matched_queries)
+            kind = (kinds or {}).get(query, "accession")   # no kinds -> old conservative behaviour
+            if kind == "accession":
+                hits.decisive_matches.append(query)
+            else:
+                hits.related_matches.append(query)
+    if kinds:
+        hits.inconclusive = any(kinds.get(q) == "accession" for q in hits.failed_queries)
+    hits.already_present = bool(hits.decisive_matches)
     return hits
 
 

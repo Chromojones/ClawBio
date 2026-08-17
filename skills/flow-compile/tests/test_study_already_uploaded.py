@@ -116,7 +116,9 @@ class TestACleanResult:
         results = {"SRX999": {"projects": [], "samples": [], "data": [], "executions": []}}
         hits = summarise_hits(results)
         assert hits.already_present is False
-        assert "no match" in hits.describe().lower()
+        # asserts the claim, not the phrasing — the wording gained the word "accession"
+        # once match precedence landed (see test_hit_precedence.py)
+        assert "does not appear to be on the platform" in hits.describe().lower()
 
     def test_user_and_group_hits_are_ignored(self):
         """A protein name matching a username says nothing about the data."""
