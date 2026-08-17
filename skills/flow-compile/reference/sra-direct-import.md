@@ -33,6 +33,26 @@ protein in human neural progenitors, three accessions named in the paper — and
 abstract, Europe PMC, PMC efetch, bioRxiv full text, methods extraction. Every minute of it
 was wasted work that one lookup would have prevented.
 
+Then ask **the whole platform** whether the study is already there — not just the project
+you are about to import into:
+
+```python
+from lib.study_already_uploaded import build_search_queries, summarise_hits, search_url
+q = build_search_queries(sheet_rows, extra=["<distinctive title word>"])
+print(summarise_hits({t: fetch(search_url(t)) for t in q}).describe())
+```
+
+GSE80202 was already on Flow — public, all 7 samples, paper attached — and was imported
+again. The project-scoped pre-flight below ran first and said *none (clean import)*: true,
+and worthless, because the target project had been created seconds earlier and was empty by
+construction. It also matched on sample **name**, and the two uploads named the same samples
+`Nacc1_N2A_Mm_rep1` versus `NACC1_N2A_Mm_endogenous_rep1_SRX2415967`.
+
+Search on **accessions** (they survive inside deposited filenames) and **target proteins**.
+The parameter is `q`, not `query`. `GSM…` and PubMed ids are **not indexed** and return empty
+— querying them would pad a clean result with searches that can never match. Re-run against
+the live platform, all 10 queries matched.
+
 Then ask the **project** what it already holds — not a status note, not even your own:
 
 ```python
