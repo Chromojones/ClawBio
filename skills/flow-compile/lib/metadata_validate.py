@@ -563,7 +563,7 @@ def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
     Condition participates in the key so legitimate designs survive: GSE76475 has RBFOX1
     replicate 1 in both the HMW and soluble fractions, which is not a collision.
     """
-    groups: dict[tuple[str, str, str], list[str]] = {}
+    groups: dict[tuple[str, str, str, str, str, str], list[str]] = {}
     for _, row in annotation.iterrows():
         name = str(row.get("Sample Name", "")).strip()
         replicate = replicate_token(name)
@@ -582,16 +582,23 @@ def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
         # GFP-tagged construct, so APOBEC3G + producer cell + replicate 1 legitimately
         # exists twice, distinguished only by `nT7` vs `nGFP`. Excluding it from the key
         # would flag 12 correct rows and push the tag into Condition to appease the check.
+        # The biological source is part of the identity too. GSE58448 runs coilin-GFP in
+        # mouse P19 and human HeLa; mouse rep1 and human rep1 share target, tag and
+        # condition, and without source in the key the check called that a lost
+        # distinction. Cell line AND organism both participate, since one species can
+        # legitimately host the same protein in two lines.
         key = (
             target,
             str(row.get("Purification Target Annotation", "") or "").strip().upper(),
             str(row.get("Condition", "") or "").strip().lower(),
+            str(row.get("Cell or Tissue", "") or "").strip().lower(),
+            str(row.get("Organism", "") or "").strip().lower(),
             replicate,
         )
         groups.setdefault(key, []).append(name)
 
     issues: list[MetadataIssue] = []
-    for (target, tag, condition, replicate), names in groups.items():
+    for (target, tag, condition, _source, _organism, replicate), names in groups.items():
         if len(names) < 2:
             continue
         where = f" under condition {condition!r}" if condition else ""
