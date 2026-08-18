@@ -284,3 +284,41 @@ often the useless `OTHER`, with the real method recorded as free text — GSE266
 - [YeoLab/eclipdemux](https://github.com/YeoLab/eclipdemux) — `demux.py`, barcode reference `yeolabbarcodes_20170101.fasta`
 - [YeoLab/eclip](https://github.com/yeolab/eclip) — full processing pipeline
 - Busa *et al.* 2024, *iScience* — worked example ([PMID 38495826](https://pubmed.ncbi.nlm.nih.gov/38495826/))
+
+---
+
+## Before submitting: are the params coherent with each other?
+
+```python
+from lib.umi_params import check_umi_params
+print(check_umi_params(params, barcode=row["five_prime_barcode_sequence"]).reason)
+```
+
+`move_umi_to_header=true` with **no `umi_separator`** was submitted on four consecutive
+studies (GSE75418, GSE68800, GSE80202, GSE58448). The pipeline extracts the barcode into the
+read name and UMICollapse is then given no delimiter to find it with:
+
+```
+java.lang.IllegalStateException: No match found
+    at umicollapse.util.SAMRead.getUMI(SAMRead.java:36)
+```
+
+E-MTAB-2700 (605/605) carries the same shape **plus** `"umi_separator": "_"`.
+
+Two reasons this needs a check rather than care:
+
+- **it fails late** — trimming, mapping and sorting all finish first, so most of a run is
+  spent before anything complains;
+- **it fails misleadingly** — the trace names `SAMRead.getUMI`, so it reads as a UMI-in-the-
+  data problem. The LARP6 header case throws a byte-identical exception for the opposite
+  reason: there the UMI genuinely was absent from the read name, here it is present and the
+  parser was never told the delimiter.
+
+| Archetype | `move_umi_to_header` | `umi_separator` |
+|---|---|---|
+| barcode on the read | `true` | `_` |
+| UMI in the read name (iCount, ultraplex) | `false` | `rbc:` |
+| reads pre-deduplicated | `false` | not needed — `skip_umi_dedupe=true` |
+
+The check also pins `umi_header_format` to all-N of the barcode length: the metadata field
+carries the real sequence, the execution mask must not.
