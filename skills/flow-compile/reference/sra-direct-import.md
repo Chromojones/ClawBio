@@ -264,6 +264,22 @@ demand that Flow invent values.
 
 ## 5a. Choosing which mate to analyse — `csv_params.samplesheet.paired`
 
+**Check the layout first.** On SINGLE-end data there is no mate to select, and `first` or
+`second` empties the samplesheet:
+
+```python
+from lib.paired_selection import check_paired_selection
+r = check_paired_selection(choice, layouts={x["library_layout"] for x in ena_runs})
+```
+
+GSE75418 and GSE68800 were both submitted with `second`, inherited from a submit script
+copied out of a paired-end study. The rows came out as
+`MSI1_U251_Hs_WT_rep3_SRX1023997,1,,` — both read columns blank — and died at
+`SAMPLE_BASE_SAMPLESHEET_CHECK` with *"Invalid number of populated columns (minimum = 3)"*,
+which never mentions reads, mates or `paired`. Both executions had to be deleted and
+resubmitted. ENA's `library_layout` states SINGLE or PAIRED per run, so this is answerable
+before submitting.
+
 **A sample with both mates does not have to be analysed as paired-end.** The samplesheet
 `csv` param accepts a `paired` key that selects the mate:
 
