@@ -507,6 +507,27 @@ def validate_organism(value: str) -> list[Check]:
     )]
 
 
+#: Flow caps `comments` at 1000 characters. The constant also lives in `lib/sra_import.py`,
+#: which builds import sheets — but hand-assembled sheets validated through
+#: `validate_annotation_table` bypassed that module entirely, so the cap was silent for the
+#: workflow that kept hitting it (GSE76475, GSE58448, U1A IP1). It is checked here because
+#: this is the gate that actually runs.
+MAX_COMMENTS_CHARS = 1000
+
+
+def validate_comments(value: str) -> list[Check]:
+    """Reject a comment the server will reject, before the reads are staged."""
+    text = str(value or "")
+    if len(text) <= MAX_COMMENTS_CHARS:
+        return []
+    return [Check(
+        ERROR,
+        f"comments is {len(text)} characters, over the {MAX_COMMENTS_CHARS} limit — "
+        f"`samples import` rejects the whole batch and `samples upload` rejects every row.",
+        "Comments",
+    )]
+
+
 def validate_five_prime_barcode(value: str, *, umi_header_format: str = "") -> list[Check]:
     value = str(value or "").strip()
     field = "5' Barcode Sequence"
@@ -654,6 +675,8 @@ def validate_annotation_table(
         # Only when the sheet carries the column — edit sheets legitimately omit it.
         if "Organism" in annotation.columns:
             checks += validate_organism(str(row.get("Organism", "")))
+        if "Comments" in annotation.columns:
+            checks += validate_comments(str(row.get("Comments", "")))
 
         for check in checks:
             issues.append(
