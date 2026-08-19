@@ -51,8 +51,11 @@ WARNING = "warning"
 #: Largest study observed to import successfully in one job (GSE252683).
 LARGEST_KNOWN_GOOD_BYTES = 8_000_000_000
 
-#: Size at which an import is known to have failed (GSE63262).
-KNOWN_FAILURE_BYTES = 132_700_000_000
+#: Size at which an import is known to have failed: GSE63262's true total across its 36 runs,
+#: summed from ENA `fastq_bytes`. This is the measured figure, not a tidied one — the first
+#: cut used `132_700_000_000`, which sits 10.9 million bytes ABOVE the real total and so let
+#: the very study this module was built from pass with only a warning.
+KNOWN_FAILURE_BYTES = 132_689_117_735
 
 #: Default ceiling when splitting. Chosen below the known failure and above the known
 #: success; it is a working figure, not a measured limit.

@@ -60,6 +60,9 @@ from lib.import_size import (  # noqa: E402
 
 GB = 1_000_000_000
 
+#: GSE63262's true total across all 36 runs, summed from ENA `fastq_bytes`.
+GSE63262_BYTES = 132_689_117_735
+
 
 def rows(*specs):
     """`(accession, target)` pairs in sheet shape."""
@@ -111,7 +114,22 @@ class TestTheCeiling:
 
     def test_the_bounds_are_the_measured_ones(self):
         assert LARGEST_KNOWN_GOOD_BYTES == 8 * GB
-        assert KNOWN_FAILURE_BYTES == 132_700_000_000
+        assert KNOWN_FAILURE_BYTES == GSE63262_BYTES
+
+    def test_the_exact_study_that_failed_is_refused(self):
+        """The regression case, at its true size — not a rounded stand-in.
+
+        The first cut of this module set the threshold to a tidied `132_700_000_000`. The
+        study's real total is `132_689_117_735`, 10.9 million bytes below it, so GSE63262 —
+        the failure the module exists to prevent — only warned. The test fixture said
+        36 x 3.7 GB, which rounds *up* past the threshold and hid it. Only running the check
+        against the actual sheet exposed it.
+
+        Bounds must be measured values, never tidied ones.
+        """
+        by_accession = {"SRX0": {"SRR0": GSE63262_BYTES}}
+        checks = check_import_size(rows(("SRX0", "SR")), by_accession)
+        assert any(c.severity == ERROR for c in checks)
 
 
 class TestSplitting:
