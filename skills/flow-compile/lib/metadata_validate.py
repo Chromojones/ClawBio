@@ -283,8 +283,8 @@ def _validate_agent_string(
         return checks
     # A tagged pulldown's antibody names the TAG, not the protein: `Anti-Myc` against target
     # LARP6 with annotation `nMYC` is correct by construction, not a mismatch.
-    tag = re.sub(r"^[cn]", "", str(annotation or "").strip(), count=1).upper()
-    if tag and named and named == tag:
+    tag = _annotation_tag(annotation)
+    if tag and named and named in _tag_components(tag):
         return checks
     if named and target_upper and named != target_upper:
         checks.append(
@@ -390,6 +390,38 @@ _GENE_RE = re.compile(r"^[A-Z][A-Z0-9-]{1,15}$")
 def _name_tokens(name: str) -> set[str]:
     return {t for t in re.split(r"[^A-Za-z0-9]+", str(name or "").upper()) if t}
 
+
+
+def _annotation_tag(annotation: str) -> str:
+    """The tag half of an annotation, upper-cased, with the mutation and n/c prefix stripped.
+
+    `100Q-nFLAG-HA-HIS` -> `FLAG-HA-HIS`. Uses the annotation grammar rather than a bare
+    prefix strip, so a mutation is never mistaken for part of the tag.
+    """
+    annotation = str(annotation or "").strip()
+    if not annotation:
+        return ""
+    match = _TAG_RE.match(annotation)
+    tag = match.group("tag") if match else annotation
+    return re.sub(r"^[cn]", "", tag, count=1).upper()
+
+
+def _tag_components(tag: str) -> set[str]:
+    """Every epitope an antibody could legitimately be raised against for this tag.
+
+    A composite cassette is a real tag whose parts are individually targetable: an anti-HA
+    pulldown of a FLAG-HA-HIS construct is correct by construction, exactly as anti-Myc
+    against `nMYC` is. Copy-number prefixes are equivalent to the bare epitope, so anti-FLAG
+    against `3xFLAG` is clean too.
+
+    Matching the whole string only, as this once did, produced 41 false warnings on
+    GSE131210 and buried the one true one (anti-HA against a FLAG-only SF3B1 construct).
+    """
+    parts = {tag}
+    for part in tag.split("-"):
+        parts.add(part)
+        parts.add(re.sub(r"^\d+X", "", part))
+    return {p for p in parts if p}
 
 def validate_target_and_annotation(
     *,
