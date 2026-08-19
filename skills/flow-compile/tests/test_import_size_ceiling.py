@@ -63,6 +63,10 @@ GB = 1_000_000_000
 #: GSE63262's true total across all 36 runs, summed from ENA `fastq_bytes`.
 GSE63262_BYTES = 132_689_117_735
 
+#: GSE63262 batch 1 (B52 + Rbp1, both replicates) — imported successfully in ~28 minutes
+#: after the whole study failed. The largest import measured to work.
+GSE63262_BATCH1_BYTES = 32_588_391_652
+
 
 def rows(*specs):
     """`(accession, target)` pairs in sheet shape."""
@@ -101,19 +105,24 @@ class TestTheCeiling:
         assert "132" in message or "133" in message
         assert "batch" in message.lower()
 
+    def test_a_batch_the_size_of_the_one_that_worked_passes_clean(self):
+        """32.6 GB imported successfully, so it must not warn."""
+        by_accession = {"SRX0": {"SRR0": GSE63262_BATCH1_BYTES}}
+        assert check_import_size(rows(("SRX0", "B52")), by_accession) == []
+
     def test_a_study_the_size_of_gse252683_passes_clean(self):
         by_accession = {f"SRX{i}": {f"SRR{i}": 0.6 * GB} for i in range(12)}  # 7.2 GB, at GSE252683 scale
         assert check_import_size(rows(*[(f"SRX{i}", "P") for i in range(12)]), by_accession) == []
 
     def test_between_known_good_and_known_bad_warns_rather_than_refusing(self):
         """The ceiling is bounded, not measured. Claiming a precise limit would be a guess."""
-        by_accession = {"SRX1": {"SRR1": 40 * GB}}
+        by_accession = {"SRX1": {"SRR1": 60 * GB}}
         checks = check_import_size(rows(("SRX1", "P")), by_accession)
         assert [c.severity for c in checks] == [WARNING]
         assert "not known" in " ".join(c.message for c in checks).lower()
 
     def test_the_bounds_are_the_measured_ones(self):
-        assert LARGEST_KNOWN_GOOD_BYTES == 8 * GB
+        assert LARGEST_KNOWN_GOOD_BYTES == GSE63262_BATCH1_BYTES
         assert KNOWN_FAILURE_BYTES == GSE63262_BYTES
 
     def test_the_exact_study_that_failed_is_refused(self):

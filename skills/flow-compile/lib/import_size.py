@@ -30,10 +30,11 @@ study                  bytes       outcome
 =====================  ==========  ========
 E-MTAB-2700 (24 smp)   ~0.2 GB     imported
 GSE252683 (12 runs)    ~8 GB       imported
+GSE63262 batch 1        32.6 GB    imported
 GSE63262 (36 runs)     132.7 GB    FAILED
 =====================  ==========  ========
 
-The ceiling therefore lies *somewhere between* 8 GB and 132.7 GB and is not otherwise known.
+The ceiling therefore lies *somewhere between* 32.6 GB and 132.7 GB and is not otherwise known.
 This module refuses to invent a precise limit it cannot support: it passes below the largest
 observed success, warns in the unmeasured band while saying plainly that the band is
 unmeasured, and refuses at or above the known failure size.
@@ -48,8 +49,10 @@ from dataclasses import dataclass
 ERROR = "error"
 WARNING = "warning"
 
-#: Largest study observed to import successfully in one job (GSE252683).
-LARGEST_KNOWN_GOOD_BYTES = 8_000_000_000
+#: Largest import observed to succeed in one job: GSE63262 batch 1 (B52 + Rbp1, both
+#: replicates), which landed in ~28 minutes after the whole 132.7 GB study had failed. This
+#: replaced an earlier 8 GB figure once the batched retry measured a real upper bound.
+LARGEST_KNOWN_GOOD_BYTES = 32_588_391_652
 
 #: Size at which an import is known to have failed: GSE63262's true total across its 36 runs,
 #: summed from ENA `fastq_bytes`. This is the measured figure, not a tidied one — the first
@@ -57,8 +60,8 @@ LARGEST_KNOWN_GOOD_BYTES = 8_000_000_000
 #: the very study this module was built from pass with only a warning.
 KNOWN_FAILURE_BYTES = 132_689_117_735
 
-#: Default ceiling when splitting. Chosen below the known failure and above the known
-#: success; it is a working figure, not a measured limit.
+#: Default ceiling when splitting. Sits just above the largest measured success and far
+#: below the known failure; it is a working figure, not a measured limit.
 DEFAULT_BATCH_BYTES = 35_000_000_000
 
 
