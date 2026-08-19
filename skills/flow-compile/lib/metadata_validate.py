@@ -367,7 +367,11 @@ def validate_source(value: str) -> list[Check]:
 
 #: Recognised affinity tags. Prefix is terminal: ``c`` (C-terminal) or ``n`` (N-terminal).
 TAGS = (
-    "3xFLAG-HBH", "3xFLAG", "FLAG", "GFP", "V5", "HA", "MYC", "HBH", "HIS", "TAP",
+    # Composite cassettes first: the alternation is matched longest-first, so a composite
+    # listed after its own prefix would never match (`FLAG-HA-HIS` would parse as `FLAG`
+    # plus trailing junk and be rejected). FHH is the triple-epitope cassette carried by 41
+    # of GSE131210's 50 samples.
+    "3xFLAG-HBH", "FLAG-HA-HIS", "3xFLAG", "FLAG", "GFP", "V5", "HA", "MYC", "HBH", "HIS", "TAP",
     "SNAP", "HALO", "MS2",
     # T7 gene 10 leader peptide (MASMTGGQQMG) — as standard as FLAG, and half of
     # E-MTAB-2700's design (APOBEC3G/3F expressed as both T7- and GFP-tagged constructs).
