@@ -225,7 +225,10 @@ def validate_purification_agent(
         return [
             Check(
                 ERROR,
-                f"control target {target} must have an empty purification agent, got {value!r}",
+                f"control target {target} must have an empty purification agent, got {value!r}. "
+                f"If the antibody is real and the cells simply lack the epitope — a mock IP, "
+                f"e.g. anti-HA on untagged cells — the target is AbControl, which requires the "
+                f"antibody instead of forbidding it. Do NOT drop the antibody to pass this check.",
                 field,
             )
         ]
