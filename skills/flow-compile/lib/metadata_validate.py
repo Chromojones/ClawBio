@@ -86,9 +86,18 @@ ALLOWED_AGENT_LITERALS = {
 #: the provenance goes in **Comments**. Requiring `anti-` still rejects the vendor-less prose
 #: forms — `NOVA antibody`, `anti-NOVA antibody`, `V5-antibody` — because the trailing word
 #: leaves the pattern unanchored; those signal an unfinished lookup, not a gift antibody.
+#: Solid-phase forms an antibody is supplied on. GSE131210's methods say "anti-HA magnetic
+#: beads", GSE63262's say "anti-FLAG M2 magnetic beads". Recording the bare antibody loses
+#: the fact that the pulldown used beads, and the regex used to end after the optional
+#: parenthetical, so these values were rejected outright rather than accepted.
+REAGENT_FORMS = ("magnetic beads", "dynabeads", "agarose", "sepharose", "resin", "beads")
+_FORM_ALT = "|".join(re.escape(f) for f in REAGENT_FORMS)
+
 _AGENT_RE = re.compile(
     rf"^(?:(?P<species>{'|'.join(SPECIES)})\s+)?"
     r"anti[-\s]?(?P<target>[A-Za-z0-9][A-Za-z0-9./-]*)"
+    rf"(?:\s+(?P<clone>M2|[A-Z0-9]{{1,6}}))??"
+    rf"(?:\s+(?P<form>{_FORM_ALT}))?"
     r"(?:\s*\((?P<inner>[^()]+)\))?$",
     re.I,
 )
@@ -168,18 +177,40 @@ def normalize_purification_agent(value: str) -> str:
     target = match.group("target").strip().upper()
     prefix = f"{species} " if species else ""
     inner = (match.group("inner") or "").strip()
+    clone = (match.group("clone") or "").strip()
+    form = (match.group("form") or "").strip().lower()
+    form_suffix = (f" {clone}" if clone else "") + (f" {form}" if form else "")
 
     # No parenthetical, or a gift provenance that belongs in Comments rather than the agent:
     # both resolve to the bare canonical form so there is exactly one convention on Flow.
     if not inner or inner.lower() == "gift" or _GIFT_INNER_RE.match(inner):
-        return f"{prefix}Anti-{target}"
+        return f"{prefix}Anti-{target}{form_suffix}"
 
     vendor, catalog = split_vendor_catalog(inner)
-    if not vendor or not looks_like_catalog(catalog):
+    if not looks_like_catalog(catalog):
+        # A parenthetical that is JUST a vendor name is legitimate: GSE159997 names
+        # Invitrogen and never publishes a number. `split_vendor_catalog` rpartitions, so
+        # "(Invitrogen)" arrives as ("", "Invitrogen") and "(Santa Cruz)" as
+        # ("Santa", "Cruz"); either way the whole parenthetical is the vendor.
+        #
+        # A comma or a dilution ratio means the author DID intend vendor + catalog and what
+        # landed there is not one - "(Santa Cruz, 1:500)" is the western blot sentence, not
+        # the IP one. That stays rejected, so the researcher goes back to the right Methods
+        # line instead of silently recording a vendor-only agent.
+        if "," in inner or _DILUTION_ANYWHERE_RE.search(inner):
+            return ""
+        vendor = (vendor + " " + catalog).strip() if vendor else catalog.strip()
+        catalog = ""
+    if not vendor:
         return ""
+    if not catalog:
+        # A published vendor with no published catalog number is a real state, not a
+        # malformed value: GSE159997 names Invitrogen and never gives a number. Rejecting it
+        # scored a MORE informative value worse than the bare form it fell back to.
+        return f"{prefix}Anti-{target}{form_suffix} ({vendor})"
     if species:
-        return format_agent(species, target, vendor, catalog)
-    return f"Anti-{target} ({vendor} {catalog})"
+        return format_agent(species, target, vendor, catalog) + form_suffix
+    return f"Anti-{target}{form_suffix} ({vendor} {catalog})"
 
 
 def agent_target(value: str) -> str:
@@ -271,6 +302,21 @@ def _validate_agent_string(
                 field,
             )
         )
+    else:
+        inner_now = normalized[normalized.find("(") + 1 : normalized.rfind(")")]
+        if inner_now and not looks_like_catalog(inner_now):
+            # Vendor published, catalog number not. A real and common state: GSE159997 names
+            # Invitrogen and never gives a number. Worth flagging so nobody assumes the
+            # catalog was simply dropped, but not an error - it is strictly more information
+            # than the bare form.
+            checks.append(
+                Check(
+                    WARNING,
+                    f"{normalized!r} names a vendor but no catalog number; confirm the study "
+                    "never published one rather than it being missed",
+                    field,
+                )
+            )
     if normalized in ALLOWED_AGENT_LITERALS.values():
         checks.append(
             Check(WARNING, f"target {target} has agent {normalized!r}; confirm this is a control", field)

@@ -179,6 +179,10 @@ _METHOD_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(?<![A-Za-z])ir[\s-]?clip\b", re.I), "irCLIP"),
     (re.compile(r"(?<![A-Za-z])se[\s-]?clip\b", re.I), "seCLIP"),
     (re.compile(rf"{_PFX}uvclap\b", re.I), "uvCLAP"),
+    # PAR-iCLIP must precede BOTH par-clip and iclip. `par[\s-]?clip` cannot match
+    # "PAR-iCLIP" (the next token is `iclip`, not `clip`), so without this entry the
+    # plain `iclip` pattern matches the tail of the same word and returns iCLIP.
+    (re.compile(rf"{_PFX}par[\s-]?iclip\b", re.I), "PAR-iCLIP"),
     (re.compile(rf"{_PFX}par[\s-]?clip\b", re.I), "PAR-CLIP"),
     (re.compile(rf"{_PFX}hits[\s-]?clip\b", re.I), "HITS-CLIP"),
     (re.compile(rf"{_PFX}iclap\b", re.I), "iCLAP"),
