@@ -25,7 +25,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ERROR = "error"
+from lib.results import ERROR, WARNING, Finding as Check
+
 
 #: sample type -> fields the API refuses, despite `batch-template` listing them.
 REJECTED_BY_SAMPLE_TYPE: dict[str, frozenset[str]] = {
@@ -33,10 +34,6 @@ REJECTED_BY_SAMPLE_TYPE: dict[str, frozenset[str]] = {
 }
 
 
-@dataclass
-class Check:
-    severity: str
-    message: str
 
 
 def _rejected(sample_type: str) -> frozenset[str]:

@@ -46,8 +46,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ERROR = "error"
-WARNING = "warning"
+from lib.results import ERROR, WARNING, Finding as Check
+
 
 #: Largest import observed to succeed in one job: GSE63262 batch 1 (B52 + Rbp1, both
 #: replicates), which landed in ~28 minutes after the whole 132.7 GB study had failed. This
@@ -65,10 +65,6 @@ KNOWN_FAILURE_BYTES = 132_689_117_735
 DEFAULT_BATCH_BYTES = 35_000_000_000
 
 
-@dataclass
-class Check:
-    severity: str
-    message: str
 
 
 def _sizes_for(accession: str, by_accession: dict) -> list[float] | None:

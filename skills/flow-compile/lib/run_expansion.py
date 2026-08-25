@@ -31,17 +31,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-ERROR = "error"
-WARNING = "warning"
+from lib.results import ERROR, WARNING, Finding as Check
+
 
 #: Accession prefixes that denote a RUN rather than an experiment.
 _RUN_PREFIXES = ("SRR", "ERR", "DRR")
 
 
-@dataclass
-class Check:
-    severity: str
-    message: str
 
 
 def is_run_accession(accession: str) -> bool:

@@ -27,31 +27,17 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import NamedTuple
 
 import pandas as pd
 
 from lib.vendor.flow_api.metadata.parse_key_resources_antibodies import format_agent
 
-ERROR = "error"
-WARNING = "warning"
+from lib.results import ERROR, WARNING, Finding
 
-
-class Check(NamedTuple):
-    """One validator finding. Indexable as (severity, message) by design."""
-
-    severity: str
-    message: str
-    field: str = ""
-
-
-@dataclass
-class MetadataIssue:
-    row: int
-    sample_name: str
-    field: str
-    severity: str
-    message: str
+#: Historical names. Both were separate classes; both are now `results.Finding`, which keeps
+#: NamedTuple-style positional access so `issues[0][0] == ERROR` still holds.
+Check = Finding
+MetadataIssue = Finding
 
 
 # --------------------------------------------------------------------------- agents
@@ -712,7 +698,7 @@ def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
         issues.append(
             MetadataIssue(
                 row=0,
-                sample_name=", ".join(sorted(names)),
+                subject=", ".join(sorted(names)),
                 field="Sample Name",
                 severity=ERROR,
                 message=(
@@ -767,7 +753,7 @@ def validate_annotation_table(
             issues.append(
                 MetadataIssue(
                     row=row_no,
-                    sample_name=sample,
+                    subject=sample,
                     field=check.field,
                     severity=check.severity,
                     message=check.message,
@@ -811,7 +797,7 @@ def write_metadata_hook(output_dir: Path, issues: list[MetadataIssue]) -> Path:
         ]
         for i in errors + warnings:
             lines.append(
-                f"| {i.row} | `{i.sample_name}` | {i.field} | {i.severity} | {i.message} |"
+                f"| {i.row} | `{i.subject}` | {i.field} | {i.severity} | {i.message} |"
             )
         lines += [
             "",
