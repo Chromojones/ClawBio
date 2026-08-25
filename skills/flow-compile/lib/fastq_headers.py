@@ -69,6 +69,17 @@ def sample_read_headers(fastq_path: Path, *, n_reads: int = 5, include_sequence:
     return blocks
 
 
+def srr_from_annotation_file(filename: str) -> str:
+    """The SRR embedded in an annotation `File` value, or "".
+
+    Lived in both UMI-extract modules and again as `flow_stages._srr_from_file`; the
+    UMI modules are gone, so it belongs beside `find_fastq_for_srr`, which answers the
+    inverse question.
+    """
+    match = re.search(r"(SRR\d+)", str(filename))
+    return match.group(1).upper() if match else ""
+
+
 def find_fastq_for_srr(search_dir: Path, srr: str) -> Path | None:
     """Locate a FASTQ for an SRR under search_dir (non-recursive then shallow recursive)."""
     srr = srr.upper()

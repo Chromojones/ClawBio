@@ -77,43 +77,6 @@ def derive_clip_pipeline_params(
     return params
 
 
-def derive_uvclap_post_umi_params(*, skip_umi_dedupe: str = "false") -> dict[str, str]:
-    """
-    uvCLAP after umi_tools extract: UMIs already in PE read headers.
-
-    Adapter trimming and 3' readthrough clip run in Flow via Trim Galore
-    (trimgalore_params). Authors clip 10 bp R1 / 5 bp R2 after adapter trim.
-    """
-    return {
-        "move_umi_to_header": "false",
-        "umi_separator": "_",
-        "skip_umi_dedupe": skip_umi_dedupe,
-        "crosslink_position": "start",
-        "encode_eclip": "false",
-        "star_params": DEFAULT_STAR_PARAMS,
-        "trimgalore_params": UVCLAP_TRIMGALORE_PARAMS,
-    }
-
-
-def derive_flash_post_umi_params(*, skip_umi_dedupe: str = "false") -> dict[str, str]:
-    """
-    FLASH after umi_tools extract: UMI is already in read 1 headers.
-
-    Do not set move_umi_to_header — Flow should not re-extract from read sequence.
-    umi_separator _ tells umi_dedup how to parse the umi_tools suffix (readname_UMI).
-    Upload *_1.umi.fastq.gz without removespace — spaces after the UMI are fine; samtools
-    truncates at the first space before umi_dedup runs.
-    """
-    return {
-        "move_umi_to_header": "false",
-        "umi_separator": "_",
-        "skip_umi_dedupe": skip_umi_dedupe,
-        "crosslink_position": "start",
-        "encode_eclip": "false",
-        "star_params": DEFAULT_STAR_PARAMS,
-    }
-
-
 def summarize_params_for_report(params: dict[str, str], inspection: HeaderInspection | None) -> str:
     lines = [
         "## Flow pipeline params (from header inspection)",

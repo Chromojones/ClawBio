@@ -42,22 +42,7 @@ from lib.fastq_headers import (
     inspection_to_dict,
     resolve_srr_fastq_paths,
     sample_headers_from_fastq_dir,
-)
-from lib.flash_umi_extract import (
-    apply_umi_extracted_filenames,
-    collect_flash_umi_pairs,
-    planned_flash_umi_pairs,
     srr_from_annotation_file,
-    umi_output_basename,
-    write_umi_extract_script,
-)
-from lib.uvclap_umi_extract import (
-    apply_uvclap_umi_filenames,
-    collect_uvclap_umi_pairs,
-    gsm_merge_plan_from_srr_map,
-    planned_uvclap_umi_pairs,
-    write_merge_pe_script,
-    write_umi_extract_script as write_uvclap_umi_extract_script,
 )
 from lib.flow_annotate import (
     _match_method,
@@ -75,8 +60,6 @@ from lib.metadata_validate import validate_annotation_table, write_metadata_hook
 from lib.geo_matrix import parse_geo_matrix
 from lib.pipeline_params import (
     derive_clip_pipeline_params,
-    derive_flash_post_umi_params,
-    derive_uvclap_post_umi_params,
     summarize_params_for_report,
     write_analysis_params_hook,
 )
@@ -310,20 +293,6 @@ def _apply_cleaned_filenames(annotation) -> tuple[Any, bool]:
     return updated, True
 
 
-def _annotation_is_flash(annotation, matrix_data: dict[str, Any] | None = None) -> bool:
-    if "Experimental Method" in annotation.columns:
-        methods = annotation["Experimental Method"].dropna().astype(str).str.strip().str.upper()
-        if (methods == "FLASH").any():
-            return True
-    if matrix_data:
-        blob = " ".join(
-            str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
-        )
-        if _match_method(blob) == "FLASH":
-            return True
-    return False
-
-
 def _annotation_is_eclip(annotation, matrix_data: dict[str, Any] | None = None) -> bool:
     if "Experimental Method" in annotation.columns:
         methods = annotation["Experimental Method"].dropna().astype(str).str.strip().str.lower()
@@ -339,91 +308,6 @@ def _annotation_is_eclip(annotation, matrix_data: dict[str, Any] | None = None) 
         ):
             return True
     return False
-
-
-def _annotation_is_uvclap(annotation, matrix_data: dict[str, Any] | None = None) -> bool:
-    if "Experimental Method" in annotation.columns:
-        methods = annotation["Experimental Method"].dropna().astype(str).str.strip().str.upper()
-        if (methods == "UVCLAP").any():
-            return True
-    if matrix_data:
-        blob = " ".join(
-            str(s.get("extract_protocol_ch1", "")) for s in matrix_data.get("samples", {}).values()
-        )
-        if "uvclap" in blob.lower():
-            return True
-    return False
-
-
-def _setup_uvclap_umi_stage(
-    output_dir: Path,
-    annotation,
-    srr_map_df,
-    fastq_dir: Path | None,
-) -> tuple[Any, str, str]:
-    """Write umi_extract.sh (+ merge_pe.sh) and retarget annotation to PE UMI FASTQs."""
-    srr_ids = list(
-        dict.fromkeys(
-            srr_from_annotation_file(str(row.get("File", "")))
-            for _, row in annotation.iterrows()
-            if srr_from_annotation_file(str(row.get("File", "")))
-        )
-    )
-    if not srr_ids:
-        return annotation, "skipped — no SRR in annotation", ""
-
-    merge_stage = ""
-    merges = gsm_merge_plan_from_srr_map(srr_map_df)
-    if fastq_dir and merges:
-        merge_script = write_merge_pe_script(output_dir, merges, fastq_dir=fastq_dir)
-        if merge_script:
-            merge_stage = f"merge_pe.sh ({len(merges)} GSM(s))"
-
-    if not fastq_dir:
-        ann = apply_uvclap_umi_filenames(annotation)
-        return ann, "planned — pass --fastq-dir to write umi_extract.sh", merge_stage
-
-    pairs = collect_uvclap_umi_pairs(fastq_dir, srr_ids)
-    if not pairs:
-        pairs = planned_uvclap_umi_pairs(fastq_dir, srr_ids)
-    script = write_uvclap_umi_extract_script(output_dir, pairs)
-    if not script:
-        return apply_uvclap_umi_filenames(annotation), "skipped — could not write umi_extract.sh", merge_stage
-    return apply_uvclap_umi_filenames(annotation), f"umi_extract.sh ({len(pairs)} library/ies)", merge_stage
-
-
-def _setup_flash_umi_stage(
-    output_dir: Path,
-    annotation,
-    fastq_dir: Path | None,
-    *,
-    prefer_cleaned_r1: bool = False,
-) -> tuple[Any, str]:
-    """Write umi_extract.sh and retarget annotation to SE *_1.umi.fastq.gz uploads.
-
-    UMI extract runs on raw (uncleaned) PE mates so read names stay paired; header
-    clean runs on *_1.umi.fastq.gz after extraction when needed.
-    """
-    srr_ids = list(
-        dict.fromkeys(
-            srr_from_annotation_file(str(row.get("File", "")))
-            for _, row in annotation.iterrows()
-            if srr_from_annotation_file(str(row.get("File", "")))
-        )
-    )
-    if not srr_ids:
-        return annotation, "skipped — no SRR in annotation"
-
-    if not fastq_dir:
-        return apply_umi_extracted_filenames(annotation), "planned — pass --fastq-dir to write umi_extract.sh"
-
-    pairs = collect_flash_umi_pairs(fastq_dir, srr_ids, prefer_cleaned_r1=prefer_cleaned_r1)
-    if not pairs:
-        pairs = planned_flash_umi_pairs(fastq_dir, srr_ids, prefer_cleaned_r1=prefer_cleaned_r1)
-    script = write_umi_extract_script(output_dir, pairs)
-    if not script:
-        return apply_umi_extracted_filenames(annotation), "skipped — could not write umi_extract.sh"
-    return apply_umi_extracted_filenames(annotation), f"umi_extract.sh ({len(pairs)} library/ies)"
 
 
 def _resolve_fastq_paths_from_annotation(
@@ -457,7 +341,6 @@ def _run_header_inspection(
     fastq_dir: Path | None,
     reads_per_file: int,
     removespace_script: Path | None = None,
-    skip_header_clean: bool = False,
 ) -> tuple[dict[str, str], dict[str, Any], str, str]:
     """Write headers.txt, pipeline_params.json, optional clean_fastq.sh; return params, inspection, statuses."""
     header_stage = ""
@@ -529,7 +412,7 @@ def _run_header_inspection(
     else:
         header_stage = "skipped — no FASTQ files (prefetch first, then --fastq-dir)"
 
-    if not skip_header_clean and resolved_paths and headers_need_cleaning(inspection.sample_headers):
+    if resolved_paths and headers_need_cleaning(inspection.sample_headers):
         rs_script = resolve_removespace_script(removespace_script)
         if rs_script:
             write_clean_fastq_script(output_dir, resolved_paths, removespace_script=rs_script)
@@ -645,7 +528,6 @@ def run_pipeline(
         "flow-annotate",
         "fastq-headers",
         "header-clean",
-        "flash-umi-extract",
         "annotation-xlsx",
         "flow-upload",
         "flow-analysis",
@@ -760,30 +642,10 @@ def run_pipeline(
         )
         return None, True
 
-    flash_study = _annotation_is_flash(annotation, matrix_data)
-    uvclap_study = _annotation_is_uvclap(annotation, matrix_data)
     eclip_study = _annotation_is_eclip(annotation, matrix_data)
     if eclip_study:
         annotation = apply_eclip_crosslink_mate_filenames(annotation)
         stages["flow_annotate"] += " (eCLIP: read 2 = crosslink mate)"
-    if flash_study:
-        annotation = apply_umi_extracted_filenames(annotation)
-        stale_clean = output_dir / "clean_fastq.sh"
-        if stale_clean.exists():
-            stale_clean.unlink()
-    elif uvclap_study:
-        annotation = apply_uvclap_umi_filenames(annotation)
-        stale_clean = output_dir / "clean_fastq.sh"
-        if stale_clean.exists():
-            stale_clean.unlink()
-
-    umi_on_disk = False
-    if fastq_dir and flash_study:
-        umi_on_disk = all(
-            (fastq_dir / umi_output_basename(srr_from_annotation_file(str(row.get("File", ""))))).is_file()
-            for _, row in annotation.iterrows()
-            if srr_from_annotation_file(str(row.get("File", "")))
-        )
 
     pipeline_params, header_inspection, header_stage, clean_stage = _run_header_inspection(
         output_dir,
@@ -793,66 +655,16 @@ def run_pipeline(
         fastq_dir=fastq_dir,
         reads_per_file=reads_per_file,
         removespace_script=removespace_script,
-        skip_header_clean=flash_study or uvclap_study,
     )
     stages["fastq_headers"] = header_stage
-    if flash_study:
-        clean_stage = "skipped (FLASH — keep umi_tools headers with spaces for umi_dedup)"
-    elif uvclap_study:
-        clean_stage = "skipped (uvCLAP — keep umi_tools PE headers for umi_dedup)"
     stages["header_clean"] = clean_stage
     if pipeline_params:
         stages["pipeline_params"] = f"move_umi_to_header={pipeline_params.get('move_umi_to_header')}"
 
-    use_cleaned_names = (
-        (output_dir / "clean_fastq.sh").exists() and not flash_study and not uvclap_study
-    )
-    if use_cleaned_names:
+    if (output_dir / "clean_fastq.sh").exists():
         annotation, _ = _apply_cleaned_filenames(annotation)
     if eclip_study:
         annotation = apply_eclip_crosslink_mate_filenames(annotation)
-
-    flash_umi_stage = ""
-    uvclap_umi_stage = ""
-    uvclap_merge_stage = ""
-    if flash_study:
-        _, flash_umi_stage = _setup_flash_umi_stage(
-            output_dir,
-            annotation,
-            fastq_dir,
-            prefer_cleaned_r1=False,
-        )
-        pipeline_params = derive_flash_post_umi_params()
-        stages["flash_umi_extract"] = flash_umi_stage
-        (output_dir / "pipeline_params.json").write_text(json.dumps(pipeline_params, indent=2))
-        write_analysis_params_hook(
-            output_dir,
-            pipeline_params,
-            None,
-            headers_path=output_dir / "headers.txt",
-        )
-        stages["pipeline_params"] = "move_umi_to_header=false (FLASH post umi_tools extract)"
-    elif uvclap_study:
-        _, uvclap_umi_stage, uvclap_merge_stage = _setup_uvclap_umi_stage(
-            output_dir,
-            annotation,
-            srr_map,
-            fastq_dir,
-        )
-        pipeline_params = derive_uvclap_post_umi_params()
-        stages["uvclap_umi_extract"] = uvclap_umi_stage
-        if uvclap_merge_stage:
-            stages["uvclap_merge_pe"] = uvclap_merge_stage
-        (output_dir / "pipeline_params.json").write_text(json.dumps(pipeline_params, indent=2))
-        write_analysis_params_hook(
-            output_dir,
-            pipeline_params,
-            None,
-            headers_path=output_dir / "headers.txt",
-        )
-        stages["pipeline_params"] = (
-            "move_umi_to_header=false; trimgalore_params with 3' clip R1=10 R2=5"
-        )
 
     if not flagged and pmid:
         flagged = [
