@@ -25,32 +25,8 @@ def prompt_flow_credentials() -> tuple[str, str]:
     return username, password
 
 
-API_BASE = os.environ.get("FLOWBIO_API_BASE", "https://app.flow.bio/api").rstrip("/")
+from lib.flow_client import API_BASE, mint_api_token  # noqa: F401  (re-exported)
 
-
-def mint_api_token(username: str, password: str, *, base: str = API_BASE) -> str:
-    """Exchange username/password for an API token via POST /login.
-
-    The vendored upload/analysis scripts authenticate with username+password, but the
-    flowbio CLI (`samples import`, `import-status`) wants a **token** — `FLOW_API_TOKEN`,
-    `--token-file`, or `~/.config/flow/api-token`. Minting one here means the SRA-direct
-    path never has to prompt again mid-workflow.
-
-    Returns "" if the exchange fails; callers fall back to username/password auth.
-    """
-    import json
-    import urllib.request
-
-    try:
-        request = urllib.request.Request(
-            f"{base}/login",
-            data=json.dumps({"username": username, "password": password}).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            return str(json.loads(response.read()).get("token") or "")
-    except Exception:  # noqa: BLE001 - offline or bad credentials is not fatal here
-        return ""
 
 
 def write_credentials_env(

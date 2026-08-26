@@ -32,6 +32,7 @@ This module is pure; the caller supplies the sheet rows and the sample bodies.
 """
 
 from __future__ import annotations
+from lib.flow_client import project_id_of as _project_id_of
 
 from dataclasses import dataclass
 
@@ -73,12 +74,8 @@ def count_reads(sample: dict) -> int:
     return sum(len(fileset.get("data") or []) for fileset in (sample.get("filesets") or []))
 
 
-def project_id_of(sample: dict) -> str:
-    """The owning project id, whether the API nests it or returns it bare."""
-    project = sample.get("project")
-    if isinstance(project, dict):
-        project = project.get("id")
-    return "" if project is None else str(project)
+#: Re-exported so callers importing it from here keep working.
+project_id_of = _project_id_of
 
 
 def find_import_discrepancies(

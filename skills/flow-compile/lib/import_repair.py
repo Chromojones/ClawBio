@@ -24,6 +24,7 @@ Pure — the caller performs the reads and the writes.
 """
 
 from __future__ import annotations
+from lib.flow_client import project_id_of
 
 from dataclasses import dataclass, field
 
@@ -98,7 +99,7 @@ def _mismatches(row: dict, sample: dict, project_id: str) -> dict:
         want = str(row.get(column) or "")
         if _observed(sample, column) != want:
             wrong[column] = want
-    if project_id and ((sample.get("project") or {}).get("id") or "") != project_id:
+    if project_id and project_id_of(sample) != project_id:
         wrong["project"] = project_id
     return wrong
 

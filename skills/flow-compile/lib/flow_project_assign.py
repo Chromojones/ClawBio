@@ -20,7 +20,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-API_BASE = os.environ.get("FLOWBIO_API_BASE", "https://app.flow.bio/api").rstrip("/")
+from lib.flow_client import API_BASE, FlowClient, project_id_of as _project_id_of
+from lib.flow_client import resolve_token as _resolve_token
 
 
 class FlowApi(Protocol):
@@ -42,13 +43,6 @@ class AssignmentResult:
     skipped: int = 0
     failed: int = 0
     failures: dict[str, str] = field(default_factory=dict)
-
-
-def _project_id_of(sample: dict[str, Any]) -> str:
-    project = (sample or {}).get("project")
-    if isinstance(project, dict):
-        return str(project.get("id") or "")
-    return str(project or "")
 
 
 def build_assignment_plan(
