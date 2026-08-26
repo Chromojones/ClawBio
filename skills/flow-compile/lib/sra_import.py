@@ -31,11 +31,7 @@ from pathlib import Path
 
 import pandas as pd
 
-#: Mirrors `flowbio.cli._accession_sheet.RESERVED_COLUMNS`. Asserted equal to it by test, so
-#: a downgrade fails loudly instead of silently leaving a study unattached.
-RESERVED_SHEET_COLUMNS: tuple[str, ...] = (
-    "accession", "name", "organism", "project", "pubmed", "sample_type",
-)
+from lib.import_check import RESERVED_SHEET_COLUMNS  # noqa: F401  (re-exported)
 
 #: `project` and `pubmed` became reserved here; below it they are swallowed as metadata.
 MIN_FLOWBIO_VERSION = (0, 12, 0)
