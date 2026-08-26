@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+
+from lib import protocol as protocol_mod
 from typing import Any
 
 import pandas as pd
@@ -172,34 +174,10 @@ _FLASH_FROZEN_RE = re.compile(r"flash[\s-]*fro(?:zen|ze)", re.I)
 #: words cannot bleed in.
 _PFX = r"(?<![A-Za-z])[a-z]{0,3}"
 
-#: (regex, method) in specificity order — more specific names first, since a prefixed token
-#: can otherwise be claimed by a shorter pattern.
-_METHOD_PATTERNS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(rf"{_PFX}iclip2\b", re.I), "iCLIP2"),
-    (re.compile(r"(?<![A-Za-z])ir[\s-]?clip\b", re.I), "irCLIP"),
-    (re.compile(r"(?<![A-Za-z])se[\s-]?clip\b", re.I), "seCLIP"),
-    (re.compile(rf"{_PFX}uvclap\b", re.I), "uvCLAP"),
-    # PAR-iCLIP must precede BOTH par-clip and iclip. `par[\s-]?clip` cannot match
-    # "PAR-iCLIP" (the next token is `iclip`, not `clip`), so without this entry the
-    # plain `iclip` pattern matches the tail of the same word and returns iCLIP.
-    (re.compile(rf"{_PFX}par[\s-]?iclip\b", re.I), "PAR-iCLIP"),
-    (re.compile(rf"{_PFX}par[\s-]?clip\b", re.I), "PAR-CLIP"),
-    (re.compile(rf"{_PFX}hits[\s-]?clip\b", re.I), "HITS-CLIP"),
-    (re.compile(rf"{_PFX}iclap\b", re.I), "iCLAP"),
-    # FLASH keeps a strict boundary: "flash-frozen" is boilerplate in extract protocols and
-    # a prefix-tolerant pattern would reintroduce that misfire.
-    (re.compile(r"\bflash\b", re.I), "FLASH"),
-    (re.compile(rf"{_PFX}eclip\b", re.I), "eCLIP"),
-    (re.compile(rf"{_PFX}iclip\b", re.I), "iCLIP"),
-]
 
 
 def _match_method(text: str) -> str:
-    blob = _FLASH_FROZEN_RE.sub(" ", text or "")
-    for pattern, method in _METHOD_PATTERNS:
-        if pattern.search(blob):
-            return method
-    return ""
+    return protocol_mod.match_method(text)
 
 
 def infer_experimental_method(protocol: str, series_title: str = "") -> str:
@@ -212,7 +190,7 @@ def infer_experimental_method(protocol: str, series_title: str = "") -> str:
     Unknown protocols still fall back to iCLIP — the most common CLIP flavour — but that
     fallback is a guess and is surfaced in the metadata hook rather than trusted silently.
     """
-    return _match_method(series_title) or _match_method(protocol) or "iCLIP"
+    return protocol_mod.detect_method(protocol, series_title)
 
 
 def load_srr_map(path) -> pd.DataFrame:
@@ -236,7 +214,7 @@ def load_srr_map(path) -> pd.DataFrame:
 
 
 def is_eclip_method(method: str) -> bool:
-    return (method or "").strip().lower() in {"eclip", "seclip"}
+    return protocol_mod.is_eclip_method(method)
 
 
 def validate_srr_map(srr_map: pd.DataFrame) -> list[str]:

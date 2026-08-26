@@ -25,11 +25,12 @@ UVCLAP_TRIMGALORE_PARAMS = (
     f"{DEFAULT_TRIMGALORE_PARAMS} --three_prime_clip_R1 10 --three_prime_clip_R2 5"
 )
 
-ECLIP_METHODS = frozenset({"eclip", "seclip"})
+from lib.protocol import ECLIP_METHODS  # single definition
 
 
 def is_eclip_method(experimental_method: str) -> bool:
-    return (experimental_method or "").strip().lower() in ECLIP_METHODS
+    from lib.protocol import is_eclip_method as _impl
+    return _impl(experimental_method)
 
 
 def derive_clip_pipeline_params(
