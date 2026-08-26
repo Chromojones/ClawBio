@@ -139,7 +139,7 @@ An `NIL` input shows ~2.0 at *every* position. See the worked example in §5.
 
 ---
 
-## 3. Has the barcode/UMI already been extracted? — three header states
+## 3. Has the barcode/UMI already been extracted? — four header states
 
 This single check drives every parameter. **Inspect headers before choosing params.**
 
@@ -161,11 +161,31 @@ This single check drives every parameter. **Inspect headers before choosing para
 > `encode_eclip=true`. Files pulled from SRA/ENA for the *same* experiment are usually
 > **raw** and need extraction. Always check; do not assume from the accession.
 
-Note `lib/fastq_headers.py` currently detects only the `:rbc:` form. The
-`RANDOMER:title` form emitted by current `eclipdemux` is a **third** state — if you meet
-it, treat it as already-extracted and set `move_umi_to_header=false`.
+`lib/fastq_headers.py` detects only the `:rbc:` form and cannot tell a `RANDOMER:title`
+header from a raw one. Use `lib/header_state.py` instead; it classifies all four.
 
-Never set `encode_eclip=true` without `:rbc:` in sampled headers.
+**Four header states, not three.** Verified against the RBP ENCODE project on Flow, whose
+executions are the ground truth for this parameter:
+
+| Header looks like | Meaning | `encode_eclip` |
+|---|---|---|
+| `@HWI-D00611:153:…:25252 2:N:0:GAATT…` | **Raw** — randomer still on the read | `false`, `move_umi_to_header=true` |
+| `@TAAAG:HWI-D00611:119:…:90397 2:N:0:TCCG…` | **`eclipdemux`** — randomer *prepended to the title* | **`true`**, `move_umi_to_header=false` |
+| `@…:2149:rbc:CACTTG 1:N:0:ATCACG` | **ENCODE portal** — `:rbc:` mid-header | **`true`**, `umi_separator=rbc:` |
+| `@…:0:1rbc:AAAATATAA` | **iCLIP** — tag terminates the header | `false`, `umi_separator=rbc:` |
+
+An earlier revision of this page said *"Never set `encode_eclip=true` without `:rbc:` in
+sampled headers."* **That is wrong.** The live RBP ENCODE files that run with
+`encode_eclip=true` carry a **prepended randomer and no `:rbc:` at all** — 5 nt, 949 distinct
+values across 5,371 reads. Presence of `:rbc:` is neither necessary nor sufficient; the
+*layout* decides, and the assay family gates it.
+
+Derivation is `lib/header_state.py` (`classify_header` / `params_for_state`), not
+`fastq_headers.inspect_header_lines`, which returns the same `(False, False)` for a prepended
+randomer as for a raw header and cannot distinguish the two `:rbc:` positions.
+
+Note the tag is not always colon-delimited on the left — GSE297587 writes `…:N:0:1rbc:TAG…`.
+Match with `fastq_headers.RBC_TAG`, never a literal `":rbc:"`.
 
 ---
 
