@@ -37,6 +37,7 @@ import re
 from dataclasses import dataclass
 
 from lib.fastq_headers import RBC_TAG
+from lib.protocol import ECLIP_FAMILY
 from lib.results import Verdict
 
 #: Raw instrument header; the randomer is still on the read and must be extracted.
@@ -47,9 +48,6 @@ RANDOMER_PREFIX = "randomer_prefix"
 RBC_MID = "rbc_mid"
 #: `:rbc:` terminates the header. Typical iCLIP; NOT the ENCODE layout.
 RBC_END = "rbc_end"
-
-#: Assays for which `encode_eclip` is meaningful at all.
-_ECLIP_FAMILY = frozenset({"eclip", "seclip"})
 
 #: A prepended randomer: `@<ACGTN run>:` before anything instrument-shaped.
 _PREFIX_RE = re.compile(r"^@([ACGTN]{3,15}):(?=.)")
@@ -118,7 +116,7 @@ def params_for_state(state: str, *, experimental_method: str) -> dict[str, str]:
     setting, and within that family it follows the layout rather than the mere presence of a
     ``:rbc:`` token.
     """
-    is_eclip = str(experimental_method or "").strip().lower() in _ECLIP_FAMILY
+    is_eclip = str(experimental_method or "").strip().lower() in ECLIP_FAMILY
     encode = "true" if (is_eclip and state in (RBC_MID, RANDOMER_PREFIX)) else "false"
 
     if state == RAW:
