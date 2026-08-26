@@ -1,9 +1,12 @@
-"""Attach imported samples to a Flow project (the step `samples import` cannot do).
+"""Attach samples to a Flow project. A repair, no longer a required step.
 
-`flowbio samples import --sheet` accepts only ``accession``, ``name``, ``organism`` and
-``sample_type`` as reserved columns — there is **no project field**. A ``project`` column
-in the sheet is silently swallowed as metadata, so a successful import leaves every sample
-unattached and invisible in the project view. This module performs the second step via
+flowbio 0.10.0 reserved only ``accession``, ``name``, ``organism`` and ``sample_type``: a
+``project`` column was silently swallowed as metadata, so a successful import left every
+sample unattached and invisible in the project view, and this module was the mandatory second
+pass. 0.12.0 added ``project`` and ``pubmed`` to the reserved set, so a fresh import attaches
+its own samples.
+
+What remains is repair — studies imported before 0.12.0, and samples that need moving — via
 ``POST /samples/{id}/edit`` with ``{"project": "<id>"}``.
 
 The API surface is injected (`api` object with ``get_sample`` / ``edit_sample``) so the

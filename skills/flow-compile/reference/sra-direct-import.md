@@ -5,7 +5,7 @@ from SRA/ENA itself, so there is no local download, no `prefetch`, no `removespa
 cleaning and no multi-gigabyte staging disk. What remains is metadata accuracy and a
 header preview — which is where all the guardrails now sit.
 
-Requires **flowbio ≥ 0.10.0** (`flowbio samples import`). The older local-download path
+Requires **flowbio ≥ 0.12.0** (`flowbio samples import`; `project`/`pubmed` reserved). The older local-download path
 (`prefetch.sh` → `clean_fastq.sh` → `upload_live.sh`) is still documented in `WORKFLOW.md`
 and is the fallback when a study is not in SRA/ENA, or when reads must be transformed
 before upload (FLASH / uvCLAP UMI extraction).
@@ -88,7 +88,7 @@ These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
 | # | Fact | Symptom if ignored |
 |---|------|--------------------|
 | 1 | **The accession must be an experiment — `SRX`/`ERX`/`DRX`, never a run (`SRR`/`ERR`)** | `HTTP 500 internal_error`, no diagnostic |
-| 2 | **The sheet has no `project` column** — flowbio's `RESERVED_COLUMNS` is `(accession, name, organism, sample_type)` | Import succeeds; every sample lands **unattached** and the project shows 0 samples |
+| 2 | **The sheet drops `__annotation` columns** — they are forwarded as ordinary metadata keys and discarded by the import job server-side | Import succeeds; targets and sources arrive with no annotation. `project` is fine: reserved since 0.12.0 |
 | 3 | **`strandedness` is rejected for CLIP** — it is an RNA-Seq field | `422 … Not a valid attribute for this sample type` |
 | 4 | **Deleting a sample is `POST /samples/{id}/delete`** — the `DELETE` verb returns `200` with the sample body but **does nothing** | You believe a sample is gone; it is still in the project and still matches your execution filters |
 | 5 | **The import silently drops `__annotation` columns** — `purification_target__annotation` and `source__annotation` are accepted and stored nowhere | Job `COMPLETED`, every read attached, and every tag and cell-line detail gone. GSE252683 lost `nFLAG` / `Flp-In T-REx` / `neuroblastoma` on all 12 samples with no error anywhere |
@@ -418,5 +418,5 @@ execution covers **one genome** and **one `umi_header_format`**.
 | Header cleaning | n/a — never uploaded locally | `clean_fastq.sh` (`removespace.py`) |
 | UMI pre-extraction | **not possible** — use local path for FLASH / uvCLAP | `umi_extract.sh` |
 | Accession | **SRX** | SRR |
-| Project | separate assignment step | `--project-id` on upload |
+| Project | `project` column in the sheet (0.12.0+) | `--project-id` on upload |
 | Entry point | `sra_import.sh` | `upload_live.sh` |

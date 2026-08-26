@@ -65,7 +65,7 @@ metadata:
       - requests>=2.31
       - openpyxl>=3.1
     optional_packages:
-      - flowbio>=0.10.0   # Flow.bio client + CLI; `samples import` (SRA-direct) requires >=0.10.0
+      - flowbio>=0.12.0   # Flow.bio client + CLI; `project`/`pubmed` became reserved import columns in 0.12.0
     system:
       - wget      # ENA FASTQ FTP download (ena-arrayexpress-workflow)
       - pigz      # removespace / header clean
@@ -141,7 +141,7 @@ self-contained (no parent advbfx tree required).
 ## Preferred workflow — SRA-direct import
 
 **Default to this path.** Flow pulls reads from SRA/ENA itself (`flowbio samples import`,
-flowbio ≥ 0.10.0), so there is no local download, no `prefetch`, and no `removespace`
+flowbio ≥ 0.12.0), so there is no local download, no `prefetch`, and no `removespace`
 header cleaning. Runbook: **`reference/sra-direct-import.md`**.
 
 ```
@@ -154,7 +154,7 @@ credentials → geo-matrix → barcode-extract → flow-annotate → metadata ga
 | Header preview | `lib/sra_header_preview.py` | ENA byte-range keeps **original** headers; `fastq-dump` rewrites deflines and is fallback-only |
 | Metadata gate | `lib/metadata_validate.py` | `CONFIRM_METADATA.md`; released by `--accept-metadata` |
 | Import sheet | `lib/sra_import.py` | Accession must be **SRX/ERX/DRX** — run accessions (`SRR`) fail with HTTP 500 |
-| Project assign | `lib/flow_project_assign.py` | **Required** — the import sheet has no `project` field, so samples land unattached |
+| Project assign | `lib/flow_project_assign.py` | **Repair only** — set `project` in the import sheet (reserved since flowbio 0.12.0). Use this to attach studies imported before 0.12.0 |
 
 `srr_map.tsv` carries both `srr` (header preview) and `srx` (import).
 
@@ -225,7 +225,7 @@ All Flow uploads must go through `flow_compile.py` with these **hard stops**:
 
 Integrates:
 
-- **SRA-direct import** — `reference/sra-direct-import.md` (**canonical workflow**; SRX-only accessions, no project field, header preview).
+- **SRA-direct import** — `reference/sra-direct-import.md` (**canonical workflow**; SRX-only accessions, `project` in the sheet, header preview).
 - **Metadata accuracy checklist** — `reference/metadata-accuracy-checklist.md` (per-field search order, formats, never-do list, worked traps).
 - **Annotation rules** — `reference/annotation-rules.md` (from Flow annotate / `annotation-file-creation` skill).
 - **eCLIP analysis params** — `reference/eclip-analysis-params.md` (`encode_eclip`, PE crosslink on R1).
@@ -323,7 +323,7 @@ Monitor upload: `tail -f /tmp/flow-compile-demo/logs/upload.log`
 
 - **Flow sample names must not contain spaces.** Sanitize every token before it reaches the name; invalid names break CLIP samplesheets at execution time. Note the source itself now comes from the `cell line:` / `cell type:` characteristic in preference to `!Sample_source_name_ch1` (`lib/flow_annotate.resolve_source`), so a supplier phrase like `ATCC Cell Lines` no longer reaches the name at all — GSE105082 yields `DHX9_Hs_HeLa_Rep1_…`.
 - **`samples import` takes SRX, not SRR.** A run accession returns `HTTP 500` with no diagnostic. `lib/sra_import.py` raises before submitting. Keep both in `srr_map.tsv`: `srr` drives the header preview, `srx` drives the import.
-- **The import sheet has no `project` column.** flowbio's reserved columns are `accession`, `name`, `organism`, `sample_type`; a `project` column is silently swallowed as metadata and the samples land unattached. Always run `lib/flow_project_assign.py` after the job completes.
+- **The import sheet drops `__annotation` columns, but not `project`.** Since flowbio 0.12.0 the reserved columns are `accession`, `name`, `organism`, `project`, `pubmed`, `sample_type`, so set `project` in the sheet. `purification_target__annotation` and `source__annotation` are still forwarded as ordinary metadata keys and discarded by the import job server-side, so annotations still need a post-import `POST /samples/{id}/edit` pass. A colon does not carry one: Flow renders `value:annotation` but stores a colon literally.
 - **Never preview headers with `fastq-dump`.** It rewrites deflines to `@SRR…N` even with `--origfmt`, so `:rbc:` becomes undetectable and the whole study takes the wrong params branch. Use the ENA byte-range path; `headers_provenance.md` flags any run that fell back.
 - **Replicate labels come from GEO titles**, not guesswork. `iCLIP-DHX9-1` / `iCLIP-DHX9-2` map to `Rep1` / `Rep2`. A title ending in `-2` must not become `Rep1` (GSE105082 bug fixed in `lib/sample_naming.py`).
 - **Never guess barcodes.** If protocol text and tags disagree on unrelated patterns, leave `5' Barcode Sequence` empty

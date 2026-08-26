@@ -55,7 +55,7 @@ The agent must make a **purposeful effort** to find barcodes in metadata and lit
 
 **When evidence is empty:** proposal shows `NEEDS_USER_INPUT`; pipeline still pauses; user must supply methods text or confirm manually.
 
-### End-to-end step list — SRA-direct (PREFERRED, flowbio ≥ 0.10.0)
+### End-to-end step list — SRA-direct (PREFERRED, flowbio ≥ 0.12.0)
 
 Flow pulls the reads itself; nothing is downloaded or cleaned locally. Full runbook:
 `reference/sra-direct-import.md`.
@@ -73,8 +73,8 @@ Flow pulls the reads itself; nothing is downloaded or cleaned locally. Full runb
    → CONFIRM_METADATA.md → HARD STOP #3 → --accept-metadata
 5. lib/sra_import.py → import_sheet.csv + sra_import.sh   (accession = SRX, never SRR)
 6. bash sra_import.sh
-   → flowbio samples import → poll import-status → flow_project_assign.py
-     (project assignment is a SEPARATE step — the sheet has no project field)
+   → flowbio samples import → poll import-status → post-import annotation edit pass
+     (set `project` in the sheet; the import job still discards __annotation columns)
 7. HARD STOP #4: user confirms analysis_params.confirmed.json
 8. run_analysis.sh
 ```
@@ -196,7 +196,7 @@ flowchart TD
         S2 --> S3["flowbio samples import<br/>async job id"]:::script
         S3 --> S4{"import-status<br/>COMPLETED?"}:::script
         S4 -->|poll| S4
-        S4 --> S5["flow_project_assign.py<br/>sheet has no project field"]:::script
+        S4 --> S5["annotation edit pass<br/>import job drops __annotation"]:::script
         S5 --> S6{"paired-end eCLIP?"}:::branch
         S6 -->|yes| S7["keep read 2 only<br/>pass data id as fastq_1"]:::branch
         S6 -->|no| READY

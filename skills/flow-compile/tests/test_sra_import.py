@@ -3,7 +3,8 @@
 Empirical constraints these tests lock in, discovered against the live API with
 GSE215250 (PARP13 eCLIP):
   * the accession must be an SRX/ERX **experiment**; SRR run accessions return HTTP 500
-  * the sheet has no `project` column — project assignment is a separate step
+  * `project` is reserved from flowbio 0.12.0 (see test_import_sheet_columns.py); below that
+    version it was swallowed as metadata and the study landed unattached
   * `strandedness` is rejected for CLIP (422) even though batch-template lists it
 """
 
