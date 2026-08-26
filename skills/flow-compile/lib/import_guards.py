@@ -17,7 +17,8 @@ Pure. Story: FAILURES.md#import-guards
 from __future__ import annotations
 
 from dataclasses import dataclass
-from lib.results import ERROR, INFO, WARNING, Finding as Check
+
+from lib.results import ERROR, Finding as Check, INFO, WARNING
 
 #: Accession prefixes that denote a RUN rather than an experiment.
 _RUN_PREFIXES = ("SRR", "ERR", "DRR")
