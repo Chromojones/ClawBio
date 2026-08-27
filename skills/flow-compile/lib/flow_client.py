@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-#: The one definition. `credentials` and `flow_project_assign` import it from here.
+#: The one definition. `credentials` imports it from here.
 API_BASE = os.environ.get("FLOWBIO_API_BASE", "https://app.flow.bio/api").rstrip("/")
 
 USER_AGENT = "flow-compile/1.0"
@@ -118,9 +118,6 @@ class FlowClient:
         )
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read())
-
-    # Kept for the shim in flow_project_assign.
-    _request = request
 
     def get_sample(self, sample_id: str) -> dict[str, Any]:
         return self.request(f"/samples/{sample_id}")

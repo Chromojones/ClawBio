@@ -231,13 +231,10 @@ Never emitted: `project`, `strandedness`, `reads1`, `reads2`.
 ```bash
 flowbio --json samples import --sheet import_sheet.csv        # -> {"id": ..., "status": "RUNNING"}
 flowbio --json samples import-status --job-id <JOB>           # poll until COMPLETED
-python3 lib/flow_project_assign.py --project-id <PID> --sample-ids <id1,id2,...>
 ```
 
 `import-status` returns `sample_ids` positionally matching `accessions` once `COMPLETED`.
 Those ids are the input to the assignment step — **without it the samples exist but belong
-to no project**. `flow_project_assign.py` is idempotent: samples already in the target
-project are skipped, and one failure does not abort the batch.
 
 Timing: ~3 min for a single sample, ~30 min for 8.
 

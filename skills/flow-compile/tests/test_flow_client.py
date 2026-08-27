@@ -87,10 +87,20 @@ class TestOneApiBase:
 
         assert credentials.API_BASE == fc.API_BASE
 
-    def test_flow_project_assign_agrees(self):
-        from lib import flow_project_assign
+    def test_there_is_only_one_definition_outside_vendor(self):
+        """`lib/vendor/` is upstream-mirrored and exempt; nothing else may define its own."""
+        import re
+        from pathlib import Path
 
-        assert flow_project_assign.API_BASE == fc.API_BASE
+        skill = Path(__file__).resolve().parent.parent
+        offenders = [
+            path.relative_to(skill).as_posix()
+            for path in (skill / "lib").rglob("*.py")
+            if "vendor" not in path.parts
+            and path.name != "flow_client.py"
+            and re.search(r"^API_BASE\s*=\s*(?!.*flow_client)", path.read_text(), re.M)
+        ]
+        assert offenders == []
 
 
 class TestDownloadRoute:

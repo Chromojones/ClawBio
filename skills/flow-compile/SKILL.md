@@ -134,7 +134,7 @@ pip install flowbio          # Flow.bio client (not on PyPI resolution — insta
 Set credentials via env (`FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD`) or let the
 credentials stage write `.flow_credentials.env` — it also mints a **`FLOW_API_TOKEN`**,
 which is what the flowbio CLI (`samples import`, `import-status`) and
-`lib/flow_project_assign.py` authenticate with. Everything the delivery stages
+the delivery stages
 call is vendored under `lib/vendor/flow_api/`, so a ClawBio-only clone is
 self-contained (no parent advbfx tree required).
 
@@ -154,7 +154,6 @@ credentials → geo-matrix → barcode-extract → flow-annotate → metadata ga
 | Header preview | `lib/sra_header_preview.py` | ENA byte-range keeps **original** headers; `fastq-dump` rewrites deflines and is fallback-only |
 | Metadata gate | `lib/metadata_validate.py` | `CONFIRM_METADATA.md`; released by `--accept-metadata` |
 | Import sheet | `lib/sra_import.py` | Accession must be **SRX/ERX/DRX** — run accessions (`SRR`) fail with HTTP 500 |
-| Project assign | `lib/flow_project_assign.py` | **Repair only** — set `project` in the import sheet (reserved since flowbio 0.12.0). Use this to attach studies imported before 0.12.0 |
 
 `srr_map.tsv` carries both `srr` (header preview) and `srx` (import).
 

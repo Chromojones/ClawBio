@@ -13,9 +13,8 @@ enforced here rather than left to the caller:
 2. **``project`` IS a column, from flowbio 0.12.0.** 0.10.0 reserved only
    ``(accession, name, organism, sample_type)``, so every imported study landed unattached and
    needed a second pass. 0.12.0 reserves ``project`` and ``pubmed`` too and maps them onto the
-   import spec. Anything outside the reserved set is still treated as metadata and
-   a stray ``project`` key is silently ignored, leaving samples unattached. Project
-   assignment is a separate step — see ``lib/flow_project_assign.py``.
+   import spec. Anything outside the reserved set is still treated as metadata, so on
+   0.10.0 a stray ``project`` key was silently ignored and the samples landed unattached.
 3. **``strandedness`` is rejected for CLIP** (``422 … not a valid attribute for this
    sample type``) even though ``samples batch-template --sample-type CLIP`` lists it as
    required. It is an RNA-Seq field.
@@ -208,12 +207,15 @@ def write_import_scripts(
     project_id: str,
     poll_interval: int = 60,
 ) -> Path:
-    """Emit sra_import.sh — import, poll to completion, then assign the project."""
+    """Emit sra_import.sh — import and poll to completion.
+
+    The project is set in the sheet itself (reserved since flowbio 0.12.0), so there is no
+    assignment step. Annotations are a different matter: the import job discards
+    ``__annotation`` columns, so they still need a post-import edit pass.
+    """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     script = output_dir / "sra_import.sh"
-    assign_helper = Path(__file__).resolve().parent / "flow_project_assign.py"
-
     lines = [
         "#!/usr/bin/env bash",
         "set -euo pipefail",
@@ -224,7 +226,6 @@ def write_import_scripts(
         f'SHEET="{Path(sheet_path).resolve()}"',
         f'PROJECT_ID="{project_id}"',
         f'OUTPUT="{output_dir.resolve()}"',
-        f'ASSIGN="{assign_helper}"',
         f"POLL={poll_interval}",
         "",
         'if [[ -z "${FLOW_API_TOKEN:-}" && ! -f "${HOME}/.config/flow/api-token" ]]; then',
@@ -252,11 +253,8 @@ def write_import_scripts(
         "  exit 1",
         "fi",
         "",
-        "# Set `project` in the sheet (reserved since flowbio 0.12.0); annotations still need a post-import edit.",
-        'echo "→ assigning samples to project $PROJECT_ID"',
-        'SAMPLE_IDS=$(echo "$PAYLOAD" | python3 -c "import sys,json;print(\',\'.join(str(i) for i in json.load(sys.stdin)[\'sample_ids\']))")',
-        'python3 "$ASSIGN" --project-id "$PROJECT_ID" --sample-ids "$SAMPLE_IDS"',
-        "",
+        "# `project` was set in the sheet, so the samples are already attached. Annotations",
+        "# are not: the import job discards __annotation columns, so run the edit pass next.",
         'echo "✓ import complete — $OUTPUT/import_job.json"',
     ]
     script.write_text("\n".join(lines) + "\n", encoding="utf-8")

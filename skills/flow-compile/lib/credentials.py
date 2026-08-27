@@ -39,7 +39,7 @@ def write_credentials_env(
         f"export FLOWBIO_PASSWORD={password!r}",
     ]
     if token:
-        # Consumed by `flowbio samples import` and lib/flow_project_assign.py.
+        # Consumed by `flowbio samples import`.
         lines.append(f"export FLOW_API_TOKEN={token!r}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     path.chmod(stat.S_IRUSR | stat.S_IWUSR)
