@@ -4,8 +4,22 @@ import sys
 import subprocess
 
 def _clean_header_line(text: str) -> bytes:
-    """Normalize FASTQ header / plus line: spaces and slashes break some tools."""
-    s = text.strip().replace(' ', '_').replace('/', '_')
+    """Normalize a FASTQ header or plus line: spaces out, slashes LEFT ALONE.
+
+    LOCAL PATCH (flow-compile). Upstream also did `.replace('/', '_')`, which silently
+    destroys a header-borne UMI. For a header whose UMI sits in the comment field:
+
+        @SRR123.1 1:N:0:CTACGCTCTAAA/1
+      upstream -> @SRR123.1_1:N:0:CTACGCTCTAAA_1     last `_` field = "1"           CONSTANT
+      here     -> @SRR123.1_1:N:0:CTACGCTCTAAA/1     last `_` field = "CTACGCTCTAAA/1"  varies
+
+    UMI-collapse keys on that final field. Constant across every read, it treats the whole
+    library as duplicates of one read and collapses it to near nothing, with no error.
+
+    Spaces still have to go: the SAM QNAME ends at the first whitespace, so anything after
+    one is dropped at alignment.
+    """
+    s = text.strip().replace(' ', '_')
     return s.encode() + b'\n'
 
 

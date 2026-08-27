@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path as _Path
+
+from lib.pipeline_params import compare_confirmed_params  # noqa: F401
+
+
+#: The skill root, so a generated script can import lib/ wherever it is run from.
+SKILL_DIR = _Path(__file__).resolve().parent.parent
+
 import json
 import re
 from pathlib import Path
@@ -10,6 +18,8 @@ import pandas as pd
 
 
 from lib.script_paths import resolve_flow_script as resolve_advbfx_script
+
+
 
 
 def _srr_from_file(filename: str) -> str:
@@ -113,8 +123,15 @@ def write_analysis_script(
         "  exit 3",
         "fi",
         "",
-        "if ! cmp -s \"$PARAMS\" \"$CONFIRMED_PARAMS\"; then",
-        "  echo \"analysis_params.confirmed.json is out of date.\" >&2",
+        "# Compared BY VALUE, not with `cmp -s`. Two JSON files holding identical parameters",
+        "# differ byte-for-byte on key order or indentation alone, and a gate that refuses a",
+        "# correct run teaches its operator to route around the gate.",
+        "if ! python3 -c \"import json,sys; sys.path.insert(0, sys.argv[3]);"
+        " from lib.pipeline_params import compare_confirmed_params as c;"
+        " d=json.load(open(sys.argv[1])); f=json.load(open(sys.argv[2]));"
+        " v=c(d,f); print(v.reason) if not v.ok else None; sys.exit(0 if v.ok else 1)\""
+        f" \"$PARAMS\" \"$CONFIRMED_PARAMS\" \"{SKILL_DIR}\"; then",
+        "  echo \"analysis_params.confirmed.json does not match the derived parameters.\" >&2",
         "  echo \"Re-verify $PARAMS and refresh confirmation:\" >&2",
         "  echo \"  cp \\\"$PARAMS\\\" \\\"$CONFIRMED_PARAMS\\\"\" >&2",
         "  exit 3",

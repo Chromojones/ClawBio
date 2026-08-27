@@ -26,6 +26,7 @@ UVCLAP_TRIMGALORE_PARAMS = (
 )
 
 from lib.protocol import ECLIP_METHODS  # single definition
+from lib.results import Verdict
 
 
 def is_eclip_method(experimental_method: str) -> bool:
@@ -144,3 +145,29 @@ def write_analysis_params_hook(
         ]
     )
     hook_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+def compare_confirmed_params(derived: dict, confirmed: dict) -> Verdict:
+    """Do the confirmed parameters match the derived ones? Compared BY VALUE.
+
+    The generated script used ``cmp -s``, a byte comparison. Two JSON objects holding identical
+    parameters differ byte-for-byte whenever key order, indentation or a trailing newline
+    changes, so a correctly confirmed run could be refused for a reformat. That is worse than
+    annoying: a gate that blocks correct runs teaches its operator to work around it.
+
+    The reverse held too. ``cmp`` reports no difference between two files that are equally
+    wrong, so a parameter missing from both passed the gate.
+    """
+    derived = {str(k): str(v) for k, v in (derived or {}).items()}
+    confirmed = {str(k): str(v) for k, v in (confirmed or {}).items()}
+    if derived == confirmed:
+        return Verdict(True, "confirmed parameters match the derived ones")
+
+    problems = []
+    for key in sorted(set(derived) | set(confirmed)):
+        if key not in confirmed:
+            problems.append(f"{key}: missing from the confirmed file (derived {derived[key]!r})")
+        elif key not in derived:
+            problems.append(f"{key}: in the confirmed file but never derived ({confirmed[key]!r})")
+        elif derived[key] != confirmed[key]:
+            problems.append(f"{key}: derived {derived[key]!r}, confirmed {confirmed[key]!r}")
+    return Verdict(False, "; ".join(problems), evidence={"derived": derived, "confirmed": confirmed})

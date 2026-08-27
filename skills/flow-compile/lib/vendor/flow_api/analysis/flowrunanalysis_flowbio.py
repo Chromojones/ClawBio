@@ -469,11 +469,24 @@ def main():
             params.update({k: str(v) for k, v in override.items()})
             logging.info("Loaded pipeline params from %s", args.params_json)
 
+        # LOCAL PATCH (flow-compile): `paired` was hardcoded to "both" in the payload below.
+        # It decides which mate the pipeline analyses, and for eCLIP the crosslink is on read
+        # 2, so "both" produces a clean-looking run with peaks in the wrong places. It is a
+        # samplesheet setting rather than a pipeline param, so it is pulled out of `params`
+        # here instead of being sent inside it.
+        paired = str(params.pop("paired", "") or "both")
+        if paired not in ("both", "first", "second"):
+            raise SystemExit(
+                f"paired must be both/first/second, got {paired!r}. It decides which mate "
+                f"carries the crosslink; a wrong value does not fail the run."
+            )
+        logging.info("samplesheet paired=%s", paired)
+
         # Build payload for REST API submission
         payload = {
             "params": params,
             "data_params": data_params,
-            "csv_params": {"samplesheet": {"rows": rows, "paired": "both"}},
+            "csv_params": {"samplesheet": {"rows": rows, "paired": paired}},
             "retries": None,
             "nextflow_version": nextflow_version,
             "fileset": fileset_id,
