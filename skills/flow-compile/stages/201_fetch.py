@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Stage 201 — local line: fetch the reads, and clean headers only while that is still needed.
+"""Stage 201 — local line: get the reads on disk. Nothing here renames them.
 
 The local line exists for one reason now: a study absent from SRA/ENA. Header-comment UMIs
 used to force it too, because the SAM QNAME whitespace boundary drops everything after the
-first space, taking the UMI with it. That is being fixed inside the clip-seq pipeline by
-running `removespace` there, so this stage performs the cleaning as a documented transitional
-step and stops once the pipeline change ships.
+first space and takes the UMI with it. `removespace` runs inside the clip-seq pipeline now, so
+that is handled downstream.
 
-The cleaning leaves `/` alone. Replacing it makes the last `_`-delimited field a constant `1`
-across every read, and UMI-collapse then treats unrelated reads as duplicates of one another.
+**This stage deliberately does no header cleaning.** Cleaning renamed every read to
+`*.cleaned.fastq.gz`, which made the annotation sheet's `File` column stale the instant it ran,
+and rebuilding the sheet against the new names is what forced the user to run the whole
+pipeline three times. With nothing renaming anything, the filenames chosen at annotation time
+are the filenames uploaded, and the metadata is built in one pass.
+
+Classifying the header still happens here. That reads the header; it does not rewrite the file.
 """
 
 from __future__ import annotations
@@ -32,8 +36,6 @@ def build_parser():
     parser = parser_for(NAME, __doc__.splitlines()[0])
     parser.add_argument("--fastq-dir", type=Path, help="Where the reads are, or will be.")
     parser.add_argument("--headers", type=Path, help="Pre-sampled headers as JSON.")
-    parser.add_argument("--clean-headers", action="store_true",
-                        help="Transitional: fold the header comment into the read name.")
     return parser
 
 
@@ -57,14 +59,10 @@ def body(args, out: Path) -> dict:
         st.set_study(out, header_state=result.state)
         lines.append(f"header state: {result.state}")
 
-    plan = {
-        "fastq_dir": str(args.fastq_dir) if args.fastq_dir else "",
-        "clean_headers": bool(args.clean_headers),
-    }
+    plan = {"fastq_dir": str(args.fastq_dir) if args.fastq_dir else ""}
     (out / "fetch_plan.json").write_text(json.dumps(plan, indent=2) + "\n")
-    if args.clean_headers:
-        lines.append("header cleaning: on (transitional; removespace moves into the pipeline)")
-    return {"lines": lines or ["fetch plan recorded"], "note": "local"}
+    lines.append("header cleaning: none — removespace runs in the clip-seq pipeline")
+    return {"lines": lines, "note": "local"}
 
 
 def main(argv=None) -> int:

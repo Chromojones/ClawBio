@@ -89,11 +89,14 @@ no difference between two files that are equally wrong.
 → `tests/test_params_confirmation.py`
 
 ### state-contract
-The local path required running the same command three times, because one command owned both
-`annotation.csv` and the FASTQ filenames and the filenames only settled once the reads were on
-disk. Re-execution was the dependency mechanism. `state.json` writes the dependency down, and a
-digest match alone is not "done": the declared outputs must still exist.
-→ `tests/test_state.py`, `tests/stages/test_resume.py`
+The local path required running the same command three times, for a specific reason: header
+cleaning renamed every read to `*.cleaned.fastq.gz`, so the annotation sheet's `File` column was
+stale the instant it ran and had to be rebuilt against the new names. Re-executing the whole
+command was the mechanism for that rebuild. Since `removespace` moved into the clip-seq
+pipeline nothing renames anything locally, so the annotation is built in one pass — held there
+by a test that exactly one stage writes it. `state.json` covers the general case: a digest match
+alone is not "done", the declared outputs must still exist.
+→ `tests/test_state.py`, `tests/stages/test_resume.py`, `tests/stages/test_single_pass.py`
 
 ### stage-contract
 Sixteen scripts is more surface than one command, and the trade only pays if the guarantee

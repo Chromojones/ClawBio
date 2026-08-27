@@ -1,8 +1,13 @@
 """``<output>/state.json`` — what each stage read, wrote, and decided.
 
-The old orchestrator made the user run one command three times, because a single command owned
-both ``annotation.csv`` and the FASTQ filenames and the filenames only settle once the reads are
-on disk. Re-execution *was* the dependency mechanism.
+The old orchestrator made the user run one command three times, and the reason was concrete:
+header cleaning rewrote every read to ``*.cleaned.fastq.gz``, so the annotation sheet's ``File``
+column was stale the moment cleaning ran. The sheet had to be rebuilt against the renamed files,
+and re-executing the whole command *was* the mechanism for doing it.
+
+``removespace`` now runs inside the clip-seq pipeline, so nothing renames anything locally and
+the annotation is built once. What remains is the general problem the loop pointed at: a stage's
+output feeding another stage's input, with nothing written down about which is current.
 
 Here the dependency is explicit. A stage declares its inputs; ``begin()`` hashes their contents
 plus the stage's own CLI args and says whether the work still stands. Re-running a finished stage
