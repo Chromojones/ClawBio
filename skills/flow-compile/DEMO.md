@@ -83,4 +83,4 @@ Monitor: `tail -f /tmp/flow-compile-demo/logs/upload.log`
 - [ ] After download: `headers.txt` reviewed
 - [ ] `analysis_params.confirmed.json` matches `pipeline_params.json` before analysis
 
-See **`WORKFLOW.md`** for the full branching diagram (FLASH, uvCLAP, ENA).
+See **`reference/stages.md`** for the full stage model and branch.

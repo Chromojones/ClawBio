@@ -3,7 +3,7 @@
 How to take a CLIP study deposited in **ENA / ArrayExpress** (accessions
 `E-MTAB-*`, runs `ERR*`, samples `ERS*`, experiments `ERX*`) all the way to a
 Flow.bio CLIP-Seq execution. This is the sibling of the GEO/SRA path in
-`WORKFLOW.md`; the only real differences are (1) where accessions and barcodes
+`reference/stages.md`; the only real differences are (1) where accessions and barcodes
 come from and (2) that reads are pulled from the **ENA FASTQ FTP** instead of
 `prefetch`.
 

@@ -6,7 +6,7 @@ cleaning and no multi-gigabyte staging disk. What remains is metadata accuracy a
 header preview — which is where all the guardrails now sit.
 
 Requires **flowbio ≥ 0.12.0** (`flowbio samples import`; `project`/`pubmed` reserved). The older local-download path
-(`prefetch.sh` → `clean_fastq.sh` → `upload_live.sh`) is still documented in `WORKFLOW.md`
+(`prefetch.sh` → `clean_fastq.sh` → `upload_live.sh`) is the 2xx line in `reference/stages.md`
 and is the fallback when a study is not in SRA/ENA, or when reads must be transformed
 before upload (FLASH / uvCLAP UMI extraction).
 

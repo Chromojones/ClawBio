@@ -52,3 +52,47 @@ Order of investigation is conceptual — the agent gathers text; `barcode_eviden
 1. Agent follows **Where to look** above: matrix → CLIP-focused Methods excerpt (`--paper-text`) → GEO sample *Data processing* when useful → `barcode_proposals.json` (`status: pending_confirmation`)
 2. Human reviews `CONFIRM_BARCODES.md` and sets `status: confirmed`
 3. Re-run with `--accept-proposals barcode_proposals.json` to build annotation
+
+## Judgement calls, decided once
+
+Folded from `DESIGN.md`, which is deleted. These are the cases where evidence is incomplete and
+the answer is a judgement rather than a lookup. In all of them the split is the same: **Python
+never infers, the agent proposes with its reasoning shown, the researcher confirms.**
+
+### Partial evidence — one sample lacks what its siblings have
+
+Do not block a whole study because one GSM has no direct barcode evidence.
+
+- Resolved GSMs proceed through annotation.
+- For the unresolved one the **agent** may propose an N-only pattern matching its siblings'
+  length, with the reasoning in `agent_notes`. There is deliberately no automatic inference in
+  `barcode_extract.py`: a guess made in Python is indistinguishable from a reading.
+- The barcode gate still holds for every GSM, resolved or not.
+
+### The paper lists several barcodes and a filename carries a core
+
+Treat this as replicate-specific assignment, not a contradiction.
+
+GSE105082's methods give `NNNCGGANNN` and `NNNGGCANNN`. The supplementary filenames carry the
+cores: GSM2817677 has `_rsem_CGGA.` → `NNNCGGANNN`; GSM2817678 has `_rsem_GGCA.` →
+`NNNGGCANNN`. The two samples differ only by that core, so a resolver reading the patterns but
+ignoring the per-sample core hands both replicates the same barcode, demultiplexes each into
+the other, and produces a study-shaped result with no error.
+
+Present both the paper quote and the filename core, and link core → full pattern. No automatic
+CONFLICT flag: the agent compares the sources and writes what it concluded.
+
+### Lengths given, no motif
+
+GSE303135's GEO *Data processing* gives quantities rather than a sequence: "Barcode trimming
+(first 15 bp…)" and "min. read length of 30 bp includes 15 bp barcode and UMI regions plus
+15 bp sequence insert."
+
+The answer is **15N**, and the reasoning has to be shown rather than the number asserted: GEO
+describes the 15 bp as "barcode **and** UMI regions" — two quantities inside a 30 bp total —
+and a 30N single 5′ barcode field would be unusually long.
+
+**This is not verifiable from the FASTQ.** Barcode and UMI are both random bases with no
+visible boundary, so sampling reads cannot confirm the split. An earlier revision of this rule
+said "confirm against the FASTQ", which does not work and would have produced a confident
+wrong answer. Flag the guess as resting on general protocol knowledge, and take it to the gate.
