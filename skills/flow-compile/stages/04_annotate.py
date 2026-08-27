@@ -40,7 +40,11 @@ def _inputs(args, out):
 
 def body(args, out: Path) -> dict:
     from lib.barcode_resolver import BarcodeResolution
-    from lib.flow_annotate import build_annotation_table, load_srr_map
+    from lib.flow_annotate import (
+        apply_eclip_crosslink_mate_filenames,
+        build_annotation_table,
+        load_srr_map,
+    )
     from lib.geo_matrix import parse_geo_matrix
     from lib.paper_metadata_enrich import (
         collect_annotation_field_warnings,
@@ -78,11 +82,21 @@ def body(args, out: Path) -> dict:
         warnings = collect_annotation_field_warnings(annotation)
         lines.append(f"paper: skipped, no PMID on the series matrix; {len(warnings)} field warning(s)")
 
+    # Paired-end eCLIP puts the randomer on read 2's 5' end with the crosslink immediately
+    # after, so read 2 is the crosslink read and read 1 carries only the inline demultiplexing
+    # barcode. Promoting the right mate here, in the sole writer of annotation content, means
+    # exactly one place decides it. The old orchestrator called this twice with header cleaning
+    # in between; it is idempotent, so the second call was redundant rather than load-bearing.
+    is_eclip = bool(annotation_is_eclip(annotation))
+    if is_eclip:
+        annotation = apply_eclip_crosslink_mate_filenames(annotation)
+        lines.append("eCLIP: read 2 promoted as the crosslink mate")
+
     (out / "annotation_warnings.json").write_text(
         json.dumps([str(w) for w in warnings], indent=2) + "\n")
     annotation.to_csv(out / "annotation.raw.csv", index=False)
 
-    st.set_study(out, eclip=bool(annotation_is_eclip(annotation)))
+    st.set_study(out, eclip=is_eclip)
     return {"lines": lines, "note": f"{len(annotation)} rows"}
 
 

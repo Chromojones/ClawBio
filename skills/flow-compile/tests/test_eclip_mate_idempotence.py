@@ -82,3 +82,33 @@ class TestWhatItLeavesAlone:
         df = pd.DataFrame([{"Sample Name": "S1", "File": "SRR1.fastq.gz",
                             "Experimental Method": "eCLIP"}])
         assert apply_mates(df).loc[0, "File"] == "SRR1.fastq.gz"
+
+
+class TestItIsActuallyWiredIn:
+    """Proving idempotence is worthless if nothing calls it.
+
+    The old orchestrator called this twice. The stage rewrite called it zero times, which is a
+    quieter bug than calling it twice: an eCLIP study uploads read 1, the barcode-only mate,
+    and every peak lands in the wrong place with nothing failing.
+    """
+
+    def test_a_stage_promotes_the_crosslink_mate(self):
+        from pathlib import Path
+
+        stages = Path(__file__).resolve().parent.parent / "stages"
+        callers = [
+            p.name for p in stages.glob("*.py")
+            if "apply_eclip_crosslink_mate_filenames" in p.read_text()
+        ]
+        assert callers, "no stage promotes the eCLIP crosslink mate"
+
+    def test_exactly_one_stage_does(self):
+        """Two writers of the File column is how the old triple-re-run loop started."""
+        from pathlib import Path
+
+        stages = Path(__file__).resolve().parent.parent / "stages"
+        callers = [
+            p.name for p in stages.glob("*.py")
+            if "apply_eclip_crosslink_mate_filenames(" in p.read_text()
+        ]
+        assert len(callers) == 1, f"promoted in {callers}"
