@@ -24,7 +24,7 @@ https://app.flow.bio/projects/997999200849251656/
 
 Project creation is manual for now; a future stage should call `POST /projects` (see flow-ai notes).
 
-After flow-compile produces `annotation.csv`, `annotation.xlsx`, `headers.txt`, and `pipeline_params.json`:
+After flow-compile produces `annotation.csv`, `headers.txt`, and `pipeline_params.json`:
 
 ```bash
 python skills/flow-compile/lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py \

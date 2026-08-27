@@ -1,9 +1,9 @@
 ---
 name: flow-compile
 description: >-
-  End-to-end CLIP literature-to-Flow pipeline — scan PubMed alerts for new CLIP studies,
-  audit GEO/SRA deposits, resolve 5' barcodes from multiple metadata sources, build
-  Flow upload annotation sheets, optionally prefetch reads, and upload via Flow API.
+  Take a published CLIP study from its accession to an analysed project on Flow — audit the
+  GEO/SRA deposit, resolve 5' barcodes from the study's own metadata, build and validate the
+  annotation, import or upload to Flow, then submit and audit the analysis.
 license: MIT
 metadata:
   version: 0.2.0
@@ -14,18 +14,9 @@ metadata:
     - iclip
     - flow-bio
     - geo
-    - pubmed
     - annotation
     - barcode
   inputs:
-    - name: alert_config
-      type: file
-      format:
-        - json
-      description: >-
-        Optional alert config (PubMed query, date window, known PMIDs to skip).
-        Omit with --demo.
-      required: false
     - name: geo_matrix
       type: file
       format:
@@ -53,10 +44,6 @@ metadata:
       type: file
       format: csv
       description: Flow-compatible annotation table (upload via uploadsample_flowbio_v6.py).
-    - name: flagged_papers
-      type: file
-      format: json
-      description: CLIP-relevant papers from the alert scan.
   dependencies:
     python: '>=3.11'
     packages:
@@ -96,13 +83,13 @@ metadata:
       - linux
     trigger_keywords:
       - flow compile
-      - clip pubmed alert
-      - new clip paper
       - crosslinking and immunoprecipitation
       - geo clip annotation
       - flow upload clip
       - 5 prime barcode clip
       - build flow annotation sheet
+      - import clip study to flow
+      - clip barcode resolution
 ---
 
 # Flow Compile
@@ -206,7 +193,7 @@ that is what the last drift cost us.
 | Local patches to vendored upstream code | [`lib/vendor/README.md`](lib/vendor/README.md) |
 | **Every incident that produced a guardrail** | [`FAILURES.md`](FAILURES.md) |
 
-## Example output
+## Example Output
 
 ```
 $ python3 flow_compile.py --status --output runs/GSE131210
@@ -237,13 +224,13 @@ clinical diagnoses. Consult a healthcare professional before making any medical 
 Uploading is outward-facing and hard to reverse. Nothing is submitted without the four gates,
 and `110_import` and `210_upload` are dry-run unless given `--submit`.
 
-## Agent boundary
+## Agent Boundary
 
 The agent dispatches stages, reads their evidence, and explains the result. The stages execute
 and decide. When a gate opens, the agent presents the evidence and **the researcher approves**
 — never the agent on the researcher's behalf.
 
-## Chaining partners
+## Chaining Partners
 
 - **`flow-bio`** — browse and run pipelines on data already in Flow
 - **`nfcore-rnaseq-wrapper`** — RNA-Seq deposits accompanying a CLIP study

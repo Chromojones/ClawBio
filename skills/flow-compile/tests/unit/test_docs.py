@@ -148,3 +148,58 @@ class TestNoDanglingLinks:
             for target in re.findall(r"\]\(([^)]*)\)", doc.read_text()):
                 assert "WORKFLOW.md" not in target, doc.name
                 assert "DESIGN.md" not in target, doc.name
+
+
+class TestClawBioConformance:
+    """The project's 17-point SKILL.md checklist, run as a test instead of by hand.
+
+    `/pr-audit` enforces this on every PR and the section names are matched exactly, so a
+    lowercased heading fails an audit that a human reading the file would pass. Checking it
+    here means the answer is known before the PR rather than after.
+    """
+
+    def _frontmatter(self):
+        return SKILL.read_text().split("---", 2)[1]
+
+    def test_name_matches_the_folder(self):
+        assert f"name: {SKILL_DIR.name}" in self._frontmatter()
+
+    def test_version_is_semver(self):
+        import re
+
+        assert re.search(r"version: \d+\.\d+\.\d+", self._frontmatter())
+
+    def test_the_required_frontmatter_keys_are_present(self):
+        fm = self._frontmatter()
+        for key in ("author:", "description:", "inputs:", "outputs:", "trigger_keywords:"):
+            assert key in fm, key
+
+    def test_at_least_three_trigger_keywords(self):
+        import re
+
+        block = self._frontmatter().split("trigger_keywords:")[1]
+        assert len(re.findall(r"^      - .+$", block, re.M)) >= 3
+
+    def test_the_required_sections_exist_with_the_template_casing(self):
+        """Title case, as `templates/SKILL-TEMPLATE.md` defines them."""
+        text = SKILL.read_text()
+        for heading in ("## Trigger", "## Scope", "## Workflow", "## Example Output",
+                        "## Safety", "## Agent Boundary"):
+            assert f"\n{heading}\n" in text, heading
+
+    def test_the_trigger_has_both_lists(self):
+        text = SKILL.read_text()
+        assert "Fire when" in text and "Do **not** fire" in text
+
+    def test_the_disclaimer_is_present(self):
+        assert "not a medical device" in SKILL.read_text()
+
+    def test_demo_data_and_tests_exist(self):
+        assert (SKILL_DIR / "demo").is_dir()
+        assert list((SKILL_DIR / "tests").rglob("test_*.py"))
+
+    def test_the_description_does_not_promise_what_was_removed(self):
+        """It advertised PubMed alert scanning after `pubmed_stage.py` was deleted."""
+        fm = self._frontmatter().lower()
+        assert "pubmed alert" not in fm
+        assert "alert scan" not in fm
