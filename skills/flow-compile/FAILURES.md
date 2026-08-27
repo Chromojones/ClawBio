@@ -74,11 +74,21 @@ raised `AttributeError` on the other — inside the repair stage, whose input is
 
 ## Gates and state
 
+### execution-batching
+The analysis submission was the fourth hard stop, re-asking a question 108 had already settled.
+The parameters *are* the decision; confirming them again at submission is how a gate stops
+meaning anything. What actually made submission risky was the batch size — no more than 18
+samples per execution — and that is a rule, so it is enforced rather than approved. `-n` on the
+analysis script is the number of BATCHES, not samples per batch, so passing 18 through directly
+makes 18 executions of 11 for a 200-sample study.
+→ `tests/unit/test_execution_batching.py`
+
 ### approval-hooks
-Barcodes and analysis parameters are hard stops. Both were once warnings that printed and
-continued, which is how an unapproved barcode could reach an upload. A gate exits 3, writes its
-evidence, names its release flag, and does not satisfy a prerequisite — without that last part
-it is decorative.
+Barcodes, metadata and analysis parameters are hard stops — three, not four. All were once
+warnings that printed and continued, which is how an unapproved barcode could reach an upload.
+A gate exits 3, writes its evidence, names its release flag, and does not satisfy a
+prerequisite; without that last part it is decorative. Adding a fourth at submission was the
+opposite error: a gate that re-asks a settled question trains its operator to click through.
 → `tests/stages/test_gates.py`
 
 ### params-confirmation

@@ -59,11 +59,27 @@ class TestStageReference:
         missing = [s for s in stages if s not in text]
         assert missing == [], f"undocumented stages: {missing}"
 
-    def test_the_four_gates_are_listed(self):
+    def test_the_gates_documented_are_the_gates_implemented(self):
+        """Counted from the stages themselves, so the doc cannot drift from the code.
+
+        There were four. Submission at 12_analysis was dropped because it re-asked what 108
+        had already settled, and a gate that re-asks a settled question trains its operator to
+        click through.
+        """
+        gating = sorted(
+            p.stem for p in (SKILL_DIR / "stages").glob("*.py")
+            if not p.name.startswith("_") and "raise Gate(" in p.read_text()
+        )
+        assert gating == ["03_barcodes", "05_metadata", "108_params"], gating
+
         text = STAGES_DOC.read_text()
-        for stage in ("03_barcodes", "05_metadata", "108_params", "12_analysis"):
+        for stage in gating:
             assert stage in text
-        assert text.count("GATE") >= 4
+        # Counting every "GATE" would count the table and the diagram twice over; what must
+        # be true is that no fourth gate is claimed anywhere.
+        assert "GATE 4" not in text
+        for n in range(1, len(gating) + 1):
+            assert f"GATE {n}" in text, f"GATE {n} missing"
 
     def test_the_exit_codes_are_documented(self):
         """In BOTH files, each checked against `_common.py`.

@@ -171,3 +171,56 @@ def compare_confirmed_params(derived: dict, confirmed: dict) -> Verdict:
         elif derived[key] != confirmed[key]:
             problems.append(f"{key}: derived {derived[key]!r}, confirmed {confirmed[key]!r}")
     return Verdict(False, "; ".join(problems), evidence={"derived": derived, "confirmed": confirmed})
+
+
+#: Samples per execution. Above this, Flow executions become unreliable in practice; the figure
+#: is operational rather than an API limit, which is why it lives here with the other analysis
+#: parameters rather than being buried in a submission script.
+MAX_SAMPLES_PER_EXECUTION = 18
+
+
+def chunks_for(sample_count: int) -> int:
+    """How many executions ``sample_count`` samples need.
+
+    Expressed this way round because the rule is known in samples per execution while the
+    analysis script takes ``-n``, a number of BATCHES. Passing 18 straight through as ``-n``
+    is the mistake: for 200 samples it makes 18 executions of 11, and for 12 samples it makes
+    18 executions of one.
+    """
+    count = max(0, int(sample_count))
+    if count <= MAX_SAMPLES_PER_EXECUTION:
+        return 1
+    return -(-count // MAX_SAMPLES_PER_EXECUTION)
+
+
+def check_execution_batches(sample_count: int, num_chunks: int) -> list:
+    """Does this split keep every execution within the ceiling?
+
+    This is the check that replaced the fourth hard stop. Once the parameters are approved at
+    108 there is nothing further for a person to decide at submission time — the parameters
+    *are* the decision. What actually made submission risky was the batch size, and a ceiling
+    is something a machine can enforce without asking anyone.
+    """
+    from lib.results import ERROR, Finding, WARNING
+
+    count = max(0, int(sample_count))
+    chunks = int(num_chunks)
+
+    if chunks < 1:
+        return [Finding(ERROR, f"num_chunks must be at least 1, got {chunks}.")]
+
+    per = -(-count // chunks) if chunks else count
+    if per > MAX_SAMPLES_PER_EXECUTION:
+        want = chunks_for(count)
+        return [Finding(
+            ERROR,
+            f"{count} sample(s) across {chunks} execution(s) is {per} per execution, above the "
+            f"ceiling of {MAX_SAMPLES_PER_EXECUTION}. Use {want} execution(s) instead.",
+        )]
+    if chunks > count > 0:
+        return [Finding(
+            WARNING,
+            f"{chunks} execution(s) for {count} sample(s) leaves some empty. "
+            f"{chunks_for(count)} would do.",
+        )]
+    return []

@@ -74,10 +74,10 @@ Only for a study absent from SRA/ENA.
 | # | stage | decides |
 |---|---|---|
 | 11 | `11_verify` | did the samples arrive as the sheet described? repair if not |
-| 12 | `12_analysis` | submit the analysis — **GATE 4** |
+| 12 | `12_analysis` | submit the analysis; enforces the 18-per-execution ceiling |
 | 13 | `13_audit` | did every sample survive the run? |
 
-## The four hard stops
+## The three hard stops
 
 None can be skipped, and none is a failure. A gate means the run is paused on a person.
 
@@ -86,7 +86,15 @@ None can be skipped, and none is a failure. A gate means the run is paused on a 
 | 1 | `03_barcodes` | `--accept-proposals` | a wrong barcode demultiplexes into the wrong sample |
 | 2 | `05_metadata` | `--accept-metadata` | a wrong target or agent is wrong in the archive forever |
 | 3 | `108_params` | `--accept-params` | a wrong UMI or mate corrupts silently |
-| 4 | `12_analysis` | `--accept-analysis` | last point at which a wrong parameter is cheap |
+
+There were four. Submission at `12_analysis` used to be one, and it asked a question 108 had
+already settled: the parameters *are* the decision. A gate that re-asks a settled question
+trains its operator to click through, which costs the other three their meaning.
+
+What actually made submission risky was the batch size, and that is a rule rather than a
+judgement — **at most 18 samples per execution**. So `12_analysis` derives the split and refuses
+one that exceeds it. `-n` on the analysis script is the number of *batches*, not samples per
+batch.
 
 A gated stage does not satisfy a prerequisite, so the next stage cannot run past it. That is
 what makes it a stop rather than a message.
@@ -115,5 +123,5 @@ flowchart TD
     L201 --> P108
     P108 --> D109[109 sheet] --> D110[110 import] --> V11[11 verify]
     P108 --> L210[210 upload] --> V11
-    V11 --> A12{{12 analysis<br/>GATE 4}} --> A13[13 audit]
+    V11 --> A12[12 analysis] --> A13[13 audit]
 ```

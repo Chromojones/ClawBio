@@ -144,7 +144,7 @@ flowchart TD
     L201 --> P108
     P108 --> D109[109 sheet] --> D110[110 import] --> V11[11 verify]
     P108 --> L210[210 upload] --> V11
-    V11 --> A12{{12 analysis<br/>GATE 4}} --> A13[13 audit]
+    V11 --> A12[12 analysis] --> A13[13 audit]
 ```
 
 Full table of what each stage decides: **[`reference/stages.md`](reference/stages.md)**.
@@ -161,7 +161,7 @@ Full table of what each stage decides: **[`reference/stages.md`](reference/stage
 
 `3` and `4` differ on purpose. A gate is not a failure: the run is paused on a person.
 
-### The four hard stops
+### The three hard stops
 
 None can be skipped. A gated stage does not satisfy a prerequisite, so nothing runs past it.
 
@@ -170,7 +170,10 @@ None can be skipped. A gated stage does not satisfy a prerequisite, so nothing r
 | 1 | `03_barcodes` | `--accept-proposals` | [`reference/barcode-examples.md`](reference/barcode-examples.md) |
 | 2 | `05_metadata` | `--accept-metadata` | [`reference/metadata-accuracy-checklist.md`](reference/metadata-accuracy-checklist.md) |
 | 3 | `108_params` | `--accept-params` | [`reference/eclip-analysis-params.md`](reference/eclip-analysis-params.md) |
-| 4 | `12_analysis` | `--accept-analysis` | [`reference/eclip-analysis-params.md`](reference/eclip-analysis-params.md) |
+
+Submission is not a fourth. Once the parameters are approved the decision is made, and
+`12_analysis` enforces the one remaining rule — at most 18 samples per execution — rather than
+asking again.
 
 Confirming a gate is a decision about evidence, not a flag that silences output. Handing back
 an unedited proposals file is not approval: each proposal needs `status: confirmed`.
