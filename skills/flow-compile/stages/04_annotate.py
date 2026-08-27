@@ -39,13 +39,12 @@ def _inputs(args, out):
 
 
 def body(args, out: Path) -> dict:
-    from lib.flow_annotate import (
-        build_annotation_table,
+    from lib.flow_annotate import build_annotation_table, load_srr_map
+    from lib.geo_matrix import parse_geo_matrix
+    from lib.paper_metadata_enrich import (
         collect_annotation_field_warnings,
-        load_srr_map,
-        parse_geo_matrix,
+        enrich_annotation_from_paper,
     )
-    from lib.paper_metadata_enrich import enrich_annotation_from_paper
     from lib.protocol import annotation_is_eclip
 
     matrix = parse_geo_matrix(args.geo_matrix)

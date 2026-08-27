@@ -40,7 +40,8 @@ def _inputs(args, out):
 
 
 def body(args, out: Path) -> dict:
-    from lib.flow_annotate import load_srr_map, parse_geo_matrix
+    from lib.flow_annotate import load_srr_map
+    from lib.geo_matrix import parse_geo_matrix
 
     matrix = parse_geo_matrix(args.geo_matrix)
     srr_map = load_srr_map(args.srr_map)
@@ -57,15 +58,24 @@ def body(args, out: Path) -> dict:
             WARNING, f"{len(extra)} GSM(s) in the matrix have no runs mapped and will not be "
                      f"imported: {', '.join(extra[:5])}"))
 
-    rows = []
+    # A missing SRX is a warning here, not an error. The trunk runs before 06_route, so it
+    # cannot know whether this study needs accessions at all: the local line uploads files and
+    # never names one. 109_sheet turns the same condition into a hard refusal, because on the
+    # direct line a run accession silently imports its whole parent experiment.
+    rows, without_srx = [], []
     for gsm, group in srr_map.groupby(srr_map["gsm"].astype(str)):
         srx = sorted({str(v).strip() for v in group.get("srx", []) if str(v).strip()})
         if not srx:
-            findings.append(Finding(
-                ERROR, f"{gsm} has no SRX. A run accession imports its whole parent "
-                       f"experiment, so the sheet must name the experiment.", subject=gsm))
+            without_srx.append(gsm)
             continue
         rows.append({"accession": srx[0], "sample_type": args.sample_type, "gsm": gsm})
+    if without_srx:
+        findings.append(Finding(
+            WARNING,
+            f"{len(without_srx)} GSM(s) have no SRX: {', '.join(without_srx[:5])}. "
+            f"The SRA-direct line needs one per sample, because a run accession imports its "
+            f"whole parent experiment. Populate the srr_map's `srx` column, or take the local "
+            f"line."))
 
     (out / "sheet_rows.json").write_text(json.dumps(rows, indent=2) + "\n")
     (out / "index.json").write_text(json.dumps({
