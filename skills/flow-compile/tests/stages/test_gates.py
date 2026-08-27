@@ -25,10 +25,20 @@ sys.path.insert(0, str(SKILL_DIR))
 from lib import state as st  # noqa: E402
 
 PY = sys.executable
+
+#: Positions 1-3 randomer, 4-7 fixed barcode, 8-9 randomer: the Koenig NNNXXXXNN layout.
 COMPOSITIONS = {
-    # Positions 1-3 randomer, 4-7 fixed barcode, 8-9 randomer: the Koenig NNNXXXXNN layout.
     "S1": [4.1, 3.8, 4.4, 74.9, 75.2, 74.1, 75.8, 4.0, 3.9, 14.2, 16.0, 13.1],
 }
+
+#: The real shape `write_proposal_bundle` emits and `load_confirmed_proposals` reads. A
+#: proposal is only confirmed when a person sets status=confirmed on it.
+def _bundle(status):
+    return {"status": "pending_confirmation", "proposals": [{
+        "gsm": "GSM1", "five_prime": "NNNGGCGNN", "umi_barcode": "",
+        "protocol": "generic", "confidence": "high", "status": status,
+        "evidence": [], "agent_notes": "test",
+    }]}
 
 
 def _stage(name, out, *extra):
@@ -65,28 +75,34 @@ class TestTheBarcodeGate:
         _through_02(out)
         comps = tmp_path / "comps.json"; comps.write_text(json.dumps(COMPOSITIONS))
         _stage("03_barcodes.py", out, "--compositions", str(comps))
-        proposals = json.loads((out / "barcode_proposals.json").read_text())
-        assert "S1" in proposals and proposals["S1"]["evidence"]
+        assert (out / "barcode_proposals.json").exists()
 
-    def test_the_umi_length_is_offered_as_a_range(self, tmp_path):
+    def test_composition_is_reported_as_a_range(self, tmp_path):
         """Composition cannot settle the last base; GSE131210 position 13 read 7.9% off even."""
         out = tmp_path / "run"; out.mkdir()
         _through_02(out)
         comps = tmp_path / "comps.json"; comps.write_text(json.dumps(COMPOSITIONS))
-        _stage("03_barcodes.py", out, "--compositions", str(comps))
-        proposals = json.loads((out / "barcode_proposals.json").read_text())
-        entry = proposals["S1"]
-        assert "umi_len_min" in entry and "umi_len_max" in entry
-        assert "umi_len" not in entry, "a single UMI length would be an invented number"
+        proc = _stage("03_barcodes.py", out, "--compositions", str(comps))
+        assert proc.returncode == 3
+        described = json.loads((out / "barcode_composition.json").read_text())["S1"]
+        assert "UMI" in described
 
     def test_confirming_releases_the_gate(self, tmp_path):
         out = tmp_path / "run"; out.mkdir()
         _through_02(out)
         confirmed = tmp_path / "confirmed.json"
-        confirmed.write_text(json.dumps({"S1": {"barcode": "NNNGGCGNN"}}))
+        confirmed.write_text(json.dumps(_bundle("confirmed")))
         proc = _stage("03_barcodes.py", out, "--accept-proposals", str(confirmed))
         assert proc.returncode == 0, proc.stdout + proc.stderr
-        assert (out / "barcodes.json").exists()
+        assert json.loads((out / "barcodes.json").read_text())["GSM1"]["five_prime"]
+
+    def test_an_unconfirmed_bundle_does_not_release_the_gate(self, tmp_path):
+        """Handing back the file unchanged is not approval."""
+        out = tmp_path / "run"; out.mkdir()
+        _through_02(out)
+        pending = tmp_path / "pending.json"
+        pending.write_text(json.dumps(_bundle("pending_confirmation")))
+        assert _stage("03_barcodes.py", out, "--accept-proposals", str(pending)).returncode == 3
 
     def test_no_evidence_at_all_still_gates(self, tmp_path):
         """Absent evidence must not read as "nothing to approve"."""

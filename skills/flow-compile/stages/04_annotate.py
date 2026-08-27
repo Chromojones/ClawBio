@@ -39,6 +39,7 @@ def _inputs(args, out):
 
 
 def body(args, out: Path) -> dict:
+    from lib.barcode_resolver import BarcodeResolution
     from lib.flow_annotate import build_annotation_table, load_srr_map
     from lib.geo_matrix import parse_geo_matrix
     from lib.paper_metadata_enrich import (
@@ -49,7 +50,20 @@ def body(args, out: Path) -> dict:
 
     matrix = parse_geo_matrix(args.geo_matrix)
     srr_map = load_srr_map(args.srr_map)
-    barcodes = json.loads((out / "barcodes.json").read_text())
+    # 03 writes plain JSON so the confirmed file stays reviewable by a person; rebuild the
+    # objects the annotator expects rather than teaching it a second input shape.
+    barcodes = {
+        gsm: BarcodeResolution(
+            gsm=gsm,
+            five_prime=entry.get("five_prime", ""),
+            three_prime=entry.get("umi_barcode", ""),
+            protocol=entry.get("protocol", "generic"),
+            confidence="high",
+            sources=["human_confirmed"],
+            notes=entry.get("notes", ""),
+        )
+        for gsm, entry in json.loads((out / "barcodes.json").read_text()).items()
+    }
 
     annotation = build_annotation_table(matrix, srr_map, barcodes)
     pmid = matrix["series"].get("pubmed_id", "")
