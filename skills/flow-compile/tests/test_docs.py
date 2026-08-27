@@ -66,11 +66,19 @@ class TestStageReference:
         assert text.count("GATE") >= 4
 
     def test_the_exit_codes_are_documented(self):
-        from stages._common import CHECK_FAILED, GATE, PREREQUISITE, USAGE
+        """In BOTH files, each checked against `_common.py`.
 
-        text = STAGES_DOC.read_text()
-        for code in (USAGE, GATE, CHECK_FAILED, PREREQUISITE):
-            assert f"`{code}`" in text, f"exit code {code} undocumented"
+        The exit-code table is the one thing deliberately stated twice: SKILL.md has to be
+        readable on its own, and the codes are how you read the flowchart. Duplication is safe
+        only while both copies are pinned to the source, which is what this does — change a
+        code in `_common.py` and both documents fail here.
+        """
+        from stages._common import CHECK_FAILED, GATE, OK, PREREQUISITE, USAGE
+
+        for doc in (STAGES_DOC, SKILL):
+            text = doc.read_text()
+            for code in (OK, USAGE, GATE, CHECK_FAILED, PREREQUISITE):
+                assert f"`{code}`" in text, f"exit code {code} undocumented in {doc.name}"
 
 
 class TestSkillMd:
