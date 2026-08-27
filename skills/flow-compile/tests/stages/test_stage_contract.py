@@ -46,6 +46,14 @@ IDS = [p.stem for p in STAGES]
 @pytest.mark.skipif(not STAGES, reason="no stages yet")
 class TestEveryStage:
     @pytest.mark.parametrize("stage", STAGES, ids=IDS)
+    def test_is_executable_and_says_how(self, stage):
+        """A stage is chmod +x, so it needs the line that makes that mean something."""
+        import os
+
+        assert stage.read_text().startswith("#!"), f"{stage.name} has no shebang"
+        assert os.access(stage, os.X_OK), f"{stage.name} is not executable"
+
+    @pytest.mark.parametrize("stage", STAGES, ids=IDS)
     def test_is_numbered(self, stage):
         """The number is the running order; a stage without one has no place in the flow."""
         assert stage.stem[:2].isdigit(), f"{stage.name} does not start with a two-digit number"

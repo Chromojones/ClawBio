@@ -80,6 +80,17 @@ def parser_for(name: str, description: str) -> argparse.ArgumentParser:
     return parser
 
 
+def _output_from(argv: Sequence[str]) -> Path | None:
+    """Find --output without a full parse, so prerequisites can be checked first."""
+    argv = list(argv)
+    for i, token in enumerate(argv):
+        if token == "--output" and i + 1 < len(argv):
+            return Path(argv[i + 1])
+        if token.startswith("--output="):
+            return Path(token.split("=", 1)[1])
+    return None
+
+
 def run_stage(
     name: str,
     body: Callable[[argparse.Namespace, Path], dict | None],
@@ -97,8 +108,16 @@ def run_stage(
     invalidated one recomputes. That is what removes the "run the command three times" loop —
     a stage no longer has to be re-executed for a later one to see its output.
     """
-    args = parser.parse_args(argv)
-    out = Path(args.output)
+    raw = list(sys.argv[1:] if argv is None else argv)
+
+    # Prerequisites are checked BEFORE argparse validates the rest, so a stage run out of order
+    # says "run 01_study first" rather than "--geo-matrix is required". When both are wrong the
+    # ordering one is the more useful thing to hear, and fixing the flags first would only
+    # surface the real problem on the next attempt.
+    out = _output_from(raw)
+    if out is None:
+        parser.parse_args(raw)          # let argparse report the missing --output and exit 2
+        return USAGE                     # unreachable; argparse raises SystemExit(2)
 
     try:
         out.mkdir(parents=True, exist_ok=True)
@@ -115,8 +134,10 @@ def run_stage(
         print(f"{name}: {exc}", file=sys.stderr)
         return USAGE
 
+    args = parser.parse_args(raw)
+
     declared = list(inputs(args, out)) if inputs else []
-    cli = [a for a in (argv if argv is not None else sys.argv[1:]) if a not in ("--force", "--json")]
+    cli = [a for a in raw if a not in ("--force", "--json")]
 
     if not st.begin(out, name, inputs=declared, args=cli, force=args.force):
         print(f"{name}: already done (inputs unchanged) — pass --force to recompute")

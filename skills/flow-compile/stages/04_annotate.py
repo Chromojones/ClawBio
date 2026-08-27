@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""Stage 04 — names, target, tag, agent, source, organism.
+
+The sole writer of annotation content. `annotation.raw.csv` is what this stage produces;
+later stages that touch filenames regenerate from it rather than editing in place, which is
+what stops the old "run the command three times so the filenames catch up" loop.
+
+Paper enrichment runs here when a PMID is present. When it is not, the field checks still
+run: a series without `!Series_pubmed_id` previously got no validation at all.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from lib import state as st  # noqa: E402
+from stages._common import parser_for, run_stage  # noqa: E402
+
+NAME = "04_annotate"
+REQUIRES = ("03_barcodes",)
+OUTPUTS = ("annotation.raw.csv",)
+
+
+def build_parser():
+    parser = parser_for(NAME, __doc__.splitlines()[0])
+    parser.add_argument("--geo-matrix", type=Path, required=True)
+    parser.add_argument("--srr-map", type=Path, required=True)
+    parser.add_argument("--paper-text", type=Path, action="append", default=[],
+                        help="Full text for metadata enrichment; repeatable.")
+    return parser
+
+
+def _inputs(args, out):
+    return [args.geo_matrix, args.srr_map, out / "barcodes.json", *args.paper_text]
+
+
+def body(args, out: Path) -> dict:
+    from lib.flow_annotate import (
+        build_annotation_table,
+        collect_annotation_field_warnings,
+        load_srr_map,
+        parse_geo_matrix,
+    )
+    from lib.paper_metadata_enrich import enrich_annotation_from_paper
+    from lib.protocol import annotation_is_eclip
+
+    matrix = parse_geo_matrix(args.geo_matrix)
+    srr_map = load_srr_map(args.srr_map)
+    barcodes = json.loads((out / "barcodes.json").read_text())
+
+    annotation = build_annotation_table(matrix, srr_map, barcodes)
+    pmid = matrix["series"].get("pubmed_id", "")
+    lines = [f"{len(annotation)} annotation row(s)"]
+
+    if pmid:
+        blob = "\n\n".join(p.read_text(errors="replace") for p in args.paper_text)
+        annotation, meta, warnings = enrich_annotation_from_paper(annotation, pmid, paper_text=blob)
+        lines.append(f"paper: Scientist={meta.first_author or '?'}, PI={meta.last_author or '?'}, "
+                     f"{len(warnings)} warning(s)")
+    else:
+        warnings = collect_annotation_field_warnings(annotation)
+        lines.append(f"paper: skipped, no PMID on the series matrix; {len(warnings)} field warning(s)")
+
+    (out / "annotation_warnings.json").write_text(
+        json.dumps([str(w) for w in warnings], indent=2) + "\n")
+    annotation.to_csv(out / "annotation.raw.csv", index=False)
+
+    st.set_study(out, eclip=bool(annotation_is_eclip(annotation)))
+    return {"lines": lines, "note": f"{len(annotation)} rows"}
+
+
+def main(argv=None) -> int:
+    return run_stage(NAME, body, parser=build_parser(), requires=REQUIRES,
+                     inputs=_inputs, outputs=OUTPUTS, argv=argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
