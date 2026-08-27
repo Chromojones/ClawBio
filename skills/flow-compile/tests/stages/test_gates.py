@@ -128,3 +128,35 @@ class TestAGatedStageBlocksTheNextOne:
         from stages._common import CHECK_FAILED, GATE
 
         assert GATE != CHECK_FAILED
+
+
+class TestGateFourReachesTheSubmission:
+    """Hard stop 4 has to be in the path the stages actually take.
+
+    `lib/flow_stages.write_analysis_script` generates `run_analysis.sh`, and that script holds
+    the confirmed-parameters check — the one fixed in phase 4 to compare by value rather than
+    with `cmp -s`. No stage generated it, so the fix sat in a file nothing produced. That is the
+    same shape as the eCLIP crosslink mate: correct code, wired to nothing.
+    """
+
+    def test_a_stage_generates_the_analysis_script(self):
+        from pathlib import Path
+
+        stages = Path(__file__).resolve().parent.parent.parent / "stages"
+        callers = [p.name for p in stages.glob("*.py") if "write_analysis_script" in p.read_text()]
+        assert callers == ["12_analysis.py"], callers
+
+    def test_the_generated_script_carries_the_confirmation_gate(self, tmp_path):
+        import json
+
+        from lib.flow_stages import write_analysis_script
+
+        (tmp_path / "pipeline_params.json").write_text(json.dumps({"paired": "second"}))
+        path = write_analysis_script(
+            tmp_path, analysis_script=tmp_path / "a.py", project_id="P1",
+            pipeline_params={"paired": "second"}, sample_name_filter="",
+            experimental_method="eCLIP",
+        )
+        text = path.read_text()
+        assert "compare_confirmed_params" in text
+        assert "exit 3" in text
