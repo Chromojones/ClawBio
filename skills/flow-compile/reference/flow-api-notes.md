@@ -22,7 +22,21 @@ Adapted from [goodwright/flow-skills flow-ai](https://github.com/goodwright/flow
 Flow project for GSE105082 (DHX9 iCLIP): **997999200849251656**  
 https://app.flow.bio/projects/997999200849251656/
 
-Project creation is manual for now; a future stage should call `POST /projects` (see flow-ai notes).
+### Project creation
+
+`POST /projects/new` with `{"name": …, "description": …}` returns the created project as
+`{"id": …, …}`. The route was read from the app bundle's own create-project call — the
+flow-ai notes document only the read endpoints, and flowbio has no project mutation. Because
+several Flow write endpoints return `200` while doing nothing, `FlowClient.create_project`
+(`lib/flow_client.py`) re-reads `GET /projects/{id}` and refuses a creation whose name does
+not match. Use it through the stage:
+
+```bash
+python3 stages/00_setup.py --output <dir> --accession GSE… --create-project "GSE… CLIP"
+```
+
+The created id is recorded as the run's `project_id`, exactly as `--project-id` would adopt
+an existing one.
 
 After flow-compile produces `annotation.csv`, `headers.txt`, and `pipeline_params.json`:
 
@@ -48,9 +62,11 @@ Other CLIP methods: `encode_eclip` stays `false` regardless of headers.
 
 `umi_header_format` uses **N-only structure** matching barcode length (e.g. `NNNNNNNNNN` for 10 bp Murat iCLIP, `NNNNNNNNNNNNNNN` for 15 bp iCLIP2). Annotation keeps the literal pattern (`NNNCGGANNN`) for demultiplexing metadata.
 
-## Header cleaning (removespace.py)
+## Header cleaning (removespace.py) — superseded
 
-When sampled headers contain `/`, spaces, or `_` barcode suffixes, flow-compile writes `clean_fastq.sh` calling `lib/vendor/flow_api/preprocessing/removespace.py` (spaces/slashes → underscore). Upload **`.cleaned.fastq.gz`** files — see `fastq_upload_manifest.tsv`.
+`removespace` now runs inside the clip-seq pipeline on Flow, so nothing renames reads
+locally and no `clean_fastq.sh` is generated: `201_fetch` deliberately does no header
+cleaning (see `reference/stages.md`). The vendored copy remains for reference only.
 
 ## End-to-end scripts (generated in output dir)
 
@@ -61,21 +77,9 @@ When sampled headers contain `/`, spaces, or `_` barcode suffixes, flow-compile 
 | `upload.sh` | `uploadsample_flowbio_v6.py` | After FASTQs cleaned; default `--dry-run` |
 | `run_analysis.sh` | `flowrunanalysis_flowbio.py` | After upload; passes `--params-json pipeline_params.json` |
 
-```bash
-# Full local run (after barcode confirmation)
-bash prefetch.sh
-bash clean_fastq.sh
-bash upload.sh                    # dry-run
-bash upload.sh  # edit: remove --dry-run, or use --execute-upload
-bash run_analysis.sh              # interactive login + submit
-```
-
-Or orchestrate with:
-
-```bash
-uv run python skills/flow-compile/flow_compile.py --case gse105082 ... \
-  --execute-upload --execute-analysis
-```
+The `--case`-driven orchestrator that once ran these end to end is gone; the stages drive
+the run now (`flow_compile.py --next`), and `clean_fastq.sh` is no longer generated at all
+(header cleaning moved into the clip-seq pipeline — see above).
 
 Credentials: `FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD` (not flow-ai `~/.config/flow/api-token` unless you choose token auth later).
 

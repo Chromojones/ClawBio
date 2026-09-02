@@ -129,6 +129,28 @@ class FlowClient:
     def get_sample(self, sample_id: str) -> dict[str, Any]:
         return self.request(f"/samples/{sample_id}")
 
+    def create_project(self, name: str, description: str = "") -> dict[str, Any]:
+        """``POST /projects/new`` with ``{name, description}``; returns the created project.
+
+        The route comes from the app bundle's own create-project call — neither flowbio nor
+        the flow-ai notes document a project write endpoint. Flow has a family of write
+        endpoints that return 200 while doing nothing, so the creation is not trusted until
+        the project is re-read and its name matches what was asked for.
+        """
+        created = self.request("/projects/new", {"name": name, "description": description})
+        project_id = str(created.get("id") or "")
+        if not project_id:
+            raise RuntimeError(
+                f"POST /projects/new returned no id ({created!r}); nothing was created."
+            )
+        live = self.request(f"/projects/{project_id}")
+        if live.get("name") != name:
+            raise RuntimeError(
+                f"created project {project_id} re-reads as {live.get('name')!r}, "
+                f"not {name!r} — do not trust this creation."
+            )
+        return live
+
     def edit_sample(self, sample_id: str, body: dict[str, str]) -> dict[str, Any]:
         return self.request(f"/samples/{sample_id}/edit", body)
 

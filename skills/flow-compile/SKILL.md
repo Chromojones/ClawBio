@@ -155,6 +155,7 @@ Full table of what each stage decides: **[`reference/stages.md`](reference/stage
 export FLOWBIO_USERNAME=… FLOWBIO_PASSWORD=…   # or a token: FLOW_TOKEN / FLOW_API_TOKEN both work.
                                                # flow-bio's FLOW_USERNAME/FLOW_PASSWORD are NOT read.
 python3 stages/00_setup.py --output <dir> --accession GSE… --project-id <flow project>
+# no project yet? create one instead: --create-project "GSE… CLIP" (rules: reference/flow-api-notes.md)
 ```
 
 Then follow `--next`: it prints each stage's command with its required flags as

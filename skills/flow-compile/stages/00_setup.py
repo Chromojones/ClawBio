@@ -29,13 +29,28 @@ def build_parser():
     parser = parser_for(NAME, __doc__.splitlines()[0])
     parser.add_argument("--accession", default="", help="GEO/ArrayExpress study accession.")
     parser.add_argument("--project-id", default="", help="Flow project id to import into.")
+    parser.add_argument("--create-project", default="", metavar="NAME",
+                        help="Create a new Flow project with this name and adopt its id. "
+                             "The flag is the instruction; conflicts with --project-id.")
+    parser.add_argument("--project-description", default="",
+                        help="Description for --create-project.")
     parser.add_argument("--offline", action="store_true",
                         help="Record that no credentials are available and skip minting.")
     return parser
 
 
 def body(args, out: Path) -> dict:
+    from stages._common import CheckFailed
+
     lines = [f"run directory: {out}"]
+
+    if args.create_project and args.project_id:
+        raise CheckFailed(
+            "--create-project and --project-id are two answers to the same question. "
+            "Adopt the existing project, or create a new one, not both."
+        )
+    if args.create_project and args.offline:
+        raise CheckFailed("--create-project needs the network; it cannot run with --offline.")
 
     token = ""
     if not args.offline:
@@ -49,7 +64,22 @@ def body(args, out: Path) -> dict:
             if username and password:
                 token = mint_api_token(username, password)
 
-    st.set_study(out, accession=args.accession, project_id=args.project_id,
+    project_id = args.project_id
+    if args.create_project:
+        if not token:
+            raise CheckFailed(
+                "--create-project needs credentials and none resolved. Set "
+                "FLOWBIO_USERNAME/FLOWBIO_PASSWORD or a FLOW_TOKEN."
+            )
+        from lib.flow_client import FlowClient
+
+        project = FlowClient(token).create_project(
+            args.create_project, args.project_description)
+        project_id = str(project["id"])
+        lines.append(f"project created: {args.create_project} -> "
+                     f"https://app.flow.bio/projects/{project_id}/")
+
+    st.set_study(out, accession=args.accession, project_id=project_id,
                  offline=bool(args.offline), authenticated=bool(token))
 
     if token:
@@ -70,8 +100,8 @@ def body(args, out: Path) -> dict:
                          "FLOWBIO_PASSWORD (a FLOW_TOKEN, however, is honoured).")
     if args.accession:
         lines.append(f"study: {args.accession}")
-    if args.project_id:
-        lines.append(f"project: {args.project_id}")
+    if project_id:
+        lines.append(f"project: {project_id}")
     return {"lines": lines, "note": args.accession or "no accession"}
 
 

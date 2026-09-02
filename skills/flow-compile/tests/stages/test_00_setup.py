@@ -49,3 +49,24 @@ class TestTheEnvVarTrap:
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert "credentials: NONE" in proc.stdout
         assert "FLOW_USERNAME" not in proc.stdout
+
+
+class TestCreateProject:
+    """--create-project asks Flow for a new project; the flag is the instruction. It can
+    never be combined with an adopted --project-id, an --offline run, or no credentials."""
+
+    def test_it_conflicts_with_project_id(self, tmp_path):
+        proc = _setup(tmp_path, {"FLOW_TOKEN": "tok"},
+                      "--project-id", "123", "--create-project", "GSE1 CLIP")
+        assert proc.returncode == 4, proc.stdout + proc.stderr
+        assert "--project-id" in (proc.stdout + proc.stderr)
+
+    def test_it_refuses_offline(self, tmp_path):
+        proc = _setup(tmp_path, {}, "--offline", "--create-project", "GSE1 CLIP")
+        assert proc.returncode == 4, proc.stdout + proc.stderr
+        assert "offline" in (proc.stdout + proc.stderr).lower()
+
+    def test_it_refuses_without_credentials(self, tmp_path):
+        proc = _setup(tmp_path, {}, "--create-project", "GSE1 CLIP")
+        assert proc.returncode == 4, proc.stdout + proc.stderr
+        assert "credential" in (proc.stdout + proc.stderr).lower()

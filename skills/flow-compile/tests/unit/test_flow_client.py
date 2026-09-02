@@ -242,3 +242,62 @@ class TestClient:
         monkeypatch.setattr(fc.urllib.request, "urlopen", fake_urlopen)
         fc.FlowClient("tok").edit_sample("1", {"project": "P1"})
         assert json.loads(seen["data"]) == {"project": "P1"}
+
+
+class TestCreateProject:
+    """`POST /projects/new` with {name, description} — read from the app bundle's own
+    create-project call, because neither flowbio nor the flow-ai notes document a write
+    endpoint for projects. Flow has a family of write endpoints that return 200 while
+    doing nothing (FAILURES.md#import-check territory), so creation is not trusted until
+    the project is re-read and the name matches."""
+
+    def _fake(self, responses, calls):
+        class _Resp:
+            def __init__(self, body):
+                self._body = body
+
+            def read(self):
+                return json.dumps(self._body).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=0):
+            calls.append(req)
+            return _Resp(responses.pop(0))
+
+        return fake_urlopen
+
+    def test_it_posts_then_verifies_by_rereading(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(fc.urllib.request, "urlopen", self._fake(
+            [{"id": "991"}, {"id": "991", "name": "GSE1 CLIP"}], calls))
+        created = fc.FlowClient("tok").create_project("GSE1 CLIP", "desc")
+        assert created["id"] == "991"
+        assert calls[0].full_url.endswith("/projects/new")
+        assert json.loads(calls[0].data) == {"name": "GSE1 CLIP", "description": "desc"}
+        assert calls[0].get_header("Authorization") == "Bearer tok"
+        assert calls[1].full_url.endswith("/projects/991")
+
+    def test_a_200_that_created_nothing_is_refused(self, monkeypatch):
+        """The re-read is the point: a response with no id must raise, not return."""
+        monkeypatch.setattr(fc.urllib.request, "urlopen", self._fake([{"status": "ok"}], []))
+        try:
+            fc.FlowClient("tok").create_project("GSE1 CLIP")
+        except RuntimeError as exc:
+            assert "id" in str(exc)
+        else:
+            raise AssertionError("a create with no id in the response must raise")
+
+    def test_a_reread_with_the_wrong_name_is_refused(self, monkeypatch):
+        monkeypatch.setattr(fc.urllib.request, "urlopen", self._fake(
+            [{"id": "991"}, {"id": "991", "name": "something else"}], []))
+        try:
+            fc.FlowClient("tok").create_project("GSE1 CLIP")
+        except RuntimeError as exc:
+            assert "GSE1 CLIP" in str(exc)
+        else:
+            raise AssertionError("a re-read that does not match must raise")

@@ -28,7 +28,7 @@ contradicts the reads", which is how an unapproved barcode could reach an upload
 
 | # | stage | decides |
 |---|---|---|
-| 00 | `00_setup` | run directory, credentials, `state.json` |
+| 00 | `00_setup` | run directory, credentials, the project (adopt `--project-id` or `--create-project`), `state.json` |
 | 01 | `01_study` | public? already on Flow? runs expand? does it fit one job? |
 | 02 | `02_index` | the samples, and the runs behind them |
 | 03 | `03_barcodes` | the 5′ barcode of every sample — **GATE 1** |
