@@ -44,6 +44,14 @@ because an empty field is caught and a plausible lie is not.
 | 2 | Paper Key Resources / Reagents table | Only to resolve vendor + catalog for the antibody already identified in step 1 |
 | 3 | GEO `!Sample_characteristics_ch1` — `antibody:` / `clip antibody:` | Verbatim after the colon |
 | 4 | ENA SDRF `Factor Value[IMMUNOPRECIPITATE]` | Usually too vague ("anti-TIA1 antibody") — escalate to the paper |
+| 5 | **Supplementary materials** — reagent/antibody supplementary tables, supplementary methods PDFs, a Key Resources Table read for *identification* this time | The final fallback when 1–4 name no reagent. Older papers and journals with terse Methods routinely push the antibody list into a supplement; GSE131210's tag construct came from primary sources outside the paper text. Quote the supplementary file and row as the evidence |
+
+Step 5 before step "give up": the bare vendor-less form (below) is only defensible after the
+supplement has actually been opened — "the Methods don't say" is not the same as "the paper
+doesn't say". The step-1 precedence still holds throughout: a supplementary table row for the
+right assay never overrides a Methods sentence naming a different reagent, and **never take
+the first antibody listed for the protein** applies with extra force in a Key Resources Table,
+which lists every reagent in the paper, not just the CLIP one.
 
 `extract_antibodies_from_text()` (`lib/paper_metadata_enrich.py`) implements this: it
 buckets matches by sentence and **antibodies in a sentence naming the CLIP assay override

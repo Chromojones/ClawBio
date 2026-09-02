@@ -95,7 +95,7 @@ metadata:
 # Flow Compile
 
 Take a published CLIP study from its accession to an analysed project on Flow, with every
-field defensible and four points where a person signs off.
+field defensible and three points where a person signs off.
 
 **This file is a map, not a rulebook.** Every rule lives in exactly one place, named below.
 Earlier revisions restated rules here and drifted: this file once told you to write
@@ -149,6 +149,30 @@ flowchart TD
 
 Full table of what each stage decides: **[`reference/stages.md`](reference/stages.md)**.
 
+### Starting a run
+
+```bash
+export FLOWBIO_USERNAME=… FLOWBIO_PASSWORD=…   # or a token: FLOW_TOKEN / FLOW_API_TOKEN both work.
+                                               # flow-bio's FLOW_USERNAME/FLOW_PASSWORD are NOT read.
+python3 stages/00_setup.py --output <dir> --accession GSE… --project-id <flow project>
+```
+
+Then follow `--next`: it prints each stage's command with its required flags as
+placeholders. Several stages take evidence files only you can produce — the inventory, with
+where each recipe lives:
+
+| you supply | stages | recipe |
+|---|---|---|
+| `srr_map.tsv` (`gsm`, `srx`, `srr`) | 02, 04 | ENA filereport — [`reference/sra-direct-import.md`](reference/sra-direct-import.md) |
+| `--sizes` JSON (bytes per accession) | 01, 109 | same document |
+| `--search-results` JSON (prior-upload check) | 01 | same document, step 0 |
+| paper text, GEO sample pages | 03, 04 | fetch them; [`DEMO.md`](DEMO.md) bundles examples |
+| `--live-samples`, `--processes` JSON | 11, 13 | [`reference/flow-api-notes.md`](reference/flow-api-notes.md) |
+
+`--run` resumes a run already configured this way; by design it stops at gates and before
+any stage whose required flags it cannot supply. A complete walkthrough with real commands
+and both gate pauses: **[`DEMO.md`](DEMO.md)**.
+
 ### Exit codes
 
 | code | meaning | what to do |
@@ -186,6 +210,7 @@ that is what the last drift cost us.
 | topic | file |
 |---|---|
 | What each stage decides, gates, output-dir contract | [`reference/stages.md`](reference/stages.md) |
+| Stage → library → vendored-script wiring diagram | [`reference/wiring.md`](reference/wiring.md) |
 | Barcode search order and worked examples | [`reference/barcode-examples.md`](reference/barcode-examples.md) |
 | Metadata field rules, controls, antibodies, tags | [`reference/metadata-accuracy-checklist.md`](reference/metadata-accuracy-checklist.md) |
 | Annotation column meanings | [`reference/annotation-rules.md`](reference/annotation-rules.md) |
@@ -224,7 +249,7 @@ stated twice is a rule that will drift, and this section is where the drift star
 ClawBio is a research and educational tool. It is not a medical device and does not provide
 clinical diagnoses. Consult a healthcare professional before making any medical decisions.
 
-Uploading is outward-facing and hard to reverse. Nothing is submitted without the four gates,
+Uploading is outward-facing and hard to reverse. Nothing is submitted without the three gates,
 and `110_import` and `210_upload` are dry-run unless given `--submit`.
 
 ## Agent Boundary

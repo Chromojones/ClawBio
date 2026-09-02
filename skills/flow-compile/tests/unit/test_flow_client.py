@@ -179,6 +179,18 @@ class TestTokenResolution:
         monkeypatch.setenv("FLOW_API_TOKEN", "from-env")
         assert fc.resolve_token() == "from-env"
 
+    def test_flow_token_is_accepted_too(self, monkeypatch):
+        """The sibling flow-bio skill and the root CLAUDE.md say FLOW_TOKEN; an agent
+        arriving from either sets that name and this skill must not ignore it."""
+        monkeypatch.delenv("FLOW_API_TOKEN", raising=False)
+        monkeypatch.setenv("FLOW_TOKEN", "from-flow-token")
+        assert fc.resolve_token() == "from-flow-token"
+
+    def test_the_flowbio_name_wins_over_the_flow_bio_one(self, monkeypatch):
+        monkeypatch.setenv("FLOW_API_TOKEN", "from-api-token")
+        monkeypatch.setenv("FLOW_TOKEN", "from-flow-token")
+        assert fc.resolve_token() == "from-api-token"
+
     def test_file_is_last(self, monkeypatch, tmp_path):
         monkeypatch.delenv("FLOW_API_TOKEN", raising=False)
         token_file = tmp_path / "api-token"

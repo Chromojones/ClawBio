@@ -59,6 +59,15 @@ def body(args, out: Path) -> dict:
     else:
         lines.append("credentials: NONE — network stages will fail. Set FLOWBIO_USERNAME and "
                      "FLOWBIO_PASSWORD, or pass --offline.")
+        # The sibling flow-bio skill uses FLOW_USERNAME/FLOW_PASSWORD. Adopting them here
+        # would lie: later stages spawn fresh processes (and vendored scripts) that read only
+        # FLOWBIO_*. So the mismatch is named instead of silently walked into.
+        import os
+
+        if os.environ.get("FLOW_USERNAME") or os.environ.get("FLOW_PASSWORD"):
+            lines.append("  note: FLOW_USERNAME/FLOW_PASSWORD are set, but those are the "
+                         "flow-bio skill's names — this skill reads FLOWBIO_USERNAME/"
+                         "FLOWBIO_PASSWORD (a FLOW_TOKEN, however, is honoured).")
     if args.accession:
         lines.append(f"study: {args.accession}")
     if args.project_id:

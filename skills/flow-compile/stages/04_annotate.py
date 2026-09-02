@@ -96,7 +96,10 @@ def body(args, out: Path) -> dict:
         json.dumps([str(w) for w in warnings], indent=2) + "\n")
     annotation.to_csv(out / "annotation.raw.csv", index=False)
 
-    st.set_study(out, eclip=is_eclip)
+    # sample_count feeds 12_analysis's 18-per-execution ceiling. Recorded here because this
+    # stage is the sole writer of annotation content, so its row count IS the sample count;
+    # a count nobody records is a ceiling nobody checks.
+    st.set_study(out, eclip=is_eclip, sample_count=len(annotation))
     return {"lines": lines, "note": f"{len(annotation)} rows"}
 
 

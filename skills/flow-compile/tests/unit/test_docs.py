@@ -219,3 +219,64 @@ class TestClawBioConformance:
         fm = self._frontmatter().lower()
         assert "pubmed alert" not in fm
         assert "alert scan" not in fm
+
+
+class TestGateCountProse:
+    """SKILL.md said "four points where a person signs off" and "the four gates" while its
+    own hard-stops section, `reference/stages.md`, and the code all said three. The GATE-4
+    check above could not see prose numbers, so the count is checked as words too."""
+
+    def test_the_prose_never_claims_a_fourth_gate(self):
+        text = SKILL.read_text().lower()
+        for phrase in ("four gates", "four points", "four hard stops"):
+            assert phrase not in text, f"SKILL.md still says {phrase!r}; the code has three"
+
+    def test_the_prose_count_matches_the_code(self):
+        gating = [p for p in (SKILL_DIR / "stages").glob("*.py")
+                  if not p.name.startswith("_") and "raise Gate(" in p.read_text()]
+        words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+        assert f"{words[len(gating)]} hard stops" in SKILL.read_text().lower()
+
+
+class TestDemoMd:
+    """DEMO.md kept documenting the removed monolithic CLI — `--case`, `--run-automated`,
+    `--flow-project-id` — for months after the stage split, and a fresh agent following it
+    failed on the first command with exit 2. Every flag a fenced bash block passes to a
+    script in this skill must exist in that script's source."""
+
+    def _commands(self):
+        """(script_path, [flags]) for each command line in a fenced bash block."""
+        text = (SKILL_DIR / "DEMO.md").read_text()
+        found = []
+        for block in re.findall(r"```(?:bash|sh)\n(.*?)```", text, re.S):
+            joined = block.replace("\\\n", " ")
+            for line in joined.splitlines():
+                match = re.search(r"(\S*(?:flow_compile|stages/[0-9]+_\w+)\.py)", line)
+                if not match:
+                    continue
+                script = SKILL_DIR / Path(match.group(1)).name if "stages/" not in match.group(1) \
+                    else SKILL_DIR / "stages" / Path(match.group(1)).name
+                flags = [f.split("=")[0] for f in re.findall(r"--[a-z][a-z0-9-]*", line)]
+                found.append((script, flags))
+        return found
+
+    def test_it_shows_at_least_one_stage_command(self):
+        """A demo that never runs a stage is not a demo of this skill."""
+        assert self._commands(), "no flow_compile.py or stages/*.py commands in DEMO.md"
+
+    def test_every_script_it_names_exists(self):
+        for script, _ in self._commands():
+            assert script.exists(), f"DEMO.md names missing script {script.name}"
+
+    def test_every_flag_it_shows_exists_in_the_script(self):
+        bad = []
+        for script, flags in self._commands():
+            if not script.exists():
+                continue
+            source = script.read_text()
+            if "_common" in source and "parser_for" in source:
+                source += (SKILL_DIR / "stages" / "_common.py").read_text()  # shared flags
+            for flag in flags:
+                if f'"{flag}"' not in source and f"'{flag}'" not in source:
+                    bad.append(f"{script.name} {flag}")
+        assert bad == [], f"DEMO.md shows flags the scripts do not take: {bad}"

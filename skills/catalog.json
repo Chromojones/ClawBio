@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "generated_by": "scripts/generate_catalog.py",
-  "skill_count": 87,
+  "skill_count": 88,
   "galaxy_tool_count": 8182,
   "skills": [
     {
@@ -1046,6 +1046,50 @@
         "run on flow"
       ],
       "chaining_partners": []
+    },
+    {
+      "name": "flow-compile",
+      "cli_alias": null,
+      "description": "Take a published CLIP study from its GEO/SRA accession to an analysed project on Flow.bio — audit the deposit, resolve 5' barcodes, build and validate the annotation, import or upload, then submit and audit the analysis. Three human approval gates.",
+      "version": "0.2.0",
+      "status": "active",
+      "has_script": true,
+      "has_tests": true,
+      "has_demo": true,
+      "demo_command": "see skills/flow-compile/DEMO.md (stage-by-stage offline walkthrough)",
+      "dependencies": [
+        "python>=3.11",
+        "pandas>=2.0",
+        "biopython>=1.80",
+        "requests>=2.31",
+        "openpyxl>=3.1"
+      ],
+      "tags": [
+        "clip",
+        "iclip",
+        "eclip",
+        "flow-bio",
+        "geo",
+        "sra",
+        "annotation",
+        "barcode",
+        "upload"
+      ],
+      "trigger_keywords": [
+        "flow compile",
+        "upload clip study",
+        "geo clip annotation",
+        "flow upload clip",
+        "clip barcode resolution",
+        "build flow annotation sheet",
+        "import clip study to flow",
+        "crosslinking and immunoprecipitation"
+      ],
+      "chaining_partners": [
+        "flow-bio",
+        "pubmed-summariser",
+        "nfcore-rnaseq-wrapper"
+      ]
     },
     {
       "name": "galaxy-bridge",

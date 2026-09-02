@@ -14,7 +14,9 @@ driver answers "where am I" from `state.json` rather than from memory:
     python3 flow_compile.py --run    --output <dir> ... run stages until one stops
 
 A gate is not a failure. `--next` re-offers a gated stage rather than stepping past it,
-because the run is paused on a person, not broken.
+because the run is paused on a person, not broken. Stages whose required flags only the
+operator can supply (evidence files, maps) are printed with placeholders rather than run:
+`--run` resumes a configured run; it does not replace running those stages by hand.
 
 See `reference/stages.md` for what each stage decides.
 """
@@ -80,6 +82,25 @@ def command_for(name: str, output_dir) -> list[str]:
     return [sys.executable, str(STAGES_DIR / f"{name}.py"), "--output", str(output_dir)]
 
 
+def required_flags(name: str) -> list[tuple[str, str]]:
+    """The stage's own required flags beyond --output, read from its parser.
+
+    `--next` used to print commands that exited 2: stages 02, 03, 04, 11 and 13 take
+    required flags whose values only the operator knows, and a printed command that dies on
+    argparse reads as the thing to run. Asking each stage's parser keeps this list from
+    drifting the way a table here would.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(f"stage_{name}", STAGES_DIR / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return [(action.option_strings[0], action.dest)
+            for action in module.build_parser()._actions
+            if action.required and action.option_strings
+            and "--output" not in action.option_strings]
+
+
 def print_status(output_dir) -> int:
     try:
         doc = st.load(output_dir)
@@ -102,7 +123,6 @@ def print_status(output_dir) -> int:
         if status == st.OK:
             mark, detail = "  ok  ", entry.get("note", "")
         elif status == st.GATED:
-            mark = " wait ",
             mark = " wait "
             detail = f"awaiting approval — re-run with {entry.get('release', '?')}"
         elif status == st.FAILED:
@@ -127,7 +147,10 @@ def print_next(output_dir) -> int:
         print(f"{name} is waiting on approval. Review its artefact, then:")
         print("  " + " ".join(command_for(name, output_dir)) + f" {entry.get('release', '')}")
         return 0
-    print(" ".join(command_for(name, output_dir)))
+    placeholders = [f"{flag} <{dest}>" for flag, dest in required_flags(name)]
+    print(" ".join([*command_for(name, output_dir), *placeholders]))
+    if placeholders:
+        print(f"# fill in the <value>s; see {name}.py --help and reference/stages.md")
     return 0
 
 
@@ -138,6 +161,15 @@ def run_through(output_dir, *, stop_after: str = "") -> int:
         if not name:
             print("every planned stage is complete")
             return 0
+        # Stop BEFORE a stage whose required flags this driver cannot supply, naming them,
+        # rather than invoking it and surfacing an argparse usage error mid-run.
+        missing = required_flags(name)
+        if missing:
+            print(f"\n{name} needs flags only you can supply — run it by hand:")
+            print("  " + " ".join([*command_for(name, output_dir),
+                                   *(f"{flag} <{dest}>" for flag, dest in missing)]))
+            print(f"then resume with `flow_compile.py --run --output {output_dir}`.")
+            return 2
         print(f"\n=== {name} ===")
         code = subprocess.run(command_for(name, output_dir)).returncode
         if code != 0:

@@ -75,7 +75,28 @@ def body(args, out: Path) -> dict:
     if args.umi_length:
         params["umi_length"] = str(args.umi_length)
 
-    coherence = check_umi_params(params, barcode=study.get("barcode", ""))
+    # The barcode confirmed at gate 1 is what the coherence check compares against, and on a
+    # raw header it is also the source of `umi_header_format` (all-N of the barcode's length)
+    # — params_for_state knows the header state but not this study's barcode. One run takes
+    # one format, so barcodes of different lengths cannot both be right and the study must be
+    # split rather than parameterised for the majority.
+    barcodes_file = out / "barcodes.json"
+    fives = sorted({str(v.get("five_prime", "")).strip()
+                    for v in json.loads(barcodes_file.read_text()).values()
+                    if str(v.get("five_prime", "")).strip()}) if barcodes_file.exists() else []
+    if len({len(b) for b in fives}) > 1:
+        raise CheckFailed(
+            f"the confirmed barcodes have {len({len(b) for b in fives})} different lengths "
+            f"({', '.join(fives)}) but one run takes one umi_header_format — split the study "
+            f"by barcode length."
+        )
+    barcode = fives[0] if fives else ""
+    if params.get("move_umi_to_header") == "true" and barcode and not params.get("umi_header_format"):
+        from lib.pipeline_params import barcode_to_header_format
+
+        params["umi_header_format"] = barcode_to_header_format(barcode)
+
+    coherence = check_umi_params(params, barcode=barcode)
     if not coherence.ok:
         raise CheckFailed(coherence.reason)
 

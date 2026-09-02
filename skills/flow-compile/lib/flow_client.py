@@ -63,10 +63,17 @@ def download_url(data_id: str, filename: str, *, base: str = "") -> str:
 
 
 def resolve_token(explicit: str = "") -> str:
-    """``--token`` → ``FLOW_API_TOKEN`` → ``~/.config/flow/api-token``, as the flowbio CLI does."""
+    """``--token`` → ``FLOW_API_TOKEN`` → ``FLOW_TOKEN`` → ``~/.config/flow/api-token``.
+
+    ``FLOW_API_TOKEN`` is what the flowbio CLI reads; ``FLOW_TOKEN`` is the name the sibling
+    flow-bio skill and the root CLAUDE.md document, so an agent arriving from either has
+    likely set that one. Ignoring it sent a credentialed run to fail at the first network
+    stage.
+    """
     if explicit:
         return explicit.strip()
-    env = os.environ.get("FLOW_API_TOKEN", "").strip()
+    env = (os.environ.get("FLOW_API_TOKEN", "").strip()
+           or os.environ.get("FLOW_TOKEN", "").strip())
     if env:
         return env
     token_file = os.environ.get("FLOW_TOKEN_FILE") or os.path.expanduser(

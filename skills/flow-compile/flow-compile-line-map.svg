@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1020" width="1200" height="1020"
+     font-family="'Barlow Semi Condensed', 'Archivo', 'Helvetica Neue', Arial, sans-serif"
+     role="img" aria-label="Folded metro-style map of the flow-compile pipeline. A red trunk line runs left to right along the top through 00 setup, 01 study, 02 index, 03 barcodes, 04 annotate and 05 metadata to a decision at 06 route. There the map turns downward and splits: a blue SRA-direct line bows to the right through 101 preview, and a thinner grey local line bows to the left through 201 fetch. Both converge at 108 params, a shared interchange and the last hard stop. They split again, the blue line through 109 sheet and 110 import, the grey line through 210 upload, then converge at 11 verify. There the map turns again and a green delivery line runs right to left through 12 analysis, which carries a ceiling of 18 samples per execution, to 13 audit. Three stations are hard stops where a person signs off: 03 barcodes, 05 metadata and 108 params.">
+
+  <style>
+    .track      { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 13; }
+    .t-trunk    { stroke: #DC3B28; }
+    .t-direct   { stroke: #1E7FB8; }
+    .t-delivery { stroke: #2C8F63; }
+    /* the exception route: thinner and neutral, so the map reads direct-by-default */
+    .t-local    { stroke: #97A6B0; stroke-width: 7.5; }
+
+    .halo       { fill: #F7FAFB; }
+    .ring-ink   { fill: #F7FAFB; stroke: #141E26; stroke-width: 3.4; }
+    .ring-gate  { fill: #F7FAFB; stroke: #C81E32; stroke-width: 3.8; }
+    .core-gate  { fill: #C81E32; }
+
+    .s-trunk    { fill: #DC3B28; stroke: #F7FAFB; stroke-width: 2.6; }
+    .s-direct   { fill: #1E7FB8; stroke: #F7FAFB; stroke-width: 2.6; }
+    .s-local    { fill: #97A6B0; stroke: #F7FAFB; stroke-width: 2.4; }
+    .s-delivery { fill: #2C8F63; stroke: #F7FAFB; stroke-width: 2.6; }
+
+    .num   { font-family: 'IBM Plex Mono', ui-monospace, 'DejaVu Sans Mono', monospace;
+             font-size: 15px; font-weight: 600; fill: #8496A2; }
+    .nm    { font-size: 19px; font-weight: 600; fill: #141E26; }
+    .nm-mu { font-size: 19px; font-weight: 600; fill: #5A6C77; }
+    .flag  { font-family: 'IBM Plex Mono', ui-monospace, 'DejaVu Sans Mono', monospace;
+             font-size: 12.5px; fill: #C81E32; }
+    .rl, .routelabel {
+             font-family: 'IBM Plex Mono', ui-monospace, 'DejaVu Sans Mono', monospace;
+             font-size: 12.5px; font-weight: 600; letter-spacing: 1.3px; }
+    .cond  { font-size: 16px; font-weight: 500; fill: #4A5A66; }
+    .rule-note { font-size: 14px; font-weight: 500; fill: #4A5A66; }
+
+    .lgt   { font-family: 'IBM Plex Mono', ui-monospace, 'DejaVu Sans Mono', monospace;
+             font-size: 11px; font-weight: 600; letter-spacing: 1.5px; fill: #8496A2; }
+    .lgi   { font-size: 15px; fill: #4A5A66; }
+    .lgb   { font-size: 15px; font-weight: 600; fill: #141E26; }
+    .lgn   { font-family: 'IBM Plex Mono', ui-monospace, 'DejaVu Sans Mono', monospace;
+             font-size: 15px; font-weight: 600; fill: #141E26; }
+  </style>
+
+  <rect x="0" y="0" width="1200" height="1020" fill="#F7FAFB"/>
+
+
+
+  <!-- ======================= TRACKS ======================= -->
+  <!-- trunk, west to east along the top -->
+  <path class="track t-trunk" d="M 110 120 H 800"/>
+
+  <!-- clockwise turn at 06: the map now runs south.
+       SRA-direct bows east, local bows west, both converge on 108. -->
+  <path class="track t-direct"
+        d="M 800 120 L 800 215 Q 800 245 830 245 L 970 245 Q 1000 245 1000 275
+           L 1000 355 Q 1000 385 970 385 L 830 385 Q 800 385 800 415 L 800 430"/>
+  <path class="track t-local"
+        d="M 800 120 L 800 215 Q 800 245 770 245 L 630 245 Q 600 245 600 275
+           L 600 355 Q 600 385 630 385 L 770 385 Q 800 385 800 415 L 800 430"/>
+
+  <!-- and again, below the shared platform -->
+  <path class="track t-direct"
+        d="M 800 430 L 800 465 Q 800 495 830 495 L 970 495 Q 1000 495 1000 525
+           L 1000 615 Q 1000 645 970 645 L 830 645 Q 800 645 800 675 L 800 690"/>
+  <path class="track t-local"
+        d="M 800 430 L 800 465 Q 800 495 770 495 L 630 495 Q 600 495 600 525
+           L 600 615 Q 600 645 630 645 L 770 645 Q 800 645 800 675 L 800 690"/>
+
+  <!-- clockwise turn at 11: the map runs west -->
+  <path class="track t-delivery" d="M 800 690 H 340"/>
+
+  <!-- ======================= ROUTE LABELS ======================= -->
+  <!-- all placed in clear space, none crossing a track -->
+  <text class="rl" x="110"  y="52"  fill="#DC3B28">TRUNK — EVERY STUDY</text>
+  <text class="rl" x="1030" y="266" fill="#1E7FB8">1XX — SRA-DIRECT</text>
+  <text class="rl" x="570"  y="266" fill="#7A8A95" text-anchor="end">2XX — LOCAL</text>
+  <text class="rl" x="340"  y="658" fill="#2C8F63">DELIVERY</text>
+
+  <!-- the branch condition sits in the empty column the two bows leave behind -->
+  <text class="cond" x="800" y="322" text-anchor="middle">in SRA / ENA  →  direct</text>
+  <text class="cond" x="800" y="346" text-anchor="middle">otherwise  →  local</text>
+
+  <!-- ======================= TRUNK STATIONS ======================= -->
+  <circle class="s-trunk" cx="110" cy="120" r="7.5"/>
+  <text class="num" x="110" y="154" text-anchor="middle">00</text>
+  <text class="nm"  x="110" y="174" text-anchor="middle">setup</text>
+
+  <circle class="s-trunk" cx="225" cy="120" r="7.5"/>
+  <text class="num" x="225" y="154" text-anchor="middle">01</text>
+  <text class="nm"  x="225" y="174" text-anchor="middle">study</text>
+
+  <circle class="s-trunk" cx="340" cy="120" r="7.5"/>
+  <text class="num" x="340" y="154" text-anchor="middle">02</text>
+  <text class="nm"  x="340" y="174" text-anchor="middle">index</text>
+
+  <circle class="ring-gate" cx="455" cy="120" r="12"/>
+  <circle class="core-gate" cx="455" cy="120" r="4.6"/>
+  <text class="num"  x="455" y="160" text-anchor="middle">03</text>
+  <text class="nm"   x="455" y="180" text-anchor="middle">barcodes</text>
+  <text class="flag" x="455" y="199" text-anchor="middle">--accept-proposals</text>
+
+  <circle class="s-trunk" cx="570" cy="120" r="7.5"/>
+  <text class="num" x="570" y="154" text-anchor="middle">04</text>
+  <text class="nm"  x="570" y="174" text-anchor="middle">annotate</text>
+
+  <circle class="ring-gate" cx="685" cy="120" r="12"/>
+  <circle class="core-gate" cx="685" cy="120" r="4.6"/>
+  <text class="num"  x="685" y="160" text-anchor="middle">05</text>
+  <text class="nm"   x="685" y="180" text-anchor="middle">metadata</text>
+  <text class="flag" x="685" y="199" text-anchor="middle">--accept-metadata</text>
+
+  <!-- 06, the corner: labelled above, since the turn takes the space below -->
+  <rect class="ring-ink" x="787" y="107" width="26" height="26" rx="2.5"
+        transform="rotate(45 800 120)"/>
+  <text class="num" x="800" y="68" text-anchor="middle">06</text>
+  <text class="nm"  x="800" y="88" text-anchor="middle">route</text>
+
+  <!-- ======================= SRA-DIRECT ======================= -->
+  <circle class="s-direct" cx="1000" cy="315" r="7.5"/>
+  <text class="num" x="1030" y="311">101</text>
+  <text class="nm"  x="1030" y="331">preview</text>
+
+  <circle class="s-direct" cx="1000" cy="550" r="7.5"/>
+  <text class="num" x="1030" y="546">109</text>
+  <text class="nm"  x="1030" y="566">sheet</text>
+
+  <circle class="s-direct" cx="1000" cy="595" r="7.5"/>
+  <text class="num" x="1030" y="591">110</text>
+  <text class="nm"  x="1030" y="611">import</text>
+
+  <!-- ============ SHARED PLATFORM + LAST HARD STOP ============ -->
+  <circle class="halo"      cx="800" cy="430" r="19"/>
+  <circle class="ring-gate" cx="800" cy="430" r="14"/>
+  <circle class="core-gate" cx="800" cy="430" r="5.4"/>
+  <text class="num"  x="850" y="420">108</text>
+  <text class="nm"   x="850" y="440">params</text>
+  <text class="flag" x="850" y="459">--accept-params</text>
+
+  <!-- ======================= LOCAL ======================= -->
+  <circle class="s-local" cx="600" cy="315" r="6.5"/>
+  <text class="num"   x="570" y="311" text-anchor="end">201</text>
+  <text class="nm-mu" x="570" y="331" text-anchor="end">fetch</text>
+
+  <circle class="s-local" cx="600" cy="570" r="6.5"/>
+  <text class="num"   x="570" y="566" text-anchor="end">210</text>
+  <text class="nm-mu" x="570" y="586" text-anchor="end">upload</text>
+
+  <!-- ======================= DELIVERY ======================= -->
+  <circle class="ring-ink" cx="800" cy="690" r="11.5"/>
+  <text class="num" x="850" y="686">11</text>
+  <text class="nm"  x="850" y="706">verify</text>
+
+  <circle class="s-delivery" cx="570" cy="690" r="7.5"/>
+  <text class="num"       x="570" y="724" text-anchor="middle">12</text>
+  <text class="nm"        x="570" y="744" text-anchor="middle">analysis</text>
+  <text class="rule-note" x="570" y="763" text-anchor="middle">≤18 per execution</text>
+
+  <circle class="s-delivery" cx="340" cy="690" r="7.5"/>
+  <text class="num" x="340" y="724" text-anchor="middle">13</text>
+  <text class="nm"  x="340" y="744" text-anchor="middle">audit</text>
+
+  
+      
+  <!-- ======================= LEGEND ======================= -->
+  <line x1="110" y1="830" x2="1090" y2="830" stroke="#D2DBE0" stroke-width="1"/>
+  <text class="lgt" x="110" y="862">LINES</text>
+  <text class="lgt" x="530" y="862">STATIONS</text>
+  <text class="lgt" x="880" y="862">EXIT CODES</text>
+  <rect x="110" y="890" width="26" height="7" rx="3.5" fill="#DC3B28"/>
+  <text class="lgb" x="146" y="896">Trunk</text>
+  <text class="lgi" x="203" y="896">every study</text>
+  <rect x="110" y="920" width="26" height="7" rx="3.5" fill="#1E7FB8"/>
+  <text class="lgb" x="146" y="926">1xx</text>
+  <text class="lgi" x="186" y="926">SRA-direct, the default route</text>
+  <rect x="110" y="952" width="26" height="4" rx="2.0" fill="#97A6B0"/>
+  <text class="lgb" x="146" y="956">2xx</text>
+  <text class="lgi" x="186" y="956">local, only when not in SRA</text>
+  <rect x="110" y="980" width="26" height="7" rx="3.5" fill="#2C8F63"/>
+  <text class="lgb" x="146" y="986">Delivery</text>
+  <text class="lgi" x="229" y="986">both routes</text>
+  <circle cx="543" cy="891" r="6.5" fill="#141E26"/>
+  <text class="lgi" x="566" y="896">A stage — decides one thing</text>
+  <rect x="536.5" y="914.5" width="13" height="13" rx="1.5" transform="rotate(45 543 921)" fill="none" stroke="#141E26" stroke-width="2.4"/>
+  <text class="lgi" x="566" y="926">Decision — the route is chosen</text>
+  <circle cx="543" cy="951" r="6.5" fill="none" stroke="#141E26" stroke-width="2.6"/>
+  <text class="lgi" x="566" y="956">Interchange — routes meet</text>
+  <circle cx="543" cy="981" r="6.8" fill="none" stroke="#C81E32" stroke-width="2.6"/>
+  <circle cx="543" cy="981" r="2.7" fill="#C81E32"/>
+  <text class="lgb" x="566" y="986">Hard stop</text>
+  <text class="lgi" x="654" y="986">a person signs off</text>
+  <text class="lgn" x="888" y="896" text-anchor="middle">0</text>
+  <text class="lgi" x="910" y="896">ok — continue</text>
+  <text class="lgn" x="888" y="926" text-anchor="middle">3</text>
+  <text class="lgi" x="910" y="926">gate — paused on a person, not failed</text>
+  <text class="lgn" x="888" y="956" text-anchor="middle">4</text>
+  <text class="lgi" x="910" y="956">check failed — the data is wrong</text>
+  <text class="lgn" x="888" y="986" text-anchor="middle">5</text>
+  <text class="lgi" x="910" y="986">prerequisite not met — run that stage</text>
+</svg>

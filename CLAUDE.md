@@ -68,6 +68,7 @@ When the user asks a question, match it to a skill and act:
 | UK Biobank, UKB fields, "what UKB variables measure X", biobank schema search, UKB field lookup, data showcase | `skills/ukb-navigator/` | Run `ukb_navigator.py` |
 | Galaxy, usegalaxy, tool shed, bioblend, "run on galaxy", galaxy tool, galaxy workflow, NGS pipeline | `skills/galaxy-bridge/` | Run `galaxy_bridge.py` |
 | Flow.bio, flow pipeline, flow sample, flow execution, flow project, "run on flow", "upload to flow", flow search | `skills/flow-bio/` | Run `flow_bio.py` |
+| Upload a published CLIP study (iCLIP, eCLIP, seCLIP…) from GEO/SRA to Flow.bio, CLIP barcode resolution, Flow annotation sheet, import CLIP study to Flow | `skills/flow-compile/` | Read SKILL.md, then drive the stages with `flow_compile.py --next` |
 | Upstream bulk RNA-seq pipeline, run nf-core/rnaseq, FASTQ to count matrix, STAR Salmon, STAR RSEM, HISAT2 RNA-seq, Bowtie2 Salmon, preprocess bulk RNA-seq FASTQs | `skills/nfcore-rnaseq-wrapper/` | Run `nfcore_rnaseq_wrapper.py` |
 | Upstream variant calling pipeline, run nf-core/sarek, germline variant calling, somatic/tumor-normal variant calling, tumor-only variant calling, Mutect2, Strelka, HaplotypeCaller, ASCAT, ControlFREEC, Manta, WES/WGS variant calling, VEP/SnpEff annotation, FASTQ/BAM/CRAM to VCF | `skills/nfcore-sarek-wrapper/` | Run `nfcore_sarek_wrapper.py` (alias `sarek-pipeline`) |
 | Bulk RNA-seq, pseudo-bulk, differential expression, DESeq2, PyDESeq2, contrast, volcano plot | `skills/rnaseq-de/` | Run `rnaseq_de.py` |

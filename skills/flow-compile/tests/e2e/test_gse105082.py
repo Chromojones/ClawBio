@@ -135,3 +135,10 @@ class TestPastTheGate:
         again = _stage("04_annotate", confirmed, *args)
         assert again.returncode == 0
         assert "already done" in again.stdout
+
+    def test_the_sample_count_is_recorded_for_the_batch_ceiling(self, confirmed):
+        """12_analysis enforces 18-per-execution from this; a count nobody records is a
+        ceiling nobody checks."""
+        _stage("04_annotate", confirmed, "--geo-matrix", str(GSE105082_MATRIX),
+               "--srr-map", str(GSE105082_SRR_MAP))
+        assert st.study(confirmed)["sample_count"] == 1

@@ -118,3 +118,33 @@ class TestItStaysADriver:
     def test_it_does_not_import_pandas(self):
         """A driver decides order; anything touching a dataframe belongs in a stage."""
         assert "import pandas" not in DRIVER.read_text()
+
+
+class TestNextNamesTheRequiredFlags:
+    """`--next` once printed commands that exited 2: stages 02, 03, 04, 11 and 13 take
+    required flags the driver cannot know the values of, and a printed command that dies on
+    argparse is worse than none — it reads as the thing to run. The driver now reads each
+    stage's own parser and appends the required flags as placeholders."""
+
+    def test_next_appends_the_stages_required_flags(self, tmp_path):
+        st.record(tmp_path, "00_setup", st.OK)
+        st.record(tmp_path, "01_study", st.OK)
+        proc = _run("--next", "--output", str(tmp_path))
+        assert "--geo-matrix" in proc.stdout and "--srr-map" in proc.stdout
+
+    def test_a_stage_with_no_required_flags_stays_a_bare_command(self, tmp_path):
+        proc = _run("--next", "--output", str(tmp_path))
+        assert "00_setup" in proc.stdout
+        assert "<" not in proc.stdout
+
+
+class TestRunStopsBeforeAMissingFlag:
+    def test_run_names_the_flags_rather_than_letting_argparse_die(self, tmp_path):
+        """`--run` must stop BEFORE invoking a stage whose required flags it cannot supply,
+        naming them on stdout, instead of surfacing an argparse usage error mid-run."""
+        st.record(tmp_path, "00_setup", st.OK)
+        st.record(tmp_path, "01_study", st.OK)
+        proc = _run("--run", "--output", str(tmp_path))
+        assert proc.returncode == 2
+        assert "--geo-matrix" in proc.stdout
+        assert st.status(tmp_path, "02_index") == "", "02_index must never have been invoked"
