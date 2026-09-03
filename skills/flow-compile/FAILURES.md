@@ -60,6 +60,17 @@ could be walked straight past. The module that knew about expansion and the one 
 the ceiling were written a week apart and never introduced.
 → `tests/unit/test_import_guards.py`
 
+### srr-map-schema
+`load_srr_map` required `gsm`, `srr`, `mate` and `fastq` of every study, while both SKILL.md
+and `sra-direct-import.md` documented the map as `gsm`, `srr`, `srx`. A map built to the
+documentation died at stage 02, and the required set was inverted anyway: `fastq` is never
+read on the SRA-direct line — `build_import_sheet` maps the annotation onto an accession plus
+metadata and never touches the File column — so it made the operator invent filenames nothing
+downloads, while `srx`, which `109_sheet` refuses a run accession over, was not required at
+all. GSE262435 paid for this. `mate` and `fastq` are now derived when absent, and the
+documented schema is fed to the real loader by test.
+→ `tests/unit/test_srr_map.py`, `tests/unit/test_docs.py`
+
 ### study-check
 `find_already_present` compares the sample names in our own sheet, which we choose. A study
 uploaded earlier under a different convention reports "none, clean import" and is uploaded

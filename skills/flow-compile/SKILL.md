@@ -164,7 +164,7 @@ where each recipe lives:
 
 | you supply | stages | recipe |
 |---|---|---|
-| `srr_map.tsv` (`gsm`, `srx`, `srr`) | 02, 04 | ENA filereport — [`reference/sra-direct-import.md`](reference/sra-direct-import.md) |
+| `srr_map.tsv` (`gsm`, `srr`; plus `srx` on the direct line) | 02, 04 | ENA filereport — [`reference/sra-direct-import.md`](reference/sra-direct-import.md) |
 | `--sizes` JSON (bytes per accession) | 01, 109 | same document |
 | `--search-results` JSON (prior-upload check) | 01 | same document, step 0 |
 | paper text, GEO sample pages | 03, 04 | fetch them; [`DEMO.md`](DEMO.md) bundles examples |

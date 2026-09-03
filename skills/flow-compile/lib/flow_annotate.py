@@ -194,10 +194,38 @@ def infer_experimental_method(protocol: str, series_title: str = "") -> str:
 
 
 def load_srr_map(path) -> pd.DataFrame:
+    """The GSM↔run map, with the columns the run cannot derive for itself.
+
+    ``gsm`` and ``srr`` are the map; everything else has an answer that does not need asking.
+    ``mate`` and ``fastq`` were once required of every study, and on the SRA-direct line —
+    which `reference/stages.md` calls the path for essentially every study — neither is ever
+    read: `build_import_sheet` maps the annotation onto an accession plus metadata and never
+    touches the File column. Requiring them made the operator invent filenames that nothing
+    downloads, and GSE262435 died on exactly that.
+
+    So a missing ``mate`` is 1, and a missing ``fastq`` follows ENA's own naming
+    (``SRR1.fastq.gz``, or ``SRR1_1``/``SRR1_2`` when mates are declared). Deriving applies
+    only to an ABSENT column: supply one and you own its contents, blanks included.
+
+    ``srx`` stays optional here because the local line has no accessions at all. It is the
+    direct line's requirement, enforced where that line lives — warned in `02_index`,
+    refused in `109_sheet`, whose message says which column to populate.
+
+    Story: FAILURES.md#srr-map-schema
+    """
     df = pd.read_csv(path, sep="\t")
-    required = {"gsm", "srr", "mate", "fastq"}
+    required = {"gsm", "srr"}
     if not required.issubset(df.columns):
-        raise ValueError(f"SRR map must contain columns: {sorted(required)}")
+        raise ValueError(
+            f"SRR map must contain columns: {sorted(required)} "
+            f"(found: {sorted(df.columns)}). `mate` and `fastq` are optional — they are "
+            f"derived when absent — and `srx` is needed only on the SRA-direct line."
+        )
+
+    if "mate" not in df.columns:
+        df["mate"] = 1
+    if "fastq" not in df.columns:
+        df["fastq"] = _derived_fastq_names(df)
 
     # A run mapped to two GSMs, a duplicate row or a bad mate value means the map itself is
     # wrong — that attaches the wrong reads to a sample, so refuse rather than proceed.
@@ -211,6 +239,28 @@ def load_srr_map(path) -> pd.DataFrame:
             "srr_map integrity check failed:\n  - " + "\n  - ".join(blocking)
         )
     return df
+
+
+def _derived_fastq_names(frame: pd.DataFrame) -> list[str]:
+    """ENA's own filenames, used only when the map declares no ``fastq`` column.
+
+    ENA serves a paired run as ``SRR1_1.fastq.gz`` / ``SRR1_2.fastq.gz`` and a single-end run
+    as ``SRR1.fastq.gz``. Whether mate 1 takes the suffix is therefore a property of the RUN,
+    not of the row: a lone mate-1 row is single-end, the same row beside a mate 2 is half a
+    pair. Deriving row by row gave a pair the names ``SRR1.fastq.gz`` and ``SRR1_2.fastq.gz``,
+    which is neither convention and matches nothing on disk.
+    """
+    paired_runs = {
+        str(srr).strip()
+        for srr, group in frame.groupby(frame["srr"].astype(str).str.strip())
+        if "2" in {str(m).strip() for m in group["mate"]}
+    }
+    names = []
+    for _, row in frame.iterrows():
+        srr = str(row.get("srr", "")).strip()
+        mate = str(row.get("mate", "1")).strip()
+        names.append(f"{srr}_{mate}.fastq.gz" if srr in paired_runs else f"{srr}.fastq.gz")
+    return names
 
 
 def is_eclip_method(method: str) -> bool:

@@ -27,6 +27,21 @@ from lib.accession_availability import geo_url, parse_geo_response
 print(parse_geo_response(acc, fetch(geo_url(acc))).describe())
 ```
 
+**Fetch the SOFT endpoint, not the accession page.** GEO's default HTML page
+(`acc.cgi?acc=GSE…` with no `form`) sits behind reCAPTCHA and returns a challenge to any
+agent fetch tool — which reads as "study not found" rather than as a block. `geo_url()`
+builds the machine-readable form, and `curl` handles it where a fetch tool cannot:
+
+```bash
+curl -s "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE262435&targ=self&form=text&view=brief"
+```
+
+The same applies to the paper: PMC's `/bin/*.xlsx` supplementary downloads are behind a
+client-side proof-of-work challenge no headless fetch clears, so a supplementary table that
+holds the barcode (step 5 of the antibody search order, and the barcode fallback in
+`reference/barcode-examples.md`) may need the researcher's own browser session. Say so at the
+gate rather than recording "no evidence found".
+
 AUTS2 (PMID 41278797) is why this is step 0 rather than a footnote. eCLIP of a genuinely new
 protein in human neural progenitors, three accessions named in the paper — and all three
 **private until 07 Aug 2029**. The embargo was discovered only after the full literature dig:
@@ -118,7 +133,7 @@ FASTQ per run) and **`SRX` for the import**. `srr_map.tsv` therefore carries bot
 | Input | Where from |
 |-------|-----------|
 | GEO series matrix | `--geo-matrix` (or `--gse`) |
-| `srr_map.tsv` with **`gsm`, `srr`, `srx`** columns | SRA run selector / ENA filereport |
+| `srr_map.tsv` with **`gsm`, `srr`, `srx`** columns | SRA run selector / ENA filereport. `mate` and `fastq` are optional — derived on ENA's naming when absent, and needed only by the local line |
 | Paper Methods excerpt | `--paper-text` — the **CLIP assay section only** |
 | Flow project id | `--flow-project-id`, created in the Flow UI |
 | API token | `FLOW_API_TOKEN`, `--token-file`, or `~/.config/flow/api-token` |

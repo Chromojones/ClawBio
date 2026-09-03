@@ -95,12 +95,15 @@ def body(args, out: Path) -> dict:
         (out / "barcode_composition.json").write_text(json.dumps(layouts, indent=2) + "\n")
         corroboration = f" Composition for {len(layouts)} sample(s) in barcode_composition.json."
 
+    # The artefact is the rendered review file, not the JSON: it carries the evidence and the
+    # quotes a person actually reads. The JSON is what they then edit and hand back, so both
+    # are named — pointing at only the JSON left the review file discoverable by `ls`.
     raise Gate(
         f"{len(proposals)} barcode proposal(s) require approval before any upload.{corroboration} "
         f"Confirm the UMI length against the authors' pipeline config; composition cannot "
-        f"settle its final base.",
+        f"settle its final base. Set status=confirmed in {path.name}, then hand it back.",
         release=f"--accept-proposals {path.name}",
-        artefact=str(path),
+        artefact=f"{out / 'CONFIRM_BARCODES.md'}  (evidence; edit {path.name} to confirm)",
     )
 
 

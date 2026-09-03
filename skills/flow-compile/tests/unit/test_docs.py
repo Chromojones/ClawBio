@@ -280,3 +280,64 @@ class TestDemoMd:
                 if f'"{flag}"' not in source and f"'{flag}'" not in source:
                     bad.append(f"{script.name} {flag}")
         assert bad == [], f"DEMO.md shows flags the scripts do not take: {bad}"
+
+
+class TestDocumentedSchemasLoad:
+    """The DEMO.md test above checks documented FLAGS. Nothing checked documented FILE
+    SCHEMAS, and that is the hole GSE262435 fell through: SKILL.md and
+    `sra-direct-import.md` both described `srr_map.tsv` as (`gsm`, `srr`, `srx`) while the
+    loader demanded (`gsm`, `srr`, `mate`, `fastq`), so a map built to the documentation
+    died at stage 02. Every documented column list is now fed to the real loader."""
+
+    def _documented_schemas(self):
+        """(doc, [columns]) for each line describing srr_map.tsv with a backticked list."""
+        found = []
+        for doc in [SKILL, *SKILL_DIR.glob("reference/*.md"), SKILL_DIR / "DEMO.md"]:
+            for line in doc.read_text().splitlines():
+                if "srr_map.tsv" not in line:
+                    continue
+                columns = [c for c in re.findall(r"`([a-z0-9_]+)`", line)
+                           if c not in {"srr_map", "tsv"}]
+                if len(columns) >= 2:
+                    found.append((doc.name, columns))
+        return found
+
+    def test_a_schema_is_actually_documented(self):
+        assert self._documented_schemas(), "no srr_map.tsv column list found in the docs"
+
+    def test_every_documented_schema_loads(self, tmp_path):
+        from lib.flow_annotate import load_srr_map
+
+        values = {"gsm": "GSM1", "srr": "SRR1", "srx": "SRX1", "mate": "1",
+                  "fastq": "SRR1.fastq.gz"}
+        for doc, columns in self._documented_schemas():
+            path = tmp_path / f"{doc}_srr_map.tsv"
+            path.write_text("\t".join(columns) + "\n"
+                            + "\t".join(values.get(c, "x") for c in columns) + "\n")
+            try:
+                load_srr_map(path)
+            except ValueError as exc:
+                raise AssertionError(
+                    f"{doc} documents srr_map.tsv as {columns}, which the loader "
+                    f"refuses: {exc}"
+                ) from None
+
+
+class TestTheGeoFetchRecipeMatchesTheCode:
+    """GEO's default accession page is behind reCAPTCHA and unusable from a fetch tool; the
+    `form=text` SOFT endpoint works. Every agent rediscovers this the hard way, so the recipe
+    is documented — and pinned here, because a documented URL that drifts from `geo_url()`
+    sends the reader somewhere the skill does not actually go."""
+
+    def test_the_documented_url_is_the_one_the_code_builds(self):
+        from lib.study_check import geo_url
+
+        built = geo_url("GSE262435")
+        text = (SKILL_DIR / "reference" / "sra-direct-import.md").read_text()
+        for fragment in ("form=text", "targ=self"):
+            assert fragment in built
+            assert fragment in text, f"{fragment} is in geo_url() but undocumented"
+
+    def test_the_recaptcha_trap_is_named(self):
+        text = (SKILL_DIR / "reference" / "sra-direct-import.md").read_text().lower()
+        assert "recaptcha" in text or "captcha" in text

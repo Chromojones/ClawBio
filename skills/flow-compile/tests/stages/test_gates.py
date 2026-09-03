@@ -48,6 +48,14 @@ def _stage(name, out, *extra):
     )
 
 
+def _compositions(out):
+    """A composition file, so 03 has something to work from in a bare run dir."""
+    import json
+    path = out / "compositions.json"
+    path.write_text(json.dumps(COMPOSITIONS))
+    return str(path)
+
+
 def _through_02(out):
     """Stand up the prerequisites 03 declares, without running the real stages."""
     st.record(out, "00_setup", st.OK)
@@ -160,3 +168,24 @@ class TestGateFourReachesTheSubmission:
         text = path.read_text()
         assert "compare_confirmed_params" in text
         assert "exit 3" in text
+
+
+class TestTheGatePointsAtTheReviewFile:
+    """`write_proposal_bundle` writes both `barcode_proposals.json` and the human-readable
+    `CONFIRM_BARCODES.md`, but the gate named only the JSON — so the review file the docs
+    call the artefact was discoverable only by listing the directory. On GSE262435 the
+    operator found it despite the stage, not because of it."""
+
+    def test_it_names_the_markdown_review_file(self, tmp_path):
+        out = tmp_path / "run"; out.mkdir()
+        _through_02(out)
+        proc = _stage("03_barcodes.py", out, "--compositions", _compositions(out))
+        assert proc.returncode == 3
+        assert "CONFIRM_BARCODES.md" in proc.stdout, proc.stdout
+
+    def test_it_still_names_the_file_to_edit_and_pass_back(self, tmp_path):
+        out = tmp_path / "run"; out.mkdir()
+        _through_02(out)
+        proc = _stage("03_barcodes.py", out, "--compositions", _compositions(out))
+        assert "barcode_proposals.json" in proc.stdout
+        assert "--accept-proposals" in proc.stdout

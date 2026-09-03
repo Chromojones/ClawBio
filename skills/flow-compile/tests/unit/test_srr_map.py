@@ -107,3 +107,87 @@ class TestValidateSrrMap:
     def test_empty_fastq_is_an_error(self):
         rows = _rows([{"gsm": "GSM1", "srr": "SRR1", "mate": 1, "fastq": ""}])
         assert any("fastq" in i.lower() for i in validate_srr_map(rows))
+
+
+class TestLoadRequiresOnlyWhatItUses:
+    """GSE262435: a map built to the documented direct-line schema (`gsm`, `srr`, `srx`)
+    died with `SRR map must contain columns: ['fastq', 'gsm', 'mate', 'srr']`.
+
+    The required set was inverted relative to the SRA-direct line's real needs. `fastq` is
+    never read on that line — `build_import_sheet` maps annotation to an accession plus
+    metadata and never touches the File column — so requiring it forces the operator to
+    invent filenames nothing downloads. Meanwhile `srx`, which 109_sheet hard-refuses a run
+    accession over, was not required at all.
+
+    So: `gsm` and `srr` are the map. `mate` defaults to 1 and `fastq` is derived on ENA's
+    own naming convention when the column is absent; supply either and you own it.
+    """
+
+    def _write(self, tmp_path, text):
+        path = tmp_path / "srr_map.tsv"
+        path.write_text(text)
+        return path
+
+    def test_the_documented_direct_line_schema_loads(self, tmp_path):
+        from lib.flow_annotate import load_srr_map
+
+        path = self._write(tmp_path, "gsm\tsrx\tsrr\nGSM1\tSRX1\tSRR1\n")
+        frame = load_srr_map(path)
+        assert list(frame["gsm"]) == ["GSM1"]
+        assert list(frame["srx"]) == ["SRX1"]
+
+    def test_a_missing_mate_defaults_to_one(self, tmp_path):
+        from lib.flow_annotate import load_srr_map
+
+        frame = load_srr_map(self._write(tmp_path, "gsm\tsrr\nGSM1\tSRR1\n"))
+        assert list(frame["mate"]) == [1]
+
+    def test_a_missing_fastq_is_derived_on_the_ena_convention(self, tmp_path):
+        from lib.flow_annotate import load_srr_map
+
+        frame = load_srr_map(self._write(tmp_path, "gsm\tsrr\nGSM1\tSRR1\n"))
+        assert list(frame["fastq"]) == ["SRR1.fastq.gz"]
+
+    def test_a_derived_fastq_is_mate_aware(self, tmp_path):
+        """ENA serves a paired run as SRR1_1/SRR1_2, so a supplied mate must be honoured."""
+        from lib.flow_annotate import load_srr_map
+
+        frame = load_srr_map(self._write(
+            tmp_path, "gsm\tsrr\tmate\nGSM1\tSRR1\t1\nGSM1\tSRR1\t2\n"))
+        assert list(frame["fastq"]) == ["SRR1_1.fastq.gz", "SRR1_2.fastq.gz"]
+
+    def test_a_supplied_fastq_is_never_overwritten(self, tmp_path):
+        from lib.flow_annotate import load_srr_map
+
+        frame = load_srr_map(self._write(
+            tmp_path, "gsm\tsrr\tmate\tfastq\nGSM1\tSRR1\t1\tcustom_name.fq.gz\n"))
+        assert list(frame["fastq"]) == ["custom_name.fq.gz"]
+
+    def test_a_supplied_but_empty_fastq_still_refuses(self, tmp_path):
+        """Deriving is for an ABSENT column. A blank cell in a supplied column is a mistake."""
+        from lib.flow_annotate import load_srr_map
+
+        path = self._write(tmp_path, "gsm\tsrr\tmate\tfastq\nGSM1\tSRR1\t1\t\n")
+        with pytest.raises(ValueError, match="fastq"):
+            load_srr_map(path)
+
+    def test_the_map_still_needs_a_gsm_and_a_run(self, tmp_path):
+        from lib.flow_annotate import load_srr_map
+
+        with pytest.raises(ValueError, match="srr"):
+            load_srr_map(self._write(tmp_path, "gsm\tsrx\nGSM1\tSRX1\n"))
+
+    def test_the_integrity_checks_still_block(self, tmp_path):
+        """Relaxing the columns must not relax the transposed-row guard."""
+        from lib.flow_annotate import load_srr_map
+
+        path = self._write(tmp_path, "gsm\tsrr\nGSM1\tSRR1\nGSM2\tSRR1\n")
+        with pytest.raises(ValueError, match="integrity"):
+            load_srr_map(path)
+
+    def test_the_local_line_demo_map_is_unaffected(self, tmp_path):
+        """The bundled map supplies mate and fastq; it must load exactly as before."""
+        from lib.flow_annotate import load_srr_map
+
+        frame = load_srr_map(SKILL_DIR / "demo_gse105082_srr_map.tsv")
+        assert list(frame["fastq"]) == ["SRR6181530.fastq.gz"]
