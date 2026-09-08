@@ -98,9 +98,6 @@ Take a published CLIP study from its accession to an analysed project on Flow, w
 field defensible and three points where a person signs off.
 
 **This file is a map, not a rulebook.** Every rule lives in exactly one place, named below.
-Earlier revisions restated rules here and drifted: this file once told you to write
-`no antibody` for a control while the reference said leave it empty and the validator warned
-on the literal string. A reader following this file got it wrong.
 
 ## Trigger
 
@@ -159,7 +156,7 @@ python3 stages/00_setup.py --output <dir> --accession GSE… --project-id <flow 
 ```
 
 Then follow `--next`: it prints each stage's command with its required flags as
-placeholders. Several stages take evidence files only you can produce — the inventory, with
+placeholders. Several stages take evidence files only you can produce, the inventory, with
 where each recipe lives:
 
 | you supply | stages | recipe |
@@ -197,8 +194,7 @@ None can be skipped. A gated stage does not satisfy a prerequisite, so nothing r
 | 3 | `108_params` | `--accept-params` | [`reference/eclip-analysis-params.md`](reference/eclip-analysis-params.md) |
 
 Submission is not a fourth. Once the parameters are approved the decision is made, and
-`12_analysis` enforces the one remaining rule — at most 18 samples per execution — rather than
-asking again.
+`12_analysis` enforces the one remaining rule, at most 18 samples per execution.
 
 Confirming a gate is a decision about evidence, not a flag that silences output. Handing back
 an unedited proposals file is not approval: each proposal needs `status: confirmed`.
@@ -219,7 +215,6 @@ that is what the last drift cost us.
 | SRA-direct import, sheet columns, size ceiling | [`reference/sra-direct-import.md`](reference/sra-direct-import.md) |
 | ENA / ArrayExpress sourced studies | [`reference/ena-arrayexpress-workflow.md`](reference/ena-arrayexpress-workflow.md) |
 | Flow API routes and payload shapes | [`reference/flow-api-notes.md`](reference/flow-api-notes.md) |
-| Local patches to vendored upstream code | [`lib/vendor/README.md`](lib/vendor/README.md) |
 | **Every incident that produced a guardrail** | [`FAILURES.md`](FAILURES.md) |
 
 ## Example Output
@@ -242,8 +237,7 @@ next: 05_metadata
 ## Gotchas
 
 Deliberately empty. Every rule that used to live here now lives in `reference/`, and every
-incident is indexed in [`FAILURES.md`](FAILURES.md) against the test that encodes it. A rule
-stated twice is a rule that will drift, and this section is where the drift started.
+incident is indexed in [`FAILURES.md`](FAILURES.md) against the test that encodes it.
 
 ## Safety
 
@@ -272,7 +266,7 @@ Review when flowbio changes: the import sheet's reserved columns are read from
 them fails CI rather than silently unattaching a study.
 
 Staleness signals: a reference contradicting a stage's behaviour; a `FAILURES.md` anchor with
-no test; `lib/vendor/` re-vendored without reapplying [`lib/vendor/README.md`](lib/vendor/README.md).
+no test; a vendored script edited without its reasoning kept beside the line.
 
 Deprecate when Flow's own import honours `__annotation` columns and resolves run accessions
 without expansion — most of the delivery stages exist to work around those two gaps.

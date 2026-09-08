@@ -94,3 +94,32 @@ class TestAFailedLookupMustNotReadAsAnEmptyProject:
     def test_an_explicitly_empty_sample_list_is_fine(self):
         """`{"samples": []}` is a real answer — the project is empty."""
         assert names_from_listing({"samples": []}) == set()
+
+
+class TestATruncatedListingMustNotReadAsACleanImport:
+    """The same "I could not look" trap one level down. A listing page carries the project
+    total in `count`, so a payload holding fewer samples than it promises is provably
+    incomplete — and reporting that as "no collisions" is how a study gets uploaded twice.
+    """
+
+    def test_a_short_envelope_raises(self):
+        truncated = {"count": 24, "page": 1, "samples": [
+            {"id": "1", "name": "APOBEC3G_CEMSS_Hs_T7_cell_rep1_ERR565167", "metadata": {}}]}
+        try:
+            names_from_listing(truncated)
+        except ValueError as exc:
+            assert "24" in str(exc) and "1" in str(exc)
+        else:
+            raise AssertionError("a truncated listing must not yield a name set")
+
+    def test_a_complete_envelope_is_accepted(self):
+        complete = {"count": 1, "page": 1, "samples": [
+            {"id": "1", "name": "APOBEC3G_CEMSS_Hs_T7_cell_rep1_ERR565167", "metadata": {}}]}
+        assert names_from_listing(complete) == {"APOBEC3G_CEMSS_Hs_T7_cell_rep1_ERR565167"}
+
+    def test_a_countless_payload_still_works(self):
+        """Hand-assembled listings carry no envelope; they are not provably short."""
+        assert names_from_listing({"samples": [{"id": "1", "name": "x"}]}) == {"x"}
+
+    def test_an_empty_project_is_not_mistaken_for_truncation(self):
+        assert names_from_listing({"count": 0, "page": 1, "samples": []}) == set()

@@ -45,6 +45,15 @@ the upload path does, so the loss is server-side. A colon does not carry one eit
 renders `value:annotation` but stores the colon literally.
 → `tests/unit/test_import_sheet_columns.py`
 
+### listing-pagination
+`GET /projects/{id}/samples` pages, and its envelope `count` is the PROJECT TOTAL, not the
+page size — with a default page size of 10. Nothing read that number. A single page handed to
+the dedup pre-flight yields no name collisions, which reads as "none, clean import" and
+uploads the study twice; handed to verification it reports every unfetched sample as missing
+from the import. `FlowClient.paginate` collects every page and refuses to return a short
+collection, and both consumers refuse an envelope holding fewer samples than it promises.
+→ `tests/unit/test_flow_client.py`, `tests/unit/test_import_preflight.py`, `tests/unit/test_import_check.py`
+
 ### import-check
 Preflight, verify and repair each held their own copy of "which columns are not metadata",
 under two names. Both went stale the hour `project` became reserved, and every sample in a
@@ -140,9 +149,10 @@ dataclasses and five copies of the severity constants between them. `Finding` ke
 ## Vendored code
 
 ### vendor-patches
-`lib/vendor/` is an upstream mirror; a re-vendor reverts local changes silently. Two matter.
-`removespace` must keep `/`: replacing it makes the last `_` field a constant `1` on every
-read, and UMI-collapse then treats the whole library as duplicates of one read. And `paired`
-must not be hardcoded to `both`: it decides which mate is analysed, and a wrong value produces
-a clean-looking run with peaks in the wrong places.
-→ `tests/unit/test_vendor_patches.py`, `lib/vendor/README.md`
+Two lines in `lib/vendor/` corrupt data silently if reverted. `removespace` must keep `/`:
+replacing it makes the last `_` field a constant `1` on every read, and UMI-collapse then
+treats the whole library as duplicates of one read. And `paired` must not be hardcoded to
+`both`: it decides which mate is analysed, and a wrong value produces a clean-looking run with
+peaks in the wrong places. Both were once listed in a `lib/vendor/README.md` that restated the
+comments already beside them; the code is the record.
+→ `tests/unit/test_vendor_patches.py`

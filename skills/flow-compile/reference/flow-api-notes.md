@@ -22,6 +22,19 @@ Adapted from [goodwright/flow-skills flow-ai](https://github.com/goodwright/flow
 Flow project for GSE105082 (DHX9 iCLIP): **997999200849251656**  
 https://app.flow.bio/projects/997999200849251656/
 
+### Listings paginate, and the envelope lies about it
+
+`GET /projects/{id}/samples` returns `{"count": <project total>, "page": n, "samples": [...]}`.
+`count` is the **total in the project**, not the page size — and the page size defaults to
+**10**, capping at 100 (>100 is HTTP 400). So a bare listing of a 24-sample project returns 10
+samples beside an envelope saying 24, and looks complete.
+
+Collect every page through `FlowClient.paginate` / `project_samples`, which refuse to return a
+short collection. `names_from_listing` and `find_import_discrepancies` also refuse an envelope
+holding fewer samples than it promises, because the two failure modes are opposite and both
+bad: a truncated pre-flight reports "clean import" and duplicates the study, while a truncated
+verification reports every unfetched sample as missing.
+
 ### Project creation
 
 `POST /projects/new` with `{"name": …, "description": …}` returns the created project as

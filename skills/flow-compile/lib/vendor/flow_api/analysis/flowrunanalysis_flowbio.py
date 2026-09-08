@@ -469,11 +469,10 @@ def main():
             params.update({k: str(v) for k, v in override.items()})
             logging.info("Loaded pipeline params from %s", args.params_json)
 
-        # LOCAL PATCH (flow-compile): `paired` was hardcoded to "both" in the payload below.
-        # It decides which mate the pipeline analyses, and for eCLIP the crosslink is on read
-        # 2, so "both" produces a clean-looking run with peaks in the wrong places. It is a
-        # samplesheet setting rather than a pipeline param, so it is pulled out of `params`
-        # here instead of being sent inside it.
+        # `paired` decides which mate the pipeline analyses, so it must never be a constant:
+        # for eCLIP the crosslink is on read 2, and "both" produces a clean-looking run with
+        # peaks in the wrong places. It is a samplesheet setting rather than a pipeline param,
+        # so it is pulled out of `params` here instead of being sent inside it.
         paired = str(params.pop("paired", "") or "both")
         if paired not in ("both", "first", "second"):
             raise SystemExit(

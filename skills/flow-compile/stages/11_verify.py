@@ -58,7 +58,21 @@ def body(args, out: Path) -> dict:
         "repairs": [{"sample_id": e.sample_id, "fields": e.fields} for e in plan],
     }, indent=2) + "\n")
 
-    lines = [f"{len(discrepancies)} discrepancy(ies), {len(plan)} sample(s) need repair"]
+    # A listing collected without paging is short, and every unfetched sample then reads as
+    # "in the sheet but not imported". An envelope proves the shortfall and is refused in
+    # find_import_discrepancies; a hand-assembled list cannot, so name the possibility here.
+    live_count = len(live.get("samples") or []) if isinstance(live, dict) else len(live)
+    if live_count < len(sheet_rows):
+        lines_prefix = [
+            f"NOTE: {live_count} live sample(s) for {len(sheet_rows)} sheet row(s). If "
+            f"--live-samples was built from a project listing, check it was not one page "
+            f"(default page size 10); see reference/flow-api-notes.md."
+        ]
+    else:
+        lines_prefix = []
+
+    lines = [*lines_prefix,
+             f"{len(discrepancies)} discrepancy(ies), {len(plan)} sample(s) need repair"]
     if plan and not args.repair:
         raise CheckFailed(
             f"{len(plan)} sample(s) do not match the sheet. Review verify_report.json, then "

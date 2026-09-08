@@ -142,3 +142,29 @@ class TestOldImportPathsStillWork:
         from lib.import_check import find_already_present as shim
 
         assert shim is find_already_present
+
+
+class TestVerificationRefusesAProvablyShortListing:
+    """`--live-samples` is assembled by hand from a project listing. If that listing was one
+    page, every unfetched sample is reported as "in the sheet but not imported" — a wall of
+    false findings. An envelope carries the project total, so the shortfall is provable."""
+
+    def test_an_envelope_shorter_than_its_count_raises(self):
+        rows = [{"name": "S1"}, {"name": "S2"}]
+        envelope = {"count": 2, "samples": [{"name": "S1", "metadata": {"x": {"value": "1"}}}]}
+        try:
+            find_import_discrepancies(rows, envelope)
+        except ValueError as exc:
+            assert "2" in str(exc) and "1" in str(exc)
+        else:
+            raise AssertionError("a provably short listing must not be verified against")
+
+    def test_a_complete_envelope_is_unwrapped_and_verified(self):
+        rows = [{"name": "S1"}]
+        envelope = {"count": 1, "samples": [{"name": "S1", "metadata": {"x": {"value": "1"}}}]}
+        assert find_import_discrepancies(rows, envelope, expect_reads=False) == []
+
+    def test_a_plain_list_still_works(self):
+        rows = [{"name": "S1"}]
+        live = [{"name": "S1", "metadata": {"x": {"value": "1"}}}]
+        assert find_import_discrepancies(rows, live, expect_reads=False) == []

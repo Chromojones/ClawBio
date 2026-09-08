@@ -47,7 +47,9 @@ flowchart TD
 
 ## The vendored layer, in one line each
 
-Nine scripts under `lib/vendor/` (patches indexed in `lib/vendor/README.md`), reached three ways:
+Nine scripts under `lib/vendor/`, reached three ways. They began as copies of
+Goodwright's `flow_api` tools and are now part of this skill — edit them in place, keeping the
+reasoning in the code:
 
 | reached by | scripts |
 |---|---|

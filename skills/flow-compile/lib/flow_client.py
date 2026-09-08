@@ -126,6 +126,44 @@ class FlowClient:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read())
 
+    def paginate(self, path: str, *, items_key: str, per_page: int = 100) -> list[dict]:
+        """Every item behind a paginated listing, or nothing at all.
+
+        The envelope is ``{"count": <project total>, "page": n, "<items_key>": [...]}``, and
+        ``count`` being the TOTAL rather than the page size is what makes a short read look
+        complete. The default page size is 10, so a bare listing of a 24-sample project
+        returns 10 samples beside an envelope saying 24.
+
+        A partial listing is never returned. Handed one, the dedup pre-flight reports "none,
+        clean import" and the study is uploaded twice; verification reports every unfetched
+        sample as missing. Refusing costs a re-run; returning a subset costs a duplicate.
+
+        Story: FAILURES.md#listing-pagination
+        """
+        collected: list[dict] = []
+        total, page = None, 1
+        while True:
+            joiner = "&" if "?" in path else "?"
+            payload = self.request(f"{path}{joiner}count={per_page}&page={page}")
+            items = payload.get(items_key) or []
+            collected += items
+            if total is None:
+                total = int(payload.get("count") or 0)
+            if len(collected) >= total or not items:
+                break
+            page += 1
+        if len(collected) != total:
+            raise RuntimeError(
+                f"{path} returned {len(collected)} of {total} {items_key} across {page} "
+                f"page(s). A partial listing reads as a complete one — re-run rather than "
+                f"acting on this."
+            )
+        return collected
+
+    def project_samples(self, project_id: str) -> list[dict]:
+        """Every sample in a project. Trimmed shape: names yes, `metadata` empty."""
+        return self.paginate(f"/projects/{project_id}/samples", items_key="samples")
+
     def get_sample(self, sample_id: str) -> dict[str, Any]:
         return self.request(f"/samples/{sample_id}")
 

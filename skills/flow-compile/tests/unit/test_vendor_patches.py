@@ -1,8 +1,9 @@
-"""Two one-line changes inside `lib/vendor/`, and the grep-tests that survive a re-vendor.
+"""Two lines in `lib/vendor/` that cause silent data corruption if they are ever reverted.
 
-`lib/vendor/` is an upstream mirror. Anything we change there is lost the next time it is
-re-vendored, and lost silently, so each patch carries a test that fails loudly if it is
-reverted. Both patches are one line and both cause silent data corruption when absent.
+These scripts started as copies of Goodwright's `flow_api` tools and are now simply part of
+this skill — edited in place, with the reasoning in the code beside each line. They were once
+tracked as "patches to reapply after a re-vendor" in a README that restated what the code
+already said; the code is the record now, and these tests are what keep it true.
 
 **removespace and the `/`.** It replaced both spaces and slashes with underscores in FASTQ
 header lines. For a header whose UMI sits in the comment field, that turns
@@ -67,9 +68,9 @@ class TestRemovespaceKeepsTheSlash:
         assert "/" in _clean(CSDE1_HEADERS[0])
 
 
-class TestTheGrepsThatSurviveAReVendor:
+class TestTheLinesThemselves:
     def test_removespace_does_not_replace_slashes(self):
-        """A re-vendor restores `.replace('/', '_')`. This is what notices.
+        """An "obvious" cleanup would restore `.replace('/', '_')`. This is what notices.
 
         Checked against the assignment itself rather than the file text: the docstring
         deliberately quotes the upstream line it is warning about, and a whole-file grep
@@ -87,12 +88,3 @@ class TestTheGrepsThatSurviveAReVendor:
     def test_paired_is_read_from_the_params(self):
         assert "paired" in ANALYSIS.read_text()
 
-
-class TestVendorPatchesAreRecorded:
-    def test_the_readme_lists_them(self):
-        """A re-vendor is done by a person who needs to know what to reapply."""
-        readme = SKILL_DIR / "lib" / "vendor" / "README.md"
-        assert readme.exists(), "lib/vendor/README.md is missing"
-        text = readme.read_text()
-        assert "removespace" in text
-        assert "paired" in text

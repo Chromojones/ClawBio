@@ -94,7 +94,15 @@ def find_import_discrepancies(
     A sample carrying no ``metadata`` block at all raises ``ValueError`` — that is the
     trimmed listing shape, and reporting it as a wall of missing fields would bury the one
     real finding.
+
+    ``live_samples`` may be a plain list or a listing envelope. An envelope is checked
+    against its own ``count`` first: a single page of a paginated project would otherwise
+    report every unfetched sample as missing from the import.
     """
+    if isinstance(live_samples, dict):
+        _refuse_if_truncated(live_samples, live_samples.get("samples") or [], "verification")
+        live_samples = live_samples.get("samples") or []
+
     for sample in live_samples:
         # The trimmed listing carries `metadata` as an EMPTY DICT, so the key's presence
         # proves nothing — only a populated block does. A guard testing `"metadata" not in
@@ -325,7 +333,24 @@ def names_from_listing(payload: dict | None) -> set[str]:
             "as an empty project."
         )
     samples = payload.get("samples") or []
+    _refuse_if_truncated(payload, samples, "pre-flight")
     return {str(s.get("name", "")).strip() for s in samples if s.get("name")}
+
+
+def _refuse_if_truncated(payload: dict, items: list, what: str) -> None:
+    """A listing holding fewer samples than its envelope promises proves nothing.
+
+    ``count`` is the project total, not the page size, so this is decidable rather than
+    guessed. The pre-flight direction is the dangerous one: a truncated page yields no name
+    collisions, which reads as "clean import" and duplicates the study.
+    """
+    total = payload.get("count")
+    if isinstance(total, int) and len(items) < total:
+        raise ValueError(
+            f"listing holds {len(items)} of {total} samples — it is one page, not the "
+            f"project. A truncated listing makes this {what} meaningless; collect every "
+            f"page (flow_client.FlowClient.project_samples) and retry."
+        )
 
 
 def find_already_present(sheet_rows: list[dict], existing_names: set[str]) -> list[str]:

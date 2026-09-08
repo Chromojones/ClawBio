@@ -301,3 +301,77 @@ class TestCreateProject:
             assert "GSE1 CLIP" in str(exc)
         else:
             raise AssertionError("a re-read that does not match must raise")
+
+
+class TestPagination:
+    """`GET /projects/{id}/samples` pages, and its envelope `count` is the PROJECT TOTAL,
+    not the page size. The default page size is 10, so a bare listing of a 24-sample project
+    returns 10 samples and an envelope that says 24 — and nothing read the 24.
+
+    Both consumers fail badly on a short listing. The dedup pre-flight reports "none, clean
+    import" and the study is uploaded twice; verification reports every unfetched sample as
+    missing from the import. The second is noisy, the first is silent and destructive.
+    """
+
+    def _pager(self, pages):
+        class _Resp:
+            def __init__(self, body):
+                self._body = body
+
+            def read(self):
+                return json.dumps(self._body).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        seen = []
+
+        def fake_urlopen(req, timeout=0):
+            seen.append(req.full_url)
+            return _Resp(pages[len(seen) - 1])
+
+        return fake_urlopen, seen
+
+    def test_it_collects_every_page(self, monkeypatch):
+        pages = [
+            {"count": 3, "page": 1, "samples": [{"id": "1"}, {"id": "2"}]},
+            {"count": 3, "page": 2, "samples": [{"id": "3"}]},
+        ]
+        fake, seen = self._pager(pages)
+        monkeypatch.setattr(fc.urllib.request, "urlopen", fake)
+        items = fc.FlowClient("tok").paginate("/projects/9/samples", items_key="samples")
+        assert [i["id"] for i in items] == ["1", "2", "3"]
+        assert "page=2" in seen[1]
+
+    def test_a_single_page_needs_no_second_request(self, monkeypatch):
+        fake, seen = self._pager([{"count": 2, "page": 1, "samples": [{"id": "1"}, {"id": "2"}]}])
+        monkeypatch.setattr(fc.urllib.request, "urlopen", fake)
+        assert len(fc.FlowClient("tok").paginate("/projects/9/samples", items_key="samples")) == 2
+        assert len(seen) == 1
+
+    def test_a_short_collection_refuses_rather_than_returning_a_subset(self, monkeypatch):
+        """The envelope promises 24; the pages stop delivering at 10. Returning those 10 is
+        the failure this exists to prevent, so it raises and names both numbers."""
+        pages = [
+            {"count": 24, "page": 1, "samples": [{"id": str(i)} for i in range(10)]},
+            {"count": 24, "page": 2, "samples": []},
+        ]
+        fake, _ = self._pager(pages)
+        monkeypatch.setattr(fc.urllib.request, "urlopen", fake)
+        try:
+            fc.FlowClient("tok").paginate("/projects/9/samples", items_key="samples")
+        except RuntimeError as exc:
+            assert "10" in str(exc) and "24" in str(exc)
+        else:
+            raise AssertionError("a partial listing must never be returned")
+
+    def test_project_samples_asks_for_the_largest_legal_page(self, monkeypatch):
+        """count caps at 100; >100 is HTTP 400, so 100 is the fewest possible requests."""
+        fake, seen = self._pager([{"count": 1, "page": 1, "samples": [{"id": "1"}]}])
+        monkeypatch.setattr(fc.urllib.request, "urlopen", fake)
+        fc.FlowClient("tok").project_samples("9")
+        assert "/projects/9/samples" in seen[0]
+        assert "count=100" in seen[0]
