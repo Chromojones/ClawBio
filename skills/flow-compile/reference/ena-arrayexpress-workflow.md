@@ -21,7 +21,8 @@ ENA-specific deltas.
 ## 0. Inputs from ArrayExpress
 
 Download the **full SDRF** (`...sdrf?full=true`) — the summary SDRF omits the
-`Comment[SUBMITTED_FILE_NAME]` column that carries the real barcode pattern.
+`Comment[SUBMITTED_FILE_NAME]` column, which is where the barcode pattern sits when the
+submitter encoded it in the filename.
 
 Key SDRF columns:
 
@@ -31,8 +32,8 @@ Key SDRF columns:
 | `Comment[ENA_SAMPLE]` | sample accession `ERS*` → treat as the "GSM" key |
 | `Comment[ENA_EXPERIMENT]` | `ERX*` (groups technical replicates) |
 | `Comment[FASTQ_URI]` | ENA FTP download URL |
-| `Comment[SUBMITTED_FILE_NAME]` | **barcode source** (see §2) |
-| `Comment[BARCODE]` | short 2–3 nt library tag — **NOT the pattern to upload** |
+| `Comment[SUBMITTED_FILE_NAME]` | candidate barcode source (see §2) |
+| `Comment[BARCODE]` | short library tag; often truncated, so verify before uploading |
 | `Factor Value[TEST]` | method (iCLIP / iCLAP) |
 | `Factor Value[IMMUNOPRECIPITATE]` | antibody / purification agent |
 | `Source Name` | protein + library id for sample naming |
@@ -96,27 +97,37 @@ before it is uploaded. See §7 for repairing a sample already on Flow.
 
 ---
 
-## 2. Barcodes come from the submitted filename, not `Comment[BARCODE]`
+## 2. `Comment[BARCODE]` is often truncated — check the submitted filename too
 
-This is the single most important ENA gotcha. iCLIP/iCLAP 5′ adapters are
-`<experiment barcode><random UMI>`. In E-MTAB-432 the full pattern is encoded in
-`Comment[SUBMITTED_FILE_NAME]`, **not** in the short `Comment[BARCODE]` tag:
+ENA has a barcode source GEO does not: the submitted filename. It is worth checking, and on
+E-MTAB-432 it is the *only* place the full pattern appears. But it is **an extra source, not
+a rule** — the normal search order in `reference/barcode-examples.md` still applies, paper
+Methods first, and neither field is guaranteed to carry the pattern.
+
+iCLIP/iCLAP 5′ adapters are `<experiment barcode><random UMI>`. In E-MTAB-432 the full
+pattern is encoded in `Comment[SUBMITTED_FILE_NAME]`, **not** in the short
+`Comment[BARCODE]` tag:
 
 ```
 iCLIP_pG-Beads_Hela_notgiven_hu_CANNN_20090724_LUe4_3.fq.gz
                                   ^^^^^  <- barcode pattern = CANNN
 ```
 
-Parse the pattern between `_hu_` and the date:
+**The filename convention is per-submission.** `_hu_` is the organism token in *this*
+submitter's scheme, so the parse below reads E-MTAB-432 and nothing else — read the actual
+filenames before assuming a shape:
 
 ```python
 import re
-re.search(r"_hu_([ACGTN]+)_\d{8}_", submitted_filename).group(1)   # -> "CANNN"
+re.search(r"_hu_([ACGTN]+)_\d{8}_", submitted_filename).group(1)   # -> "CANNN", E-MTAB-432 only
 ```
 
-- `Comment[BARCODE]` = `CA` (2 nt library tag) — **do not upload this**.
+- `Comment[BARCODE]` = `CA` here — the 2 nt library tag, **not** the full 5′ pattern. Do not
+  assume it is truncated in every submission; compare it against whatever else you find.
 - `Comment[SUBMITTED_FILE_NAME]` → `CANNN` = 2 fixed nt + 3 `N` UMI — **this is
-  the `5' Barcode Sequence`** written to the annotation and the sample.
+  the `5' Barcode Sequence`** for this study.
+- Neither field present, or they disagree? Fall back to the paper Methods and the
+  supplementary materials, exactly as for a GEO study, and take the evidence to the gate.
 
 Confirm barcodes through the normal hook (`CONFIRM_BARCODES.md` /
 `barcode_proposals.json` → `confirmed`). Present the submitted-filename string as
@@ -179,7 +190,7 @@ python3 lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py \
 
 ---
 
-## 6. Submit one analysis per UMI group
+## 6. Submit one analysis per UMI group, if each analysis does not exceed 18 samples
 
 For each `umi_header_format` group, write a params JSON and submit filtered by a
 sample-name regex:
@@ -252,6 +263,6 @@ Resources table, use the pull → propose → apply → push chain in
 | Sample key | `GSM*` | `ERS*` |
 | Run id | `SRR*` | `ERR*` |
 | Download | Flow pulls from SRA on the direct line | manual `wget -c` per `Comment[FASTQ_URI]` |
-| Barcode source | GEO `data_processing` / paper methods | `Comment[SUBMITTED_FILE_NAME]` |
+| Barcode source | GEO `data_processing` / paper methods | same order, plus `Comment[SUBMITTED_FILE_NAME]` as an extra source |
 | Integrity | (SRA validated) | **`gzip -t` every file** |
 | Everything else | identical | identical |

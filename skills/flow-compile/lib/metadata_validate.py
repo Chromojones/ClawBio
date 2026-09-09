@@ -416,7 +416,49 @@ TAGS = (
 #: one composite tag rather than mutation `c3xFLAG` plus tag `HBH`.
 _TAG_ALT = "|".join(re.escape(t) for t in TAGS)
 _TAG_RE = re.compile(rf"^(?:(?P<mutation>[A-Za-z0-9_.]+)-)?(?P<tag>[cn](?:{_TAG_ALT}))$")
+
+#: A protein alteration standing alone, with no tag after it — `M337P`, `dNTR`, `100Q`. The
+#: token is the same one the tagged grammar allows as a prefix: an untagged mutant is still a
+#: property of the purified protein, so `TARDBP:M337P` belongs on the target rather than being
+#: pushed into `Condition`, which severs it from the protein it describes. No spaces, so prose
+#: cannot enter a controlled field.
+_MUTATION_RE = re.compile(r"^[A-Za-z0-9_.]+$")
+
+#: The no-crosslink control. Not a control TARGET — the same protein is purified with the same
+#: antibody, and only the UV step is omitted — so `SMInput`/`IgG` do not describe it and the
+#: agent must be kept. It rides on the target as `TARDBP:noUV`.
+NO_CROSSLINK_ANNOTATION = "noUV"
 _GENE_RE = re.compile(r"^[A-Z][A-Z0-9-]{1,15}$")
+
+
+def normalize_annotation(value: str) -> str:
+    """Canonical spelling of an annotation. Only `noUV` has a case convention to enforce."""
+    cleaned = str(value or "").strip()
+    if cleaned.lower() == NO_CROSSLINK_ANNOTATION.lower():
+        return NO_CROSSLINK_ANNOTATION
+    return cleaned
+
+
+def _is_bare_tag(value: str) -> bool:
+    """A known tag written without its terminal `c`/`n` — a real mistake, not a mutation."""
+    return re.sub(r"^[cn]", "", value, count=1).upper() in {t.upper() for t in TAGS}
+
+
+#: A failed tag rather than a mutation: the terminal `c`/`n` prefix followed by an all-caps
+#: name that is not a known tag — `cBANANA`. Real alterations do not take that shape (`dNTR`
+#: leads with `d`, `M337P` and `100Q` with an uppercase letter or a digit), so accepting these
+#: as mutations would let a typo'd tag through the one field meant to be controlled.
+_FAILED_TAG_RE = re.compile(r"^[cn][A-Z0-9_.-]+$")
+
+
+def _valid_annotation(annotation: str) -> bool:
+    if _TAG_RE.match(annotation):
+        return True
+    if annotation.lower() == NO_CROSSLINK_ANNOTATION.lower():
+        return True
+    if _is_bare_tag(annotation) or _FAILED_TAG_RE.match(annotation):
+        return False
+    return bool(_MUTATION_RE.match(annotation))
 
 
 def _name_tokens(name: str) -> set[str]:
@@ -431,11 +473,12 @@ def _annotation_tag(annotation: str) -> str:
     prefix strip, so a mutation is never mistaken for part of the tag.
     """
     annotation = str(annotation or "").strip()
-    if not annotation:
+    match = _TAG_RE.match(annotation) if annotation else None
+    if not match:
+        # A bare mutation or `noUV` names no tag. Returning the raw value here would strip a
+        # leading `n` and compare `noUV` to antibody epitopes as if it were `OUV`.
         return ""
-    match = _TAG_RE.match(annotation)
-    tag = match.group("tag") if match else annotation
-    return re.sub(r"^[cn]", "", tag, count=1).upper()
+    return re.sub(r"^[cn]", "", match.group("tag"), count=1).upper()
 
 
 def _tag_components(tag: str) -> set[str]:
@@ -497,12 +540,14 @@ def validate_target_and_annotation(
                 Check(ERROR, f"{target_raw!r} is not a valid gene symbol", tfield)
             )
 
-    if annotation and not _TAG_RE.match(annotation):
+    if annotation and not _valid_annotation(annotation):
         checks.append(
             Check(
                 ERROR,
-                f"{annotation!r} is not valid tag grammar — expected a terminal prefix "
-                f"'c' or 'n' plus a known tag, e.g. c3xFLAG-HBH, cV5, nFLAG "
+                f"{annotation!r} is not a valid annotation — expected a tag with its terminal "
+                f"prefix (c3xFLAG-HBH, cV5, nFLAG), an optional mutation before it "
+                f"(dNTR-nMYC), a bare protein alteration (M337P, dNTR), or "
+                f"{NO_CROSSLINK_ANNOTATION} for a no-crosslink control "
                 f"(known tags: {', '.join(TAGS)})",
                 afield,
             )

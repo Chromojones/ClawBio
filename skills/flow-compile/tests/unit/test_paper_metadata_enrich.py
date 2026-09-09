@@ -78,7 +78,7 @@ def test_enrich_annotation_from_paper_local_text():
     )
     df = pd.DataFrame([row], columns=ANNOTATION_COLUMNS)
     enriched, paper, warnings = enrich_annotation_from_paper(
-        df, "21048981", paper_text=TIA_METHODS
+        df, "21048981", paper_text=TIA_METHODS, offline=True
     )
     assert enriched.iloc[0]["Purification Agent"] == "Goat Anti-TIA1 (Santa Cruz C-20)"
     if paper.first_author:
@@ -87,3 +87,43 @@ def test_enrich_annotation_from_paper_local_text():
         assert enriched.iloc[0]["PI"] == paper.last_author
     assert enriched.iloc[0]["PubMed ID"] == "21048981"
     assert not any(w.field == "Purification Agent" for w in warnings)
+
+
+class TestOfflineMeansOffline:
+    """`00_setup --offline` records that no network is available, but the enrichment fetched
+    Europe PMC anyway whenever a PMID was present — so an offline run made live calls, and
+    two tests in this suite went red at random under load. The switch has to reach the fetch.
+    """
+
+    def _explode(self, monkeypatch):
+        import lib.paper_metadata_enrich as pme
+
+        def boom(*a, **k):
+            raise AssertionError("offline run attempted a network fetch")
+
+        monkeypatch.setattr(pme, "_http_get", boom)
+
+    def test_load_paper_metadata_makes_no_call_when_offline(self, monkeypatch):
+        from lib.paper_metadata_enrich import load_paper_metadata
+
+        self._explode(monkeypatch)
+        paper = load_paper_metadata("21048981", paper_text=TIA_METHODS, offline=True)
+        assert paper.pmid == "21048981"
+        assert TIA_METHODS.strip()[:20] in paper.methods_text
+
+    def test_the_supplied_excerpt_still_drives_enrichment(self, monkeypatch):
+        """Offline must not mean unenriched: the attached Methods still resolve the agent."""
+        from lib.paper_metadata_enrich import enrich_annotation_from_paper
+
+        self._explode(monkeypatch)
+        row = {col: "" for col in ANNOTATION_COLUMNS}
+        row.update({
+            "Sample Name": "TIA1_Hs_HeLa_TGNNN_ERR1",
+            "Protein (Purification Target)": "TIA1",
+            "Purification Agent": "anti-TIA1 antibody",
+            "Experimental Method": "iCLIP",
+        })
+        df = pd.DataFrame([row], columns=ANNOTATION_COLUMNS)
+        enriched, _, _ = enrich_annotation_from_paper(
+            df, "21048981", paper_text=TIA_METHODS, offline=True)
+        assert enriched.iloc[0]["Purification Agent"] == "Goat Anti-TIA1 (Santa Cruz C-20)"

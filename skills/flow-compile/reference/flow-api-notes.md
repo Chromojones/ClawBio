@@ -66,12 +66,12 @@ python skills/flow-compile/lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py
 
 See also `reference/eclip-analysis-params.md` for paired-end eCLIP crosslink notes.
 
-| Header pattern | `move_umi_to_header` | `umi_separator` | `encode_eclip` (eCLIP/seCLIP only) |
-|----------------|----------------------|-----------------|-------------------------------------|
-| Contains `:rbc:` | `false` | `rbc:` | `true` |
-| No `:rbc:` (raw SRA) | `true` | `_` | `false` |
-
-Other CLIP methods: `encode_eclip` stays `false` regardless of headers.
+Two booleans cannot express this and the shortcut here was wrong: it said *contains `:rbc:`
+→ `encode_eclip=true`*, which on an already-extracted header makes `encode_moveumi` take the
+instrument name as the UMI and collapse the library. The parameters come from the **four
+header states** in `reference/eclip-analysis-params.md` §3, derived by
+`lib/header_state.py`. `encode_eclip` is true for exactly one of them — a randomer prepended
+to the title — and only for the eCLIP family.
 
 `umi_header_format` uses **N-only structure** matching barcode length (e.g. `NNNNNNNNNN` for 10 bp Murat iCLIP, `NNNNNNNNNNNNNNN` for 15 bp iCLIP2). Annotation keeps the literal pattern (`NNNCGGANNN`) for demultiplexing metadata.
 

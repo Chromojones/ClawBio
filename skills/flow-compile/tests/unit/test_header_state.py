@@ -86,8 +86,20 @@ class TestRbcPosition:
         """`inspect_header_lines` returned (True, False) for both."""
         assert classify_header(ENCODE_RBC_MID) != classify_header(ICLIP_RBC_END)
 
-    def test_mid_header_sets_encode_eclip(self):
-        assert params_for_state(RBC_MID, experimental_method="eCLIP")["encode_eclip"] == "true"
+    def test_mid_header_must_not_set_encode_eclip(self):
+        """`encode_eclip` runs `encode_moveumi`, which takes the FIRST colon-delimited field
+        of the read name as the UMI and moves it to the end as `_rbc:<umi>`:
+
+            header = record.id.split(":")
+            rearranged = ":".join(header[1:]) + "_rbc:" + header[0]
+
+        On a prepended randomer (`@TAAAG:HWI-…`) that field IS the randomer. On an
+        already-extracted `:rbc:` header (`@HWI-D00611:…:rbc:CACTTG`) it is the INSTRUMENT
+        NAME, so every read comes out `…_rbc:HWI-D00611` — a UMI constant across the library.
+        UMICollapse then treats every read at a position as one duplicate and the library
+        collapses to nothing, on a run that finishes green.
+        """
+        assert params_for_state(RBC_MID, experimental_method="eCLIP")["encode_eclip"] == "false"
 
     def test_end_of_header_does_not_even_for_eclip(self):
         """Position decides, not presence. This is the SKILL.md error."""
@@ -113,10 +125,10 @@ class TestRaw:
 class TestNonEclipNeverSetsEncodeEclip:
     def test_iclip_mid_header_rbc_is_still_false(self):
         """`encode_eclip` is an eCLIP-family setting; the assay gates it."""
-        assert params_for_state(RBC_MID, experimental_method="iCLIP")["encode_eclip"] == "false"
+        assert params_for_state(RANDOMER_PREFIX, experimental_method="iCLIP")["encode_eclip"] == "false"
 
     def test_seclip_counts_as_eclip_family(self):
-        assert params_for_state(RBC_MID, experimental_method="seCLIP")["encode_eclip"] == "true"
+        assert params_for_state(RANDOMER_PREFIX, experimental_method="seCLIP")["encode_eclip"] == "true"
 
 
 class TestSampledHeaders:

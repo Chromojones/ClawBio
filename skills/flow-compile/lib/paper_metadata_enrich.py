@@ -131,13 +131,19 @@ def fetch_pmc_methods_text(pmcid: str) -> str:
     return re.sub(r"\s+", " ", " ".join(parts)).strip()
 
 
-def load_paper_metadata(pmid: str, *, paper_text: str = "") -> PaperMetadata:
-    title, authors = fetch_pubmed_record(pmid)
+def load_paper_metadata(pmid: str, *, paper_text: str = "", offline: bool = False) -> PaperMetadata:
+    """Authors and Methods for a PMID, from PubMed/Europe PMC plus any supplied excerpt.
+
+    ``offline`` skips every fetch and uses only what was handed in. `00_setup --offline`
+    records that no network is available, and a run that says so must not then call out —
+    it stalls behind a 45s timeout at best, and reaches a different answer at worst.
+    """
+    title, authors = ("", []) if offline else fetch_pubmed_record(pmid)
     excerpt = paper_text.strip()
     # An attached excerpt AUGMENTS the full Methods, it does not replace them. Replacing
     # made antibody resolution depend on which paragraph the agent happened to paste —
     # the excerpt is usually the barcode section, which contains no antibody at all.
-    pmcid = _pmcid_for_pmid(pmid)
+    pmcid = "" if offline else _pmcid_for_pmid(pmid)
     fetched = fetch_pmc_methods_text(pmcid) if pmcid else ""
     methods = "\n\n".join(part for part in (excerpt, fetched) if part)
     first_author = authors[0] if authors else ""
@@ -273,12 +279,13 @@ def enrich_annotation_from_paper(
     pmid: str,
     *,
     paper_text: str = "",
+    offline: bool = False,
 ) -> tuple[pd.DataFrame, PaperMetadata, list[AnnotationWarning]]:
     """Apply first-author Scientist, last-author PI, and paper-derived purification agents."""
     if annotation.empty or not str(pmid).strip():
         return annotation, PaperMetadata(pmid="", title="", authors=[], first_author="", last_author="", pmcid="", methods_text=""), []
 
-    paper = load_paper_metadata(pmid, paper_text=paper_text)
+    paper = load_paper_metadata(pmid, paper_text=paper_text, offline=offline)
     antibodies = extract_antibodies_from_text(paper.methods_text)
     enriched = annotation.copy()
 

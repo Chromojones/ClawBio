@@ -144,15 +144,25 @@ This single check drives every parameter. **Inspect headers before choosing para
 | Header looks like | Meaning | Params |
 |---|---|---|
 | `@…:1101:20598:1033/2` — plain instrument name, read 1 still starts with the 7-mer | **Raw, not demultiplexed** | `move_umi_to_header=true`, `umi_separator=_`, `umi_header_format=` N×randomer length, `encode_eclip=false` |
-| `@NNNNNNNNNN:K00180:212:…` — randomer **prepended** to the title | Processed by current **`eclipdemux`** | `move_umi_to_header=false`; UMI already in the name |
-| `@…:1101:1445:2149:rbc:CACTTG 1:N:0:ATCACG` — `:rbc:` **mid-header** | **ENCODE portal download** (pre-extracted) | `move_umi_to_header=false`, `umi_separator=rbc:`, **`encode_eclip=true`** |
+| `@NNNNNNNNNN:K00180:212:…` — randomer **prepended** to the title | Processed by current **`eclipdemux`** | `move_umi_to_header=false`, `umi_separator=:`, **`encode_eclip=true`** |
+| `@…:1101:1445:2149:rbc:CACTTG 1:N:0:ATCACG` — `:rbc:` **mid-header** | **ENCODE portal download** (pre-extracted) | `move_umi_to_header=false`, `umi_separator=rbc:`, **`encode_eclip=false`** |
 | `@…:1101:1445:2149:rbc:CACTTG` — `:rbc:` at the **end** of the header | UMI extracted, but **not** ENCODE layout (typical **iCLIP**) | `move_umi_to_header=false`, `umi_separator=rbc:`, **`encode_eclip=false`** |
 
-> **`encode_eclip` keys off *where* `:rbc:` sits, not merely that it is present.**
-> `encode_eclip=true` is for the ENCODE layout, where `:rbc:` appears **mid-header** — i.e.
-> the read name continues after the randomer (a trailing ` 1:N:0:INDEX` comment field
-> follows). Most **iCLIP** samples carry `:rbc:` at the **end** of the header and must use
-> `encode_eclip=false`. Presence alone is not sufficient evidence; check the position.
+> **`encode_eclip` is one transform, not a label for "ENCODE data".** It switches on
+> [`encode_moveumi`](https://github.com/goodwright/clipseq/blob/master/modules/goodwright/clipseq/encode_moveumi/templates/encode_moveumi.py),
+> which takes the **first colon-delimited field of the read name** as the UMI and moves it to
+> the end:
+>
+> ```python
+> header = record.id.split(":")
+> rearranged = ":".join(header[1:]) + '_rbc:' + header[0]
+> ```
+>
+> Set it **only** for a **prepended randomer** (`@TAAAG:HWI-…`), where that first field is
+> the randomer. On any header whose UMI is already in `:rbc:` form the first field is the
+> **instrument name**, so every read becomes `…_rbc:HWI-D00611` — a UMI identical across the
+> library. UMICollapse then reads the whole run as duplicates of one fragment and collapses
+> it to nothing, on an execution that finishes green.
 
 > **Paired-end eCLIP files downloaded from the ENCODE portal already have the barcode
 > extracted into the read header** (`:rbc:` form). Do not re-extract them — set
@@ -162,19 +172,20 @@ This single check drives every parameter. **Inspect headers before choosing para
 `lib/fastq_headers.py` detects only the `:rbc:` form and cannot tell a `RANDOMER:title`
 header from a raw one. Use `lib/header_state.py` instead; it classifies all four.
 
-**Four header states, not three.** Verified against the RBP ENCODE project on Flow, whose
+**Four header states.** Verified against the RBP ENCODE project on Flow, whose
 executions are the ground truth for this parameter:
 
 | Header looks like | Meaning | `encode_eclip` |
 |---|---|---|
 | `@HWI-D00611:153:…:25252 2:N:0:GAATT…` | **Raw** — randomer still on the read | `false`, `move_umi_to_header=true` |
 | `@TAAAG:HWI-D00611:119:…:90397 2:N:0:TCCG…` | **`eclipdemux`** — randomer *prepended to the title* | **`true`**, `move_umi_to_header=false` |
-| `@…:2149:rbc:CACTTG 1:N:0:ATCACG` | **ENCODE portal** — `:rbc:` mid-header | **`true`**, `umi_separator=rbc:` |
+| `@…:2149:rbc:CACTTG 1:N:0:ATCACG` | **ENCODE portal** — `:rbc:` mid-header | `false`, `umi_separator=rbc:` — already in the target form |
 | `@…:0:1rbc:AAAATATAA` | **iCLIP** — tag terminates the header | `false`, `umi_separator=rbc:` |
 
-**`:rbc:` is neither necessary nor sufficient for `encode_eclip=true`.** The live RBP ENCODE
-files that run with it carry a **prepended randomer and no `:rbc:` at all** — 5 nt, 949
-distinct values across 5,371 reads. The *layout* decides, and the assay family gates it.
+**`:rbc:` is neither necessary nor sufficient for `encode_eclip=true`.** The RBP ENCODE files
+that legitimately run with it carry a **prepended randomer and no `:rbc:` at all** — 5 nt, 949
+distinct values across 5,371 reads. It is the prepended layout that the flag transforms, and
+the assay family gates it.
 
 Derivation is `lib/header_state.py` (`classify_header` / `params_for_state`), not
 `fastq_headers.inspect_header_lines`, which returns the same `(False, False)` for a prepended
@@ -314,8 +325,8 @@ from lib.umi_params import check_umi_params
 print(check_umi_params(params, barcode=row["five_prime_barcode_sequence"]).reason)
 ```
 
-`move_umi_to_header=true` with **no `umi_separator`** was submitted on four consecutive
-studies (GSE75418, GSE68800, GSE80202, GSE58448). The pipeline extracts the barcode into the
+`move_umi_to_header=true` with **no `umi_separator`**
+The pipeline extracts the barcode into the
 read name and UMICollapse is then given no delimiter to find it with:
 
 ```

@@ -112,12 +112,23 @@ def classify_headers(headers: list[str]) -> HeaderStateResult:
 def params_for_state(state: str, *, experimental_method: str) -> dict[str, str]:
     """The CLIP-pipeline parameters implied by a header state.
 
-    ``encode_eclip`` is gated on BOTH the assay family and the layout: it is an eCLIP-family
-    setting, and within that family it follows the layout rather than the mere presence of a
-    ``:rbc:`` token.
+    ``encode_eclip`` switches on ``encode_moveumi``, which is a specific transform, not a
+    general "this is ENCODE data" flag::
+
+        header = record.id.split(":")
+        rearranged = ":".join(header[1:]) + "_rbc:" + header[0]
+
+    It takes the **first colon-delimited field of the read name** as the UMI and moves it to
+    the end. That is true of exactly one state: ``RANDOMER_PREFIX``, where ``eclipdemux``
+    prepended the randomer. Applied to a header whose UMI is already in ``:rbc:`` form, the
+    first field is the INSTRUMENT NAME — every read comes out ``…_rbc:HWI-D00611``, a UMI
+    constant across the library, and UMICollapse collapses the whole run to nothing without
+    erroring. So ``RBC_MID`` must be false: it is already in the form this transform produces.
+
+    Story: FAILURES.md#encode-moveumi
     """
     is_eclip = str(experimental_method or "").strip().lower() in ECLIP_FAMILY
-    encode = "true" if (is_eclip and state in (RBC_MID, RANDOMER_PREFIX)) else "false"
+    encode = "true" if (is_eclip and state == RANDOMER_PREFIX) else "false"
 
     if state == RAW:
         return {"move_umi_to_header": "true", "umi_separator": "_", "encode_eclip": encode}

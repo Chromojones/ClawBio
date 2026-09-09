@@ -200,6 +200,7 @@ own target — **never the IP's protein**:
 | Bead-only / no-antibody control | `SMInput` | *(empty)* |
 | IgG control | `IgG` | *(empty)* |
 | **Antibody pulldown on cells lacking the target** | **`AbControl`** | **the antibody used** |
+| **No-crosslink control (UV omitted)** | **the real protein**, annotated `noUV` | **the antibody used** |
 | GFP-only control construct | `GFP` | anti-GFP antibody |
 
 **`AbControl` vs `SMInput`** — the distinction is whether an antibody was used. A
@@ -209,6 +210,15 @@ immunoprecipitation performed on cells that do not express the tagged protein (G
 recorded. The validator enforces the opposite rules for the two: an `AbControl` with an
 empty agent is an error, and its antibody naturally names the **tag** rather than the row's
 target, so the agent/target agreement check is skipped.
+
+**The no-crosslink control is not a control target.** The same protein is purified with the
+same antibody; only the UV step was omitted, so nothing about the *target* changed and
+`SMInput`/`IgG` would misdescribe it. What differs is the treatment, and that rides on the
+target as the annotation — `TARDBP:noUV`. The agent stays, exactly as for `AbControl`.
+
+Why it matters analytically: a no-UV library measures the background that survives the
+protocol without crosslinking, so it is the correct comparator for the *same* protein's IP.
+Recording it as `SMInput` would pool it with size-matched inputs and lose that pairing.
 
 The validator flags any row whose **name** contains `INPUT`/`SMINPUT` while its target is a
 real protein — the single most common eCLIP annotation error.
@@ -229,6 +239,8 @@ annotation carries everything that describes *the protein that was purified*.
 | `LARP6:dNTR-nMYC` | LARP6 lacking the N-terminal region, N-terminal myc tag |
 | `QKI:c3xFLAG-HBH` | full-length QKI, C-terminal 3xFLAG-HBH — **one composite tag**, not a mutation |
 | `QKI:dNTR-c3xFLAG-HBH` | deletion mutant *and* composite tag |
+| `TARDBP:M337P` | untagged point mutant — an alteration with no tag |
+| `TARDBP:noUV` | no-crosslink control for a TARDBP IP — see the control table above |
 
 Rules:
 
@@ -237,8 +249,11 @@ Rules:
   only in `Condition`.
 - **The unaltered construct takes no mutation prefix** — full-length is `nMYC`, not
   `FL-nMYC`.
-- **A mutation alone is rejected.** An untagged mutant has no tag annotation; put the
-  variant in `Condition` instead.
+- **A mutation alone is valid.** An alteration is a property of the purified protein whether
+  or not the construct is tagged, so an untagged variant still belongs here — `TARDBP:M337P`,
+  `LARP6:dNTR`. Putting it in `Condition` instead severs it from the protein it describes.
+  What is still rejected is a *failed tag*: `cBANANA` is a terminal prefix plus an unknown tag
+  name, not an alteration.
 - **Reversed order is rejected** (`nMYC-dNTR`), because the tag must be identifiable as the
   trailing component.
 

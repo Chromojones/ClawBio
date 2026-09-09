@@ -75,7 +75,10 @@ def body(args, out: Path) -> dict:
 
     if pmid:
         blob = "\n\n".join(p.read_text(errors="replace") for p in args.paper_text)
-        annotation, meta, warnings = enrich_annotation_from_paper(annotation, pmid, paper_text=blob)
+        # An --offline run must not call out: 00_setup recorded that there is no network,
+        # and the enrichment would otherwise stall behind a 45s timeout per fetch.
+        annotation, meta, warnings = enrich_annotation_from_paper(
+            annotation, pmid, paper_text=blob, offline=bool(st.study(out).get("offline")))
         lines.append(f"paper: Scientist={meta.first_author or '?'}, PI={meta.last_author or '?'}, "
                      f"{len(warnings)} warning(s)")
     else:

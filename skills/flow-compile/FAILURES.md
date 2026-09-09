@@ -14,6 +14,17 @@ answered `(False, False)`. Deriving parameters from that re-extracts five bases 
 and deduplicates on sequence that is not the UMI. Nothing errors.
 → `tests/unit/test_header_state.py`
 
+### encode-moveumi
+`encode_eclip` was set for both the prepended-randomer and the `:rbc:` mid-header states, on the
+reading that it meant "ENCODE layout". It does not: it switches on `encode_moveumi`, which takes
+the first colon-delimited field of the read name as the UMI and moves it to the end as
+`_rbc:<umi>`. That is the prepended randomer exactly — and on a header already in `:rbc:` form
+the first field is the instrument name, so every read comes out `…_rbc:HWI-D00611`. A UMI
+constant across the library makes UMICollapse read every read at a position as one duplicate,
+collapsing the run to nothing with no error. The doc had said the flag "keys off where `:rbc:`
+sits", which is what encoded the wrong state.
+→ `tests/unit/test_header_state.py`
+
 ### eclip-mate-filenames
 Paired-end eCLIP carries the crosslink on read 2. The orchestrator promoted that mate twice;
 the stage rewrite promoted it zero times, which is quieter — an eCLIP study then uploads the

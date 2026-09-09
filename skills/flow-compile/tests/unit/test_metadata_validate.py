@@ -342,10 +342,11 @@ class TestMutationTagAnnotation:
         issues = validate_target_and_annotation(target="LARP6", annotation="nMYC-dNTR", agent="")
         assert issues and issues[0][0] == ERROR
 
-    def test_mutation_without_a_tag_is_rejected(self):
-        """An untagged mutant carries no tag annotation at all; use Condition instead."""
-        issues = validate_target_and_annotation(target="LARP6", annotation="dNTR", agent="")
-        assert issues and issues[0][0] == ERROR
+    def test_mutation_without_a_tag_is_accepted(self):
+        """A deletion is a property of the purified protein whether or not it is tagged, so
+        it belongs on the target. Pushing it into `Condition` severs it from the protein it
+        describes."""
+        assert validate_target_and_annotation(target="LARP6", annotation="dNTR", agent="") == []
 
 class TestAntibodyWithoutAVendor:
     """When no catalog reagent exists, the agent is the bare canonical form.
@@ -590,3 +591,55 @@ class TestT7Tag:
     def test_existing_tags_still_work(self):
         for ann in ("cV5", "nMYC", "c3xFLAG-HBH", "nGFP"):
             assert validate_target_and_annotation(target="QKI", annotation=ann, agent="") == [], ann
+
+
+class TestAnnotationsThatAreNotTags:
+    """The annotation grammar required the value to END in a tag, so two legitimate designs
+    were rejected.
+
+    A **point mutation** is a property of the purified protein whether or not the construct
+    is tagged — `TARDBP:M337P` is the standard way to name an ALS variant pulldown, and
+    pushing it into `Condition` loses the link to the target it belongs to.
+
+    A **no-crosslink control** is the other. It is not a control *target* — the same protein
+    is purified with the same antibody — so `SMInput`/`IgG` do not describe it. What differs
+    is that the UV step was omitted, which belongs on the target as `noUV`.
+    """
+
+    def _checks(self, annotation, target="TARDBP"):
+        return validate_target_and_annotation(target=target, annotation=annotation)
+
+    def test_a_point_mutation_alone_is_accepted(self):
+        assert self._checks("M337P") == []
+
+    def test_a_deletion_alone_is_accepted(self):
+        """The same token the grammar already allows as a prefix — `LARP6:dNTR-nMYC`."""
+        assert self._checks("dNTR", target="LARP6") == []
+
+    def test_a_mutation_with_a_tag_still_works(self):
+        assert self._checks("dNTR-nMYC", target="LARP6") == []
+
+    def test_no_uv_is_accepted(self):
+        assert self._checks("noUV") == []
+
+    def test_no_uv_is_case_insensitive_but_normalises(self):
+        from lib.metadata_validate import normalize_annotation
+
+        assert normalize_annotation("nouv") == "noUV"
+        assert normalize_annotation("NOUV") == "noUV"
+
+    def test_a_bare_tag_without_its_terminal_prefix_is_still_an_error(self):
+        """`FLAG` is a tag missing its `n`/`c`; that is a real mistake, not a mutation."""
+        issues = self._checks("FLAG")
+        assert issues and issues[0].severity == ERROR
+
+    def test_prose_is_still_rejected(self):
+        """The field is a controlled vocabulary, not a comment box."""
+        assert self._checks("untagged mutant construct") != []
+
+    def test_a_no_uv_control_keeps_its_antibody(self):
+        """Unlike SMInput, the antibody was used — only the crosslinking was skipped."""
+        issues = validate_target_and_annotation(
+            target="TARDBP", annotation="noUV",
+            agent="Rabbit Anti-TARDBP (Proteintech 12892-1-AP)")
+        assert [i for i in issues if i.severity == ERROR] == []
