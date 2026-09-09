@@ -4,14 +4,26 @@ The SRA-direct import never downloads reads, but the pipeline params still depen
 the read headers look like (`:rbc:` present → UMI already extracted). This module fetches
 just enough of the gzipped FASTQ to read a few records.
 
-**ENA is the primary source and that matters.** ENA serves the *submitted* file, so the
-submitter's original Illumina headers survive::
+**ENA is the primary source and that matters — but not for the reason once recorded here.**
+ENA renders the defline as ``@<run>.<n> <original spot name>``::
 
     @SRR21863801.1 K00180:212:H7VCTBBXX:5:1101:20598:1033/1
 
-`fastq-dump` rewrites deflines to `@SRR…N` even with `--origfmt`, which would silently
-destroy `:rbc:` detection — so it is only a fallback for runs ENA does not serve, and the
-report says so explicitly.
+This is the form Flow itself fetches, which is the whole point: the preview must see the
+study exactly as the import will.
+
+The old note claimed ``fastq-dump`` rewrites deflines to ``@SRR…N`` even with ``--origfmt``
+and so destroys ``:rbc:`` detection. It does neither. Measured on SRR33628723 (sra-tools
+3.2.1), ``:rbc:`` survives every form; what differs is only *where* it sits::
+
+    ENA fastq_ftp         @SRR33628723.1 NS500784:…:1rbc:TAGGATAAA/1   comment
+    fastq-dump (default)  @SRR33628723.1 NS500784:…:1rbc:TAGGATAAA length=83   comment
+    fastq-dump --origfmt  @NS500784:…:1rbc:TAGGATAAA                  read name
+
+The UMI is lost at the **whitespace boundary**, not at dump time: the SAM QNAME ends at the
+first space, so aligners drop the comment. The fallback is still not trusted, for the
+inverse reason — ``--origfmt`` deletes the comment field entirely, so the check that refuses
+SRA-direct has no space to find. See ``umi_is_stranded_in_comment``.
 
 The pure functions here (`parse_ena_fastq_urls`, `inspection_from_header_records`) carry
 all the logic and are unit-tested; the network wrappers are thin.
@@ -130,33 +142,54 @@ def preview_run(
         return [], "unavailable"
 
 
-def umi_is_stranded_in_comment(header: str) -> bool:
-    """True when a `rbc:` UMI sits after the first space, i.e. in the comment field.
+def umi_is_stranded_in_comment(header: str, *, source: str = "ena") -> bool:
+    """True when the `rbc:` UMI will sit in the comment field once Flow fetches the run.
 
-    SRA/ENA rewrite the defline as ``@<run>.<n> <original header>``. If the original header
-    carried the UMI, it is now in the comment — which every aligner discards — so the BAM
-    read name has no UMI and UMICollapse fails with "No match found".
+    ENA and SRA render the defline as ``@<run>.<n> <original spot name>``, so a UMI carried by
+    the original header lands after the first space — in the comment, which every aligner
+    discards at the SAM QNAME boundary. The BAM read name then has no UMI and UMICollapse
+    fails with "No match found".
+
+    ``source`` matters because the fallback fetch does not show that form. ``fastq-dump
+    --origfmt`` prints the original spot name ALONE — no accession prefix, therefore no
+    comment field and no space to find. Reading that as "not stranded" is how the refusal
+    below silently disappears on the fallback path. The verdict is still decidable, because
+    the rendering is deterministic: whatever ``--origfmt`` shows in the name is exactly what
+    becomes the comment when ENA prefixes the accession, which is the form Flow fetches.
+
+    Story: FAILURES.md#defline-provenance
     """
     body = str(header or "").lstrip("@")
     name, sep, comment = body.partition(" ")
     if not sep:
-        return False
+        return source == "fastq-dump" and RBC_TAG.search(name) is not None
     return RBC_TAG.search(comment) is not None and RBC_TAG.search(name) is None
 
 
-def inspection_from_header_records(records_by_run: dict[str, list[str]]) -> HeaderInspection:
+def inspection_from_header_records(
+    records_by_run: dict[str, list[str]],
+    sources: dict[str, str] | None = None,
+) -> HeaderInspection:
     """Build a HeaderInspection from remote snippets, with no local FASTQ on disk.
 
     Reuses `fastq_headers.inspect_header_lines`, the same pure check the local path uses,
     so remote and local previews cannot diverge.
+
+    ``sources`` names how each run was fetched. It changes the comment verdict rather than
+    only annotating it: the fallback's deflines carry no comment field, so the whitespace the
+    check reads is absent for a reason that is not safety.
     """
     flat: list[str] = []
-    for records in records_by_run.values():
+    umi_in_comment = False
+    for run, records in records_by_run.items():
         flat.extend(records)
+        source = (sources or {}).get(run, "ena")
+        umi_in_comment = umi_in_comment or any(
+            umi_is_stranded_in_comment(h, source=source)
+            for h in records if str(h).startswith("@")
+        )
 
     has_rbc, has_underscore = inspect_header_lines(flat)
-    at_lines = [h for h in flat if h.startswith("@")]
-    umi_in_comment = any(umi_is_stranded_in_comment(h) for h in at_lines)
     if umi_in_comment:
         notes = (
             "UMI tag is in the header COMMENT (after the first space), not the read name. "
@@ -221,7 +254,8 @@ def write_headers_preview(
             if source == "ena":
                 note = "ENA byte-range — original submitted headers preserved"
             elif source == "fastq-dump":
-                note = "fastq-dump fallback — DEFLINES REWRITTEN, :rbc: undetectable"
+                note = ("fastq-dump --origfmt fallback — original spot name only, no "
+                        "comment field; the comment verdict is inferred, not observed")
             else:
                 note = "unavailable — no header evidence"
             lines.append(f"- `{run}`: {source} ({note})")

@@ -28,6 +28,18 @@ for months. `is_eclip_method` also existed twice with two sources of truth, deci
 carries the crosslink.
 → `tests/unit/test_protocol.py`
 
+### defline-provenance
+`sra_header_preview` recorded that `fastq-dump` "rewrites deflines to `@SRR…N` even with
+`--origfmt`", destroying `:rbc:` detection. Measured on SRR33628723 (sra-tools 3.2.1) it does
+neither: `:rbc:` survives every dump form, and `--origfmt` prints the original spot name alone.
+The UMI is lost at the whitespace boundary — the SAM QNAME ends at the first space, so the
+comment is dropped at alignment — which is an alignment-stage artifact wrongly attributed to
+the dump tool. The guard built on the wrong mechanism had a hole: `--origfmt` output has no
+comment field, so `umi_is_stranded_in_comment` returned False and the refusal that blocks
+SRA-direct disappeared on the fallback path, sending a UMI-in-comment study to the UMICollapse
+failure it exists to prevent. The verdict is now inferred from fetch provenance.
+→ `tests/unit/test_sra_header_preview.py`
+
 ### read-structure
 Composition finds the barcode/UMI boundary but cannot settle the UMI's last base. On GSE131210
 position 13 measured 7.9% off even — between random (~4%) and genomic (12–21%) — because it is

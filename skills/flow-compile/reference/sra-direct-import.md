@@ -2,8 +2,8 @@
 
 **This is the preferred way to get a public CLIP study onto Flow.** Flow pulls the reads
 from SRA/ENA itself, so there is no local download, no `prefetch`, no `removespace` header
-cleaning and no multi-gigabyte staging disk. What remains is metadata accuracy and a
-header preview — which is where all the guardrails now sit.
+cleaning and no multi-gigabyte staging disk. The focus is metadata accuracy and a
+header preview.
 
 Requires **flowbio ≥ 0.12.0** (`flowbio samples import`; `project`/`pubmed` reserved). The older local-download path
 (`prefetch.sh` → `clean_fastq.sh` → `upload_live.sh`) is the 2xx line in `reference/stages.md`
@@ -45,8 +45,7 @@ gate rather than recording "no evidence found".
 AUTS2 (PMID 41278797) is why this is step 0 rather than a footnote. eCLIP of a genuinely new
 protein in human neural progenitors, three accessions named in the paper — and all three
 **private until 07 Aug 2029**. The embargo was discovered only after the full literature dig:
-abstract, Europe PMC, PMC efetch, bioRxiv full text, methods extraction. Every minute of it
-was wasted work that one lookup would have prevented.
+abstract, Europe PMC, PMC efetch, bioRxiv full text, methods extraction.
 
 Then ask **the whole platform** whether the study is already there — not just the project
 you are about to import into:
@@ -74,12 +73,6 @@ Then ask the **project** what it already holds — not a status note, not even y
 from lib.import_preflight import find_already_present, names_from_listing
 present = find_already_present(sheet_rows, names_from_listing(listing))   # GET /projects/{id}/samples?count=100
 ```
-
-E-MTAB-2700's status file said *BLOCKED — a retry cannot duplicate*, which was true when
-written and false two days later: the original imports had completed and nothing updated the
-note. Re-importing on its word produced **48 samples in a 24-sample project**, untangled
-afterwards by creation timestamp. The trimmed listing is the right endpoint here — a
-pre-flight needs only names.
 
 Three outcomes, three different next moves:
 
@@ -120,7 +113,7 @@ Note that `samples upload` (unlike `samples import`) **does** honour `--project`
 locally-uploaded sample needs no separate assignment step.
 
 Fact 3 has an upstream inconsistency worth knowing: `flowbio samples batch-template
---sample-type CLIP` still lists `strandedness` among the **required** columns, while the
+--sample-type CLIP` may still list `strandedness` among the **required** columns, while the
 import endpoint refuses it. Trust the endpoint; `FORBIDDEN_SHEET_COLUMNS` drops it.
 
 Both accessions are needed during a run: **`SRR` for the header preview** (ENA serves
@@ -156,17 +149,40 @@ python3 -c "from lib.sra_header_preview import preview_runs, inspection_from_hea
 r,s = preview_runs(['SRR21863801'], n_reads=4); print(s); print(inspection_from_header_records(r).notes)"
 ```
 
-**Why ENA and not `fastq-dump`:** ENA serves the *submitted* file, so the original
-instrument headers survive —
+**Why ENA and not `fastq-dump`:** ENA renders the defline as `@<run>.<n> <original spot
+name>` —
 
 ```
 @SRR21863801.1 K00180:212:H7VCTBBXX:5:1101:20598:1033/1
 ```
 
-`fastq-dump` rewrites deflines to `@SRR…N` **even with `--origfmt`**, which silently
-destroys `:rbc:` detection and would send the whole study down the wrong params branch.
-`fastq-dump` is therefore only a fallback for runs ENA does not serve, and
-`headers_provenance.md` records which source each run used, flagging the lossy one.
+— which is the form **Flow itself fetches**. That is the reason, and it is the only reason:
+the preview must see the study exactly as the import will.
+
+An earlier revision claimed `fastq-dump` "rewrites deflines to `@SRR…N` even with
+`--origfmt`" and so destroys `:rbc:` detection. It does neither. Measured on `SRR33628723`
+with sra-tools 3.2.1, `:rbc:` survives every form — only its *position* changes:
+
+| source | defline | UMI sits in |
+|---|---|---|
+| ENA `fastq_ftp` | `@SRR33628723.1 NS500784:…:1rbc:TAGGATAAA/1` | comment |
+| `fastq-dump` (default) | `@SRR33628723.1 NS500784:…:1rbc:TAGGATAAA length=83` | comment |
+| `fastq-dump --origfmt` | `@NS500784:…:1rbc:TAGGATAAA` | read name |
+| `fasterq-dump --seq-defline '@$sn'` | `@NS500784:…:1rbc:TAGGATAAA` | read name |
+
+**The UMI is lost at the whitespace boundary, not at dump time.** The SAM QNAME ends at the
+first space, so anything in the comment is dropped at alignment — the same rule that makes
+`removespace` necessary. Everything that keeps the accession prefix pushes the original
+header past a space.
+
+`fasterq-dump` therefore fixes nothing `fastq-dump` cannot: `--seq-defline '@$sn'` is
+identical to `--origfmt`. Neither helps the direct line, because there **Flow does the
+fetching** and gets ENA's comment form regardless.
+
+The fallback is still not trusted, for the inverse reason: `--origfmt` removes the comment
+field entirely, so `umi_is_stranded_in_comment` has no space to find and its refusal would
+silently vanish. It now infers the verdict from provenance instead, and
+`headers_provenance.md` records which source each run used.
 
 The inspection feeds the same `fastq_headers.inspect_header_lines()` used by the local
 path, so remote and local previews cannot diverge. Params follow the usual table in
@@ -323,83 +339,6 @@ to ever prune a mate.** Import both reads and pick the informative one at submis
 
 The vendored `flowrunanalysis_flowbio.py` hardcodes `"paired": "both"`; override it when a
 study needs a specific mate.
-
----
-
-## 5b. Never delete a mate — upload only the read you want
-
-> **Deleting a mate from an existing Flow sample is destructive, in both directions.**
-> Afterwards the sample, fileset and data endpoints all report a single read and look
-> completely correct, but the samplesheet generator still emits the *other* slot, so every
-> execution containing that sample breaks. There is no API-visible trace of the problem and
-> no way to clear it. The only remedy is to delete the sample and upload the wanted read with
-> `flowbio samples upload --reads1 <file>` (no `--reads2`), which creates a sample that was
-> never paired.
-
-Observed both ways:
-
-| Deleted | Survivor | Symptom |
-|---------|----------|---------|
-| read 1 (GSE215250, keeping read 2) | `…_2.fastq.gz` | stays in `fastq_2`, `fastq_1` empty → `Invalid combination of columns` |
-| read 2 (GSE290281, keeping read 1) | `…_1.fastq.gz` | `fastq_2` still emitted, pointing at the **deleted upload id** → row looks paired; check passes, run dies staging a missing file. Mixed with genuine single-end rows it fails as `Mixture of paired-end and single-end reads!` |
-
-The second case is the nastier one: a batch made *entirely* of such samples passes the
-samplesheet check and then stalls silently.
-
-**Diagnostic:** submit one suspect sample alone. A genuine single-end sample reaches
-`UMITOOLS_EXTRACT`; a mate-deleted one finishes with only `REMOVE_GTF_BRACKETS` and
-`SAMPLE_BASE_SAMPLESHEET_CHECK`.
-
-### The original PARP13 case (read 2 only)
-
-`samples import` pulls **whole runs**, so a PE study arrives with both mates attached. For
-ENCODE3 eCLIP the crosslink is on read 2 (`reference/eclip-analysis-params.md`), so read 1
-must be removed — but deleting it is not sufficient on its own.
-
-**The trap:** Flow's samplesheet generator assigns the mate slot from the **filename
-suffix**. A lone `…_2.fastq.gz` is still placed in `fastq_2`, leaving `fastq_1` empty, and
-the pipeline rejects the row:
-
-```
-ERROR: Please check samplesheet -> Invalid combination of columns provided!
-Line: 'SMInput_HEK293T_Hs_antiviral_rep2,1,,/media/.../SRX17851514_SRR21863794_2.fastq.gz'
-```
-
-**No submission-time workaround fixes this.** All of these were tried against GSE215250
-and none produces a usable single-end row:
-
-| Attempt | Result |
-|---------|--------|
-| `csv_params.samplesheet.paired = "single"` | No effect — **`"single"` is not a valid value** and is silently ignored. The real control is `"first"`/`"second"` (§5a), which does work — but only for samples that still have both mates |
-| `POST /data/{id}/edit {"filename": …}` | Returns 200 but the rename is **silently ignored** |
-| `POST /data/{id}/edit {"paired": 1}` | `400 — "You can only pair multiplexed data"` |
-| Row `values` with `fastq_1: <data id>`, `fastq_2: ""` | Check *passes*, but `fastq_2` is still auto-filled from the filename, so the **same file occupies both slots** → classified paired-end (`single_end=0`) with identical mates; the run stops after the check |
-| Row `values` with `fastq_1: <data id>`, `fastq_2` key omitted | Identical outcome |
-
-The nf-core check is unforgiving by design:
-
-```python
-if sample and fastq_1 and fastq_2:        # -> paired-end,  single_end = 0
-elif sample and fastq_1 and not fastq_2:  # -> single-end,   single_end = 1
-else: print_error("Invalid combination of columns provided!")
-```
-
-`fastq_2` must be genuinely empty, and nothing at submission time can empty a slot that
-Flow filled from the `_2` filename.
-
-**The fix is at upload time, not submission time.** A sample whose read arrived through
-`samples import` carries an immutable mate association. To get a true single-end sample,
-upload the read-2 file explicitly as `reads1`:
-
-```bash
-flowbio samples upload --name <sample> --sample-type CLIP \
-  --reads1 <SRRxxxx_2.fastq.gz> --project <PID> --organism Hs --metadata ...
-```
-
-`--reads2` is what makes a sample paired; omitting it yields single-end, and the file lands
-in slot 1 regardless of its name. This costs a download of the read-2 files (SRA-direct
-cannot supply them locally), which is the standing limitation of the direct-import path for
-paired-end eCLIP — see §6.
 
 ---
 

@@ -87,11 +87,7 @@ None can be skipped, and none is a failure. A gate means the run is paused on a 
 | 2 | `05_metadata` | `--accept-metadata` | a wrong target or agent is wrong in the archive forever |
 | 3 | `108_params` | `--accept-params` | a wrong UMI or mate corrupts silently |
 
-There were four. Submission at `12_analysis` used to be one, and it asked a question 108 had
-already settled: the parameters *are* the decision. A gate that re-asks a settled question
-trains its operator to click through, which costs the other three their meaning.
-
-What actually made submission risky was the batch size, and that is a rule rather than a
+What makes submission risky is the batch size, and that is a rule rather than a
 judgement — **at most 18 samples per execution**. So `12_analysis` derives the split and refuses
 one that exceeds it. `-n` on the analysis script is the number of *batches*, not samples per
 batch.
@@ -108,10 +104,6 @@ always fixable by deleting it and re-running.
 Re-running a completed stage costs nothing. A stage declares its inputs; `state.begin()`
 hashes their contents plus that stage's own arguments and reports whether the previous run
 still stands. Change an upstream artefact and the downstream stage recomputes on its own.
-
-This replaces the old loop where one command owned both `annotation.csv` and the FASTQ
-filenames, so the user had to run it three times for the filenames to catch up. Re-execution
-was the dependency mechanism; now the dependency is written down.
 
 ```mermaid
 flowchart TD

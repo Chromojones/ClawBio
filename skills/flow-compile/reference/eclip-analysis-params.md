@@ -253,17 +253,21 @@ avoids mate surgery entirely. The rest of this section applies when that is not 
 Read 1 carries the crosslink and is already `fastq_1`, so both mates can simply be imported
 and left alone. This is the cheap path: no download, no mate surgery.
 
-**Genuine ENCODE3 paired-end eCLIP — use the local-download path.** The crosslink is on read
-2, and *deleting read 1 does not yield a single-end sample*: the surviving `_2` file stays in
-the `fastq_2` slot, `fastq_1` comes up empty, and the samplesheet check rejects the row.
-Forcing `fastq_1` at submission time only puts the same file in *both* slots, which is then
-classified paired-end with identical mates and stalls. The full list of failed workarounds is
-in `reference/sra-direct-import.md` §5b. Instead fetch the read-2 FASTQs from ENA FTP and
-upload them with `flowbio samples upload --reads1 <read2 file>` (omitting `--reads2`), which
-assigns slot 1 explicitly.
+**Genuine ENCODE3 paired-end eCLIP — import both mates and select read 2 at submission.**
+The crosslink is on read 2, but that does not require a single-end sample. Set
+`csv_params.samplesheet.paired = "second"` and only mate 2 reaches the samplesheet, as a
+genuine single-end row — verified on GSE290281 with both mates attached, same params, only
+`paired` changed (`reference/sra-direct-import.md` §5a). PARP13 (GSE215250) was rebuilt this
+way. This is the direct line's answer and it needs no download.
+
+*Local line only:* when you are uploading files yourself, upload the mate you want —
+`apply_eclip_crosslink_mate_filenames` promotes File 2 → File for eCLIP rows, and
+`flowbio samples upload --reads1 <read2 file>` (omitting `--reads2`) assigns slot 1
+explicitly. Do **not** reach for this on the direct line; `paired` already covers it.
 
 **Never delete a mate from an existing sample** to convert between the two — it breaks the
-sample silently in both directions (`reference/sra-direct-import.md` §5b).
+sample silently in both directions (`reference/sra-direct-import.md` §5b). `paired` exists
+precisely so that you never need to.
 
 Record the choice in the sample `Comments` — that read 2 is the uploaded read is not
 recoverable from the Flow record otherwise.
