@@ -25,7 +25,6 @@ from lib.metadata_validate import (  # noqa: E402
     validate_purification_agent,
     validate_source,
     validate_target_and_annotation,
-    write_metadata_hook,
 )
 
 
@@ -238,30 +237,16 @@ class TestAnnotationTableValidation:
         assert any(i.field == "Protein (Purification Target)" for i in issues)
 
 
-class TestMetadataHook:
-    def test_hook_writes_confirm_file_and_json(self, tmp_path):
-        df = pd.DataFrame(
-            [
-                {
-                    "Sample Name": "X_rep1",
-                    "Purification Agent": "PARP13 antibody",
-                    "Cell or Tissue": "ATCC Cell Lines",
-                    "Protein (Purification Target)": "PARP13",
-                    "Purification Target Annotation": "",
-                    "5' Barcode Sequence": "NNNNNNNNNN",
-                }
-            ]
-        )
-        issues = validate_annotation_table(df)
-        path = write_metadata_hook(tmp_path, issues)
-        assert path.name == "CONFIRM_METADATA.md"
-        assert (tmp_path / "metadata_validation.json").exists()
-        text = path.read_text(encoding="utf-8")
-        assert "Purification Agent" in text and "Cell or Tissue" in text
+class TestTheDeadHookIsRetired:
+    """`write_metadata_hook` wrote `CONFIRM_METADATA.md` + `metadata_validation.json` for the
+    monolith. No stage ever called it after the rewrite — `05_metadata` renders
+    `metadata_report.md` + `metadata_issues.json` itself — yet the docs still named its
+    artefacts as the ones to review, sending a reader to files no run produces."""
 
-    def test_clean_table_reports_no_issues(self, tmp_path):
-        path = write_metadata_hook(tmp_path, [])
-        assert "No metadata issues" in path.read_text(encoding="utf-8")
+    def test_it_is_gone(self):
+        import lib.metadata_validate as mv
+
+        assert not hasattr(mv, "write_metadata_hook")
 
 
 class TestAbControl:

@@ -341,3 +341,56 @@ class TestTheGeoFetchRecipeMatchesTheCode:
     def test_the_recaptcha_trap_is_named(self):
         text = (SKILL_DIR / "reference" / "sra-direct-import.md").read_text().lower()
         assert "recaptcha" in text or "captcha" in text
+
+
+class TestReferenceDocsNameRealThings:
+    """The DEMO.md test above checks DEMO.md's flags. These check every reference doc, which
+    is where the monolith's residue accumulated: flags from a CLI that no longer exists
+    (`--case`, `--gse`, `--flow-project-id`), and artefacts written by hooks nothing calls
+    (`CONFIRM_METADATA.md`). A doc naming a file no run produces sends the reader nowhere.
+    """
+
+    #: Flags belonging to tools this skill drives rather than defines.
+    _EXTERNAL_FLAGS = {
+        "--reads1", "--reads2", "--project", "--job-id", "--token-file", "--username",
+        "--password", "--seq-defline", "--origfmt", "--split-files", "--stdout",
+        "--concatenate-reads", "--align", "--twopass", "--length", "--out", "--sheet",
+        "--params-json", "--filter", "--pid", "--yes", "--dry-run", "--execute-upload",
+        "--sample-type", "--profile", "--input", "--outdir",
+    }
+
+    def _docs(self):
+        return [*SKILL_DIR.glob("reference/*.md"), SKILL_DIR / "SKILL.md"]
+
+    def _code(self):
+        parts = [p.read_text() for p in SKILL_DIR.glob("stages/*.py")]
+        parts += [p.read_text() for p in SKILL_DIR.glob("lib/*.py")]
+        parts += [p.read_text() for p in SKILL_DIR.glob("lib/vendor/**/*.py")]
+        parts.append((SKILL_DIR / "flow_compile.py").read_text())
+        return "\n".join(parts)
+
+    def test_every_flag_named_exists_somewhere_in_the_code(self):
+        code = self._code()
+        bad = []
+        for doc in self._docs():
+            for flag in sorted(set(re.findall(r"(?<![\w-])--[a-z][a-z0-9-]{2,}", doc.read_text()))):
+                if flag in self._EXTERNAL_FLAGS:
+                    continue
+                if f'"{flag}"' not in code and f"'{flag}'" not in code:
+                    bad.append(f"{doc.name}: {flag}")
+        assert bad == [], f"docs name flags the code does not define: {bad}"
+
+    def test_every_artefact_named_is_one_the_code_writes(self):
+        """A run-directory artefact must be produced by something, or it is a dead pointer."""
+        code = self._code()
+        external = {"srr_map.tsv", "annotation.csv", "samplesheet.csv", "Testtemplate.xlsx",
+                    "edits.csv"}  # user-authored inputs, not run artefacts
+        bad = []
+        for doc in self._docs():
+            for name in sorted(set(re.findall(
+                    r"`([a-z_0-9]+\.(?:json|md|csv|tsv|sh|txt))`", doc.read_text()))):
+                if name in external or name.startswith(("demo", "paper_", "geo_")):
+                    continue
+                if f'"{name}"' not in code and f"'{name}'" not in code and f"/ {name}" not in code:
+                    bad.append(f"{doc.name}: {name}")
+        assert bad == [], f"docs name artefacts nothing writes: {bad}"

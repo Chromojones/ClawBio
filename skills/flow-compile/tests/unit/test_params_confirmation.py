@@ -1,22 +1,19 @@
-"""Hard stop #4: the confirmed parameters must match the derived ones BY VALUE.
+"""The fourth gate must not come back through the generated script.
 
-The generated analysis script compared the two files with `cmp -s`, which is a byte
-comparison. Two JSON objects holding identical parameters differ byte-for-byte whenever a key
-order, an indent, or a trailing newline changes, and any of those is enough to make a correctly
-confirmed run refuse to start. The failure runs the other way too: `cmp` reports no difference
-between two files that are equally wrong, so a key missing from both passes the gate.
+`12_analysis` is a check, not a gate: once `108_params` is released with `--accept-params` the
+parameters *are* the decision, and asking again at submission is how a gate stops meaning
+anything. The stage honours that — but the runner it wrote did not. `run_analysis.sh` exited 3
+unless the operator hand-copied `pipeline_params.json` to `analysis_params.confirmed.json`,
+and pointed at a `CONFIRM_ANALYSIS_PARAMS.md` that `write_analysis_params_hook` would have
+written if anything had called it. So the script demanded a file nothing told anyone to make,
+to re-answer a question already settled two stages earlier.
 
-A gate that blocks correct runs is worse than annoying — it teaches the person operating it to
-work around the gate, which is exactly what this one is for.
-
-Compared as parsed values now, so key order and formatting are irrelevant and the comparison
-is about the parameters themselves.
+The comparison machinery went with it. `compare_confirmed_params` existed only to diff the
+derived params against a copy of themselves.
 
 Story: FAILURES.md#params-confirmation
 """
 
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -25,68 +22,8 @@ import pytest
 SKILL_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(SKILL_DIR))
 
-from lib.pipeline_params import compare_confirmed_params  # noqa: E402
 
-DERIVED = {"move_umi_to_header": "false", "umi_separator": "rbc:", "paired": "second"}
-
-
-class TestValueEquality:
-    def test_identical_values_match(self):
-        assert compare_confirmed_params(DERIVED, dict(DERIVED)).ok
-
-    def test_key_order_does_not_matter(self):
-        """`cmp -s` said these differed. They do not."""
-        reordered = {k: DERIVED[k] for k in reversed(list(DERIVED))}
-        assert compare_confirmed_params(DERIVED, reordered).ok
-
-    def test_a_changed_value_is_caught(self):
-        changed = dict(DERIVED, paired="both")
-        verdict = compare_confirmed_params(DERIVED, changed)
-        assert not verdict.ok
-        assert "paired" in verdict.reason
-
-    def test_a_missing_key_is_caught(self):
-        missing = {k: v for k, v in DERIVED.items() if k != "paired"}
-        verdict = compare_confirmed_params(DERIVED, missing)
-        assert not verdict.ok
-        assert "paired" in verdict.reason
-
-    def test_an_extra_key_is_caught(self):
-        """A confirmed file with a parameter the derivation never produced is not a match."""
-        extra = dict(DERIVED, encode_eclip="true")
-        verdict = compare_confirmed_params(DERIVED, extra)
-        assert not verdict.ok
-        assert "encode_eclip" in verdict.reason
-
-    def test_the_reason_names_every_difference(self):
-        verdict = compare_confirmed_params(DERIVED, dict(DERIVED, paired="both", umi_separator="_"))
-        assert "paired" in verdict.reason and "umi_separator" in verdict.reason
-
-
-class TestFormattingIsIrrelevant:
-    def test_indentation_does_not_matter(self, tmp_path):
-        a = tmp_path / "a.json"; a.write_text(json.dumps(DERIVED, indent=2))
-        b = tmp_path / "b.json"; b.write_text(json.dumps(DERIVED))
-        assert compare_confirmed_params(json.loads(a.read_text()),
-                                        json.loads(b.read_text())).ok
-
-    def test_byte_comparison_would_have_disagreed(self, tmp_path):
-        """Pins the reason this changed, so nobody restores `cmp -s` as a simplification."""
-        a = tmp_path / "a.json"; a.write_text(json.dumps(DERIVED, indent=2, sort_keys=True))
-        b = tmp_path / "b.json"; b.write_text(json.dumps(DERIVED))
-        assert a.read_bytes() != b.read_bytes()
-        assert compare_confirmed_params(json.loads(a.read_text()),
-                                        json.loads(b.read_text())).ok
-
-
-class TestTheGeneratedScript:
-    """Checked against the emitted script, not the generator's source.
-
-    The generator carries a comment explaining why `cmp -s` was replaced, and a grep over the
-    source cannot tell that explanation from the thing it warns about. This is the second time
-    in this rebuild that a grep-test matched its own documentation.
-    """
-
+class TestTheGeneratedRunnerDoesNotReGate:
     @pytest.fixture
     def script(self, tmp_path):
         from lib.flow_stages import write_analysis_script
@@ -101,13 +38,37 @@ class TestTheGeneratedScript:
         )
         return path.read_text()
 
-    def test_it_no_longer_byte_compares(self, script):
-        executable = [ln for ln in script.splitlines() if not ln.lstrip().startswith("#")]
-        assert not any("cmp -s" in ln for ln in executable)
+    def test_it_demands_no_confirmation_file(self, script):
+        assert "analysis_params.confirmed.json" not in script
+        assert "CONFIRM_ANALYSIS_PARAMS" not in script
 
-    def test_it_compares_by_value(self, script):
-        assert "compare_confirmed_params" in script
+    def test_it_does_not_exit_3(self, script):
+        """Exit 3 is the gate code. This script gates nothing; 108 already did."""
+        assert "exit 3" not in script
 
-    def test_it_still_gates_on_a_missing_confirmation(self, script):
-        """The gate itself must survive the change to how the comparison is made."""
-        assert "exit 3" in script
+    def test_it_still_submits_with_the_approved_params(self, script):
+        assert "pipeline_params.json" in script
+        assert "--params-json" in script
+
+    def test_the_params_file_is_still_written(self, tmp_path):
+        from lib.flow_stages import write_analysis_script
+
+        write_analysis_script(
+            tmp_path, analysis_script=tmp_path / "a.py", project_id="P1",
+            pipeline_params={"paired": "second"}, sample_name_filter="",
+            experimental_method="eCLIP",
+        )
+        assert (tmp_path / "pipeline_params.json").exists()
+
+
+class TestTheMachineryIsGone:
+    def test_compare_confirmed_params_is_retired(self):
+        import lib.pipeline_params as pp
+
+        assert not hasattr(pp, "compare_confirmed_params")
+
+    def test_the_dead_hook_is_retired(self):
+        """`write_analysis_params_hook` wrote the review file nothing ever asked for."""
+        import lib.pipeline_params as pp
+
+        assert not hasattr(pp, "write_analysis_params_hook")

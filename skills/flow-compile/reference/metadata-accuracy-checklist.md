@@ -2,8 +2,7 @@
 
 The checklist a researcher — or any model driving this skill — must satisfy before a CLIP
 study is uploaded to Flow. It exists because three fields are **not reliably present in
-GEO** and were previously left to the agent's judgement, producing different answers from
-different models on the same study:
+GEO**, so without a rule each model answers differently on the same study:
 
 | Field | Flow key | Why it drifts |
 |-------|----------|---------------|
@@ -11,10 +10,11 @@ different models on the same study:
 | Cell or Tissue | `source` | GEO `source_name_ch1` is often a supplier phrase or a generic descriptor |
 | Purification Target Annotation | `purification_target__annotation` | Tag (GFP/FLAG/V5…) is implied by the construct, never stated as a field |
 
-Enforcement is **code, not prose**: `lib/metadata_validate.py` validates every row and
-writes `CONFIRM_METADATA.md` + `metadata_validation.json`. Errors block the pipeline until
-the researcher re-runs with `--accept-metadata`. This document is the *reasoning* behind
-those checks — read it when the validator flags something and you must decide what the
+Enforcement is **code, not prose**: `05_metadata` validates every row through
+`lib/metadata_validate.py` and writes `metadata_report.md` + `metadata_issues.json`. Any error
+stops the stage at exit 3; review the report, then release it with
+`python3 stages/05_metadata.py --output <dir> --accept-metadata`. This document is the
+*reasoning* behind those checks — read it when the validator flags something and you must decide what the
 right value actually is.
 
 Related: `reference/annotation-rules.md` (all columns), `reference/sra-direct-import.md`
@@ -118,10 +118,9 @@ there is nothing to check it against, so `Anti-NOVA` stays unqualified.
 | *(empty)* | **Size-matched input (SMInput), bead-only and IgG controls.** No antibody was used, and this database records that as an empty field rather than a literal string |
 | `Strep/His affinity tag purification` | iCLAP (tag pulldown, not an antibody) |
 
-> **Convention:** inputs carry an **empty** `purification_agent`. An earlier revision of this
-> page prescribed the literal `no antibody`; that was reconciled to empty so IP rows are the
-> only ones with a value, making "has an agent" a clean proxy for "is an IP". Applied across
-> GSE290281 and GSE215250.
+> **Convention:** inputs carry an **empty** `purification_agent` — never the literal
+> `no antibody`, which the validator rejects. Empty makes IP rows the only ones with a value,
+> so "has an agent" is a clean proxy for "is an IP".
 
 ### Never
 
@@ -360,9 +359,9 @@ GET  /samples/{id}                                   -> {"name": ..., "pubmed": 
                                                         (NOT under "metadata")
 ```
 
-Its absence from the template is why PMIDs were previously written into `comments`. That is
-not merely untidy — **setting `pubmed` populates the owning project's `papers`** with a
-resolved citation:
+It is absent from the template, which tempts people to put the PMID in `comments` instead.
+Do not — **setting `pubmed` populates the owning project's `papers`** with a resolved
+citation:
 
 ```json
 "papers": [{"id": "31216479", "year": 2019, "journal": "Cell Rep",
@@ -434,17 +433,16 @@ Fields the pipeline **cannot** derive deterministically. Each is a place two mod
 produce different metadata for the same study, so each is a review target. Hardened items
 are listed for contrast — they now fail loudly instead of silently.
 
-### Hardened (validated or gated)
+### Enforced by the validator
 
-| Area | Was | Now |
-|------|-----|-----|
-| `purification_agent` | first Key Resources antibody; vendor-less strings passed | assay-sentence precedence; vendor **and** catalog required; dilutions (`1:500`) rejected as catalogs |
-| `source` | `!Sample_source_name_ch1` first — supplier phrases reached Flow | `cell line:` / `cell type:` wins; supplier + generic descriptors rejected |
-| `purification_target` | comma-lead returned any token — `HELA`, `RABBIT`, `ANTI-FLAG` | cell lines / host species / `ANTI-` rejected; **inputs → `SMInput`**, IgG → `IgG` |
-| `experimental_method` | `"flash"` matched before `"iclip"`; *"flash-frozen"* rerouted whole studies | `flash-frozen` stripped, word boundaries, **series title outranks protocol prose** |
-| Protocol detectors | bare substring over protocol blob | shared matcher; prose mentions no longer misfire |
-| `--paper-text` | attaching an excerpt **disabled** the PMC Methods fetch | excerpt now **augments** the fetched Methods |
-| Validation reach | warnings only when a PubMed ID existed | field checks run unconditionally; `CONFIRM_METADATA.md` blocks on errors |
+| Area | Rule |
+|------|------|
+| `purification_agent` | assay-sentence precedence; vendor **and** catalog required; dilutions (`1:500`) rejected as catalogs |
+| `source` | `cell line:` / `cell type:` wins; supplier and generic descriptors rejected |
+| `purification_target` | cell lines / host species / `ANTI-` rejected; **inputs → `SMInput`**, IgG → `IgG` |
+| `experimental_method` | `flash-frozen` stripped, word boundaries, **series title outranks protocol prose** |
+| `--paper-text` | an attached excerpt **augments** the fetched PMC Methods |
+| Validation reach | field checks run unconditionally; errors stop `05_metadata` at exit 3 |
 
 ### Still agent-decided — review these
 

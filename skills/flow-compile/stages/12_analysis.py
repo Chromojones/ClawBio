@@ -92,9 +92,8 @@ def body(args, out: Path) -> dict:
                                      f"{MAX_SAMPLES_PER_EXECUTION}-per-execution ceiling was "
                                      "not checked. Pass --samples.")]
 
-    # The generated runner carries the confirmed-parameters check, which compares the derived
-    # and confirmed files BY VALUE. Generating it here is what puts that check in the path the
-    # stages actually take; it previously lived in a script nothing produced.
+    # The runner submits with the parameters 108 already approved. It re-asks nothing:
+    # submission is not a fourth gate.
     script_path = args.analysis_script or (
         SKILL_DIR / "lib" / "vendor" / "flow_api" / "analysis" / "flowrunanalysis_flowbio.py")
     runner = write_analysis_script(
@@ -106,7 +105,7 @@ def body(args, out: Path) -> dict:
         experimental_method=st.route(out).get("protocol", ""),
         num_chunks=chunks,
     )
-    lines.append(f"runner: {runner.name} (confirm params, then run it)")
+    lines.append(f"runner: {runner.name} — submits with the parameters 108 approved")
     lines.append("submitted" if args.submit else "dry run; re-run with --submit")
     return {"findings": findings, "lines": lines, "note": check.describe()[:60]}
 

@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lib import state as st  # noqa: E402
 from lib.header_state import classify_headers  # noqa: E402
+from lib.sra_header_preview import inspection_from_header_records  # noqa: E402
 from stages._common import CheckFailed, parser_for, run_stage  # noqa: E402
 
 NAME = "101_preview"
@@ -50,15 +51,33 @@ def body(args, out: Path) -> dict:
             f"Run stages/201_fetch.py instead."
         )
 
+    sources: dict[str, str] = {}
     if args.headers:
         headers = json.loads(Path(args.headers).read_text())
+        records = {"supplied": list(headers)}
     else:
-        from lib.sra_header_preview import preview_headers
+        import lib.sra_header_preview as preview
 
-        rows = json.loads((out / "sheet_rows.json").read_text())
-        headers = []
-        for row in rows[: args.limit]:
-            headers += preview_headers(row["accession"], n_reads=args.reads)
+        rows = json.loads((out / "sheet_rows.json").read_text())[: args.limit]
+        # The RUN, not the experiment: ENA serves FASTQ per SRR, and an SRX resolves to no
+        # files — which would preview nothing and record a header state derived from no
+        # headers. 02_index carries both accessions for exactly this reason.
+        runs = [str(row.get("srr", "")).strip() for row in rows]
+        if not all(runs):
+            raise CheckFailed(
+                "sheet_rows.json has no `srr` for every previewed sample. ENA serves FASTQ "
+                "per run, so the preview needs the SRR; populate the srr_map's `srr` column "
+                "and re-run 02_index."
+            )
+        records, sources = preview.preview_runs(runs, n_reads=args.reads)
+        headers = [line for recs in records.values() for line in recs]
+
+    # Classify the state AND ask whether the UMI will survive the fetch. These are different
+    # questions: the state decides the params, while a UMI stranded in the header comment is
+    # dropped at the SAM QNAME boundary and kills dedup after mapping, whatever the state.
+    inspection = inspection_from_header_records(records, sources=sources)
+    if inspection.umi_in_comment:
+        raise CheckFailed(inspection.notes)
 
     result = classify_headers(headers)
     if not result.ok:

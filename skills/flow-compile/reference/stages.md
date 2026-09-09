@@ -12,9 +12,9 @@ python3 flow_compile.py --run    --output <dir>   # run until something stops
 
 ## Exit codes
 
-These are the interface. `3` and `4` are different on purpose: the old orchestrator printed a
-warning and continued for both "this barcode is awaiting approval" and "this barcode
-contradicts the reads", which is how an unapproved barcode could reach an upload.
+These are the interface. `3` and `4` are different on purpose: "this barcode is awaiting
+approval" and "this barcode contradicts the reads" need different answers, and collapsing them
+into one warning is how an unapproved barcode reaches an upload.
 
 | code | meaning | what to do |
 |---|---|---|
@@ -38,9 +38,8 @@ contradicts the reads", which is how an unapproved barcode could reach an upload
 
 ## The branch
 
-One condition. The local line once existed for four reasons: FLASH and uvCLAP read handling, a
-UMI in the header comment, and a study absent from SRA. The first two went with those
-protocols; the third goes once `removespace` runs inside the clip-seq pipeline.
+One condition. FLASH and uvCLAP are refused by name, and `removespace` runs inside the
+clip-seq pipeline, so a study absent from SRA/ENA is the only reason left to go local.
 
 ```
 study not in SRA/ENA   ->  local

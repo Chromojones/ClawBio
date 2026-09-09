@@ -22,7 +22,7 @@ metadata:
       format:
         - txt
         - tsv
-      description: GEO series matrix file for the target GSE (or use --gse to fetch).
+      description: GEO series matrix file for the target GSE.
       required: false
     - name: srr_map
       type: file
@@ -236,8 +236,8 @@ next: 05_metadata
 
 ## Gotchas
 
-Deliberately empty. Every rule that used to live here now lives in `reference/`, and every
-incident is indexed in [`FAILURES.md`](FAILURES.md) against the test that encodes it.
+Deliberately empty. Every rule lives in `reference/`, and every incident is indexed in
+[`FAILURES.md`](FAILURES.md) against the test that encodes it. A rule stated twice will drift.
 
 ## Safety
 

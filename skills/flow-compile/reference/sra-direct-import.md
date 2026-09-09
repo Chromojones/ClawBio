@@ -5,10 +5,9 @@ from SRA/ENA itself, so there is no local download, no `prefetch`, no `removespa
 cleaning and no multi-gigabyte staging disk. The focus is metadata accuracy and a
 header preview.
 
-Requires **flowbio ≥ 0.12.0** (`flowbio samples import`; `project`/`pubmed` reserved). The older local-download path
-(`prefetch.sh` → `clean_fastq.sh` → `upload_live.sh`) is the 2xx line in `reference/stages.md`
-and is the fallback when a study is not in SRA/ENA, or when reads must be transformed
-before upload (FLASH / uvCLAP UMI extraction).
+Requires **flowbio ≥ 0.12.0** (`flowbio samples import`; `project`/`pubmed` reserved). The
+local-upload path is the 2xx line in `reference/stages.md`, and is the fallback for a study
+absent from SRA/ENA.
 
 Worked example throughout: **GSE215250** — Busa *et al.* 2024, *iScience*
 ([PMID 38495826](https://pubmed.ncbi.nlm.nih.gov/38495826/)) — 8 PARP13 eCLIP samples
@@ -125,11 +124,11 @@ FASTQ per run) and **`SRX` for the import**. `srr_map.tsv` therefore carries bot
 
 | Input | Where from |
 |-------|-----------|
-| GEO series matrix | `--geo-matrix` (or `--gse`) |
+| GEO series matrix | `--geo-matrix` on `02_index` / `04_annotate` |
 | `srr_map.tsv` with **`gsm`, `srr`, `srx`** columns | SRA run selector / ENA filereport. `mate` and `fastq` are optional — derived on ENA's naming when absent, and needed only by the local line |
 | Paper Methods excerpt | `--paper-text` — the **CLIP assay section only** |
-| Flow project id | `--flow-project-id`, created in the Flow UI |
-| API token | `FLOW_API_TOKEN`, `--token-file`, or `~/.config/flow/api-token` |
+| Flow project id | `00_setup --project-id`, or `--create-project "<name>"` to make one |
+| API token | `FLOW_TOKEN` / `FLOW_API_TOKEN`, or `~/.config/flow/api-token` |
 
 Resolve `SRX` for a BioProject in one call:
 
@@ -159,9 +158,9 @@ name>` —
 — which is the form **Flow itself fetches**. That is the reason, and it is the only reason:
 the preview must see the study exactly as the import will.
 
-An earlier revision claimed `fastq-dump` "rewrites deflines to `@SRR…N` even with
-`--origfmt`" and so destroys `:rbc:` detection. It does neither. Measured on `SRR33628723`
-with sra-tools 3.2.1, `:rbc:` survives every form — only its *position* changes:
+`fastq-dump` does **not** rewrite deflines to `@SRR…N`, and `--origfmt` prints the original
+spot name alone. Measured on `SRR33628723` with sra-tools 3.2.1, `:rbc:` survives every form —
+only its *position* changes:
 
 | source | defline | UMI sits in |
 |---|---|---|
@@ -197,8 +196,8 @@ GSE215250 result: no `:rbc:` → `move_umi_to_header=true`, `umi_separator=_`,
 
 Build the annotation as normal, then validate before importing:
 
-- `lib/metadata_validate.py` → `CONFIRM_METADATA.md` + `metadata_validation.json`
-- Errors block until the researcher re-runs with `--accept-metadata`
+- `05_metadata` → `metadata_report.md` + `metadata_issues.json`
+- Any error stops the stage at exit 3; release it with `--accept-metadata` once reviewed
 - Full rules and worked traps: **`reference/metadata-accuracy-checklist.md`**
 
 This gate matters more on the SRA-direct path than on the local one, because there is no
@@ -248,10 +247,9 @@ Never emitted: `project`, `strandedness`, `reads1`, `reads2`.
 > Seen on GSE297587: 18 rows imported with the tag and cell-line annotation missing; a
 > follow-up edit pass restored `LARP6:dNTR-nMYC` and `U87:Glioblastoma`.
 >
-> **`samples upload` does not have this problem.** Uploading the same sample locally with
-> `--metadata-json` including `purification_target__annotation` and `source__annotation`
-> stores both correctly, so the local path needs no second pass. The gap is specific to
-> `samples import`.
+> **`samples upload` does not have this problem.** The local path sends
+> `purification_target__annotation` and `source__annotation` with the sample and they arrive
+> intact, so it needs no second pass. The gap is specific to `samples import`.
 
 ---
 
@@ -363,11 +361,10 @@ execution covers **one genome** and **one `umi_header_format`**.
 
 | Step | SRA-direct (preferred) | Local download |
 |------|------------------------|----------------|
-| Reads | Flow pulls from SRA/ENA | `prefetch.sh` / `wget` |
+| Reads | Flow pulls from SRA/ENA | fetched by hand (`wget` from ENA FTP) |
 | Disk | none | full FASTQ set |
 | Header check | ENA byte-range snippet | `lib/fastq_headers.py` on disk |
-| Header cleaning | n/a — never uploaded locally | `clean_fastq.sh` (`removespace.py`) |
-| UMI pre-extraction | **not possible** — use local path for FLASH / uvCLAP | `umi_extract.sh` |
+| Header cleaning | n/a — never uploaded locally | n/a — `removespace` runs in the clip-seq pipeline |
 | Accession | **SRX** | SRR |
 | Project | `project` column in the sheet (0.12.0+) | `--project-id` on upload |
-| Entry point | `sra_import.sh` | `upload_live.sh` |
+| Entry point | `sra_import.sh` (`109_sheet` → `110_import`) | `upload_live.sh` (`210_upload`) |

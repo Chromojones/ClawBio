@@ -154,20 +154,18 @@ class TestGateFourReachesTheSubmission:
         callers = [p.name for p in stages.glob("*.py") if "write_analysis_script" in p.read_text()]
         assert callers == ["12_analysis.py"], callers
 
-    def test_the_generated_script_carries_the_confirmation_gate(self, tmp_path):
-        import json
-
+    def test_the_generated_script_does_not_re_gate(self, tmp_path):
+        """Submission is not a fourth gate, and the runner must not smuggle one back in."""
         from lib.flow_stages import write_analysis_script
 
-        (tmp_path / "pipeline_params.json").write_text(json.dumps({"paired": "second"}))
         path = write_analysis_script(
             tmp_path, analysis_script=tmp_path / "a.py", project_id="P1",
             pipeline_params={"paired": "second"}, sample_name_filter="",
             experimental_method="eCLIP",
         )
         text = path.read_text()
-        assert "compare_confirmed_params" in text
-        assert "exit 3" in text
+        assert "analysis_params.confirmed.json" not in text
+        assert "exit 3" not in text
 
 
 class TestTheGatePointsAtTheReviewFile:

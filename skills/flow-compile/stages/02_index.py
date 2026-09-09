@@ -68,7 +68,12 @@ def body(args, out: Path) -> dict:
         if not srx:
             without_srx.append(gsm)
             continue
-        rows.append({"accession": srx[0], "sample_type": args.sample_type, "gsm": gsm})
+        # Both accessions travel with the row. The SRX is what 109_sheet imports; the SRR is
+        # what 101_preview previews, because ENA serves FASTQ per run and an experiment
+        # accession resolves to no files.
+        srr = sorted({str(v).strip() for v in group.get("srr", []) if str(v).strip()})
+        rows.append({"accession": srx[0], "srr": srr[0] if srr else "",
+                     "sample_type": args.sample_type, "gsm": gsm})
     if without_srx:
         findings.append(Finding(
             WARNING,

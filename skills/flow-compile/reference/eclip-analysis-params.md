@@ -5,12 +5,10 @@ single-end eCLIP (seCLIP) have *different read structures*, and the mate that ca
 crosslink is **not** the same in both. Getting this wrong silently analyses the wrong end
 of the molecule.
 
-> **Correction history (2026-08).** This page has been wrong twice, in opposite directions.
-> First it said the crosslink is always at the 5′ end of read 1 — untrue for **ENCODE3 /
-> Van Nostrand 2016 paired-end eCLIP**, where it is on **read 2** (`samtools view -f 128`,
-> `eclipdemux`). The fix then over-corrected to "PE eCLIP → read 2" for *all* eCLIP — also
-> untrue. **Post-2024 studies are seCLIP and use read 1**, even when sequenced and deposited
-> as PAIRED. Establish the SOP era first (§0); do not infer from the SRA layout field.
+> **Establish the SOP era before anything else (§0), and do not infer it from the SRA layout
+> field.** ENCODE3 / Van Nostrand 2016 paired-end eCLIP carries the crosslink on **read 2**
+> (`samtools view -f 128`, `eclipdemux`); post-2024 studies are seCLIP and use **read 1**,
+> even when sequenced and deposited as PAIRED.
 
 ---
 
@@ -174,11 +172,9 @@ executions are the ground truth for this parameter:
 | `@…:2149:rbc:CACTTG 1:N:0:ATCACG` | **ENCODE portal** — `:rbc:` mid-header | **`true`**, `umi_separator=rbc:` |
 | `@…:0:1rbc:AAAATATAA` | **iCLIP** — tag terminates the header | `false`, `umi_separator=rbc:` |
 
-An earlier revision of this page said *"Never set `encode_eclip=true` without `:rbc:` in
-sampled headers."* **That is wrong.** The live RBP ENCODE files that run with
-`encode_eclip=true` carry a **prepended randomer and no `:rbc:` at all** — 5 nt, 949 distinct
-values across 5,371 reads. Presence of `:rbc:` is neither necessary nor sufficient; the
-*layout* decides, and the assay family gates it.
+**`:rbc:` is neither necessary nor sufficient for `encode_eclip=true`.** The live RBP ENCODE
+files that run with it carry a **prepended randomer and no `:rbc:` at all** — 5 nt, 949
+distinct values across 5,371 reads. The *layout* decides, and the assay family gates it.
 
 Derivation is `lib/header_state.py` (`classify_header` / `params_for_state`), not
 `fastq_headers.inspect_header_lines`, which returns the same `(False, False)` for a prepended

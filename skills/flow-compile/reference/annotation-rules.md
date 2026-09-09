@@ -41,10 +41,6 @@ For raw SRA reads without `:rbc:`, Flow extracts the UMI from the uploaded read
 (`move_umi_to_header=true`, `umi_header_format=NNNNNNNNNN`, `encode_eclip=false`).
 Full read-structure table, header states and literature: `reference/eclip-analysis-params.md`.
 
-## FLASH UMI extract (pre-upload)
-
-FLASH PE libraries carry **13 nt** on read 2 (`NNXXXXXXNNNNN`: 2 random + 6 UMI + 5 flank) per [PMC7026646](https://pmc.ncbi.nlm.nih.gov/articles/PMC7026646/) and `projects/flash/umi-extract.sh`. flow-compile writes `umi_extract.sh` (umi_tools) to move UMI into read 1 headers, then uploads **read 1 only** (`*_1.umi.fastq.gz`). Do **not** run `removespace.py` on FLASH UMI outputs — headers like `@SRR….1_CCGCCCT 1 length=74` are correct; samtools drops text after the space before `umi_dedup`. Analysis uses `move_umi_to_header=false`, `umi_separator=_`.
-
 ## GSM ↔ SRR alignment
 
 1. Index matrix columns by `!Sample_geo_accession`.
@@ -58,9 +54,9 @@ FLASH PE libraries carry **13 nt** on read 2 (`NNXXXXXXNNNNN`: 2 random + 6 UMI 
 | Hook | Artifact | Agent action |
 |------|----------|--------------|
 | Barcode | `CONFIRM_BARCODES.md`, `barcode_proposals.json` | Present 5' barcode, **source** (`evidence[].source`), and quote; wait for `status: confirmed` |
-| Analysis params | `CONFIRM_ANALYSIS_PARAMS.md`, `pipeline_params.json` | Present derived `move_umi_to_header`, `umi_header_format`, etc.; user copies to `analysis_params.confirmed.json` |
+| Analysis params | `pipeline_params.json` | `108_params` derives `move_umi_to_header`, `umi_header_format`, `paired`; released with `--accept-params` |
 | Paper metadata | `ANNOTATION_WARNINGS.md`, `annotation_warnings.json` | After annotation build: Scientist = first author; PI = last author; purification agents from paper Methods/PMC; review warnings for empty/generic fields |
-| Flow project | CLI `--flow-project-id` | User creates project in Flow UI |
+| Flow project | `00_setup --project-id` or `--create-project` | Adopted or created at setup |
 
 ## Barcode source priority
 

@@ -28,7 +28,7 @@ Order of investigation is conceptual — the agent gathers text; `barcode_eviden
 
 **Agent's job here — evidence + reasoned guess, not just options:** GEO states "15 bp barcode and UMI regions" inside a 30 bp total, which parses as **15 bp barcode + 15 bp UMI as separate regions**, not one 30N run in `5' Barcode Sequence`. The agent should quote the exact Data processing sentence, then propose **15N** as the best guess — reasoning that a combined 30N block is unusually long for a single 5' barcode field (general protocol knowledge, not something derivable from this specific text alone). This guess is **not verifiable from the FASTQ itself**: the barcode and UMI are both random bases, so there is no visible boundary between them in the read to check against. The agent must present the evidence + its reasoning in `CONFIRM_BARCODES.md` and let the user confirm or correct — never silently assume.
 
-**Resolved:** `hnrnph_hs_annotation.tsv` correctly uses **15N** (`NNNNNNNNNNNNNNN`). An earlier note in this doc said "16N" — that was a miscount from an older draft, not a real alternative.
+**Resolved:** the annotation uses **15N** (`NNNNNNNNNNNNNNN`).
 
 ## PMC6307142 — DHX9 iCLIP methods (GSE105082)
 
@@ -56,8 +56,7 @@ Order of investigation is conceptual — the agent gathers text; `barcode_eviden
 
 ## Judgement calls, decided once
 
-Folded from `DESIGN.md`, which is deleted. These are the cases where evidence is incomplete and
-the answer is a judgement rather than a lookup. In all of them the split is the same: **Python
+The cases where evidence is incomplete and the answer is a judgement rather than a lookup. In all of them the split is the same: **Python
 never infers, the agent proposes with its reasoning shown, the researcher confirms.**
 
 ### Partial evidence — one sample lacks what its siblings have
@@ -94,6 +93,5 @@ describes the 15 bp as "barcode **and** UMI regions" — two quantities inside a
 and a 30N single 5′ barcode field would be unusually long.
 
 **This is not verifiable from the FASTQ.** Barcode and UMI are both random bases with no
-visible boundary, so sampling reads cannot confirm the split. An earlier revision of this rule
-said "confirm against the FASTQ", which does not work and would have produced a confident
-wrong answer. Flag the guess as resting on general protocol knowledge, and take it to the gate.
+visible boundary, so sampling reads cannot confirm the split — do not try. Flag the guess as
+resting on general protocol knowledge, and take it to the gate.

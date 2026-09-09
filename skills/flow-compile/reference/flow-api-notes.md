@@ -75,24 +75,18 @@ Other CLIP methods: `encode_eclip` stays `false` regardless of headers.
 
 `umi_header_format` uses **N-only structure** matching barcode length (e.g. `NNNNNNNNNN` for 10 bp Murat iCLIP, `NNNNNNNNNNNNNNN` for 15 bp iCLIP2). Annotation keeps the literal pattern (`NNNCGGANNN`) for demultiplexing metadata.
 
-## Header cleaning (removespace.py) — superseded
+## Header cleaning
 
-`removespace` now runs inside the clip-seq pipeline on Flow, so nothing renames reads
-locally and no `clean_fastq.sh` is generated: `201_fetch` deliberately does no header
-cleaning (see `reference/stages.md`). The vendored copy remains for reference only.
+`removespace` runs inside the clip-seq pipeline on Flow, so nothing renames reads locally and
+`201_fetch` does no header cleaning. The vendored copy is reference only.
 
-## End-to-end scripts (generated in output dir)
+## Scripts generated in the output dir
 
-| Script | Tool | When |
-|--------|------|------|
-| `prefetch.sh` | SRA prefetch + fasterq-dump | After `--download` |
-| `clean_fastq.sh` | `removespace.py` | Before upload if headers have `/`, spaces, or `_` barcodes |
-| `upload.sh` | `uploadsample_flowbio_v6.py` | After FASTQs cleaned; default `--dry-run` |
-| `run_analysis.sh` | `flowrunanalysis_flowbio.py` | After upload; passes `--params-json pipeline_params.json` |
-
-The `--case`-driven orchestrator that once ran these end to end is gone; the stages drive
-the run now (`flow_compile.py --next`), and `clean_fastq.sh` is no longer generated at all
-(header cleaning moved into the clip-seq pipeline — see above).
+| Script | Tool | Written by |
+|--------|------|-----------|
+| `upload.sh` / `upload_live.sh` | `uploadsample_flowbio_v6.py` | `flow_stages.write_upload_script` (local line) |
+| `run_analysis.sh` | `flowrunanalysis_flowbio.py` | `12_analysis`; passes `--params-json pipeline_params.json` |
+| `sra_import.sh` | `flowbio samples import` | `sra_import.write_import_scripts` (direct line) |
 
 Credentials: `FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD` (not flow-ai `~/.config/flow/api-token` unless you choose token auth later).
 
