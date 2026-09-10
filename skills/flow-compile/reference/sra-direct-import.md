@@ -97,12 +97,12 @@ These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
 | 1 | **The accession must be an experiment — `SRX`/`ERX`/`DRX`, never a run (`SRR`/`ERR`)** | `HTTP 500 internal_error`, no diagnostic |
 | 2 | **The sheet drops `__annotation` columns** — they are forwarded as ordinary metadata keys and discarded by the import job server-side | Import succeeds; targets and sources arrive with no annotation. `project` is fine: reserved since 0.12.0 |
 | 3 | **`strandedness` is rejected for CLIP** — it is an RNA-Seq field | `422 … Not a valid attribute for this sample type` |
-| 4 | **Deleting a sample is `POST /samples/{id}/delete`** — the `DELETE` verb returns `200` with the sample body but **does nothing** | You believe a sample is gone; it is still in the project and still matches your execution filters |
+| 4 | **Deleting a sample is `POST /samples/{id}/delete`, verified by a 404** — use `FlowClient.delete_sample`. The `DELETE` verb returns `200` with the sample body and is **inconsistent**: it has both worked and silently done nothing | You believe a sample is gone; it is still in the project and still matches your execution filters |
 | 5 | **The import silently drops `__annotation` columns** — `purification_target__annotation` and `source__annotation` are accepted and stored nowhere | Job `COMPLETED`, every read attached, and every tag and cell-line detail gone. GSE252683 lost `nFLAG` / `Flp-In T-REx` / `neuroblastoma` on all 12 samples with no error anywhere |
 | 6 | **`GET /projects/{id}/samples` returns trimmed samples whose `metadata` is `{}`** — not absent, *empty* | Verifying against the listing reports every field of every sample as dropped. Fetch each sample with `GET /samples/{id}` |
 
 Fact 4 belongs to a family worth knowing: several Flow write endpoints return `200` while
-silently ignoring the request. Confirmed no-ops are `DELETE /samples/{id}` and
+silently ignoring the request. Seen doing so: `DELETE /samples/{id}` and
 `POST /data/{id}/edit {"filename": …}`. **Always re-read the resource after a mutation**
 rather than trusting the status code — `flow_edit_samples.py`'s verification step exists for
 exactly this reason (though it reads a top-level key while metadata is nested under

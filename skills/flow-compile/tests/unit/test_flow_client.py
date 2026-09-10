@@ -375,3 +375,83 @@ class TestPagination:
         fc.FlowClient("tok").project_samples("9")
         assert "/projects/9/samples" in seen[0]
         assert "count=100" in seen[0]
+
+
+class TestDeleteSample:
+    """`DELETE /samples/{id}` is not a delete. It returned 200 with the full sample body three
+    times running, and the sample was still there on every direct re-read. On other samples
+    the same verb did appear to work (a 404 followed), so it is inconsistent rather than a
+    clean no-op — which is worse, because it can pass a spot check.
+
+    `POST /samples/{id}/delete` is the route that works, and its `{"success": true}` is still
+    not the evidence. A deleted sample is one that re-reads as 404.
+
+    The route was already in `reference/sra-direct-import.md`, in a table of import facts. It
+    was rediscovered the hard way anyway, because the client had no delete method and the
+    obvious REST verb was the one to hand.
+    """
+
+    def _fake(self, responses, calls):
+        """Each response is a body to return, or an int status to raise as an HTTPError."""
+        import io
+        import urllib.error
+
+        class _Resp:
+            def __init__(self, body):
+                self._body = body
+
+            def read(self):
+                return json.dumps(self._body).encode()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=0):
+            calls.append(req)
+            nxt = responses.pop(0)
+            if isinstance(nxt, int):
+                raise urllib.error.HTTPError(req.full_url, nxt, "status", {}, io.BytesIO(b""))
+            return _Resp(nxt)
+
+        return fake_urlopen
+
+    def test_it_posts_to_the_delete_route_then_confirms_a_404(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(fc.urllib.request, "urlopen",
+                            self._fake([{"success": True}, 404], calls))
+        fc.FlowClient("tok").delete_sample("555")
+        assert calls[0].full_url.endswith("/samples/555/delete")
+        assert calls[0].get_method() == "POST"
+        assert calls[1].full_url.endswith("/samples/555")
+
+    def test_it_never_issues_the_bare_delete_verb(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(fc.urllib.request, "urlopen",
+                            self._fake([{"success": True}, 404], calls))
+        fc.FlowClient("tok").delete_sample("555")
+        assert all(c.get_method() != "DELETE" for c in calls)
+
+    def test_a_sample_that_re_reads_is_not_deleted(self, monkeypatch):
+        """The failure seen live: success reported, sample still there."""
+        monkeypatch.setattr(fc.urllib.request, "urlopen", self._fake(
+            [{"success": True}, {"id": "555", "name": "SNRPB_rep2"}], []))
+        try:
+            fc.FlowClient("tok").delete_sample("555")
+        except RuntimeError as exc:
+            assert "555" in str(exc)
+        else:
+            raise AssertionError("a sample that still re-reads must not count as deleted")
+
+    def test_an_error_on_the_re_read_is_not_evidence_of_deletion(self, monkeypatch):
+        """Only a 404 says the sample is gone. A 500 says nothing, so it must not pass."""
+        monkeypatch.setattr(fc.urllib.request, "urlopen",
+                            self._fake([{"success": True}, 500], []))
+        try:
+            fc.FlowClient("tok").delete_sample("555")
+        except RuntimeError as exc:
+            assert "500" in str(exc)
+        else:
+            raise AssertionError("an unreadable sample is not a deleted sample")

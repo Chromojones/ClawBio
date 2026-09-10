@@ -35,6 +35,21 @@ holding fewer samples than it promises, because the two failure modes are opposi
 bad: a truncated pre-flight reports "clean import" and duplicates the study, while a truncated
 verification reports every unfetched sample as missing.
 
+### Deleting a sample
+
+```python
+FlowClient(token).delete_sample(sample_id)   # POST /samples/{id}/delete, then GET must 404
+```
+
+Never `DELETE /samples/{id}`. It returns `200` with the full sample body whether or not it
+deleted anything — it has done both — so a sample can survive three "successful" deletes.
+`POST /samples/{id}/delete` answers `{"success": true}`, and that is still not the evidence:
+`delete_sample` re-fetches and accepts only a **404**. A sample that re-reads, or a re-read
+that errors any other way, raises.
+
+Deleting a *read mate* from a sample is a different operation and breaks the sample; see
+`reference/sra-direct-import.md` §5b.
+
 ### Project creation
 
 `POST /projects/new` with `{"name": …, "description": …}` returns the created project as

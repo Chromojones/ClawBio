@@ -167,6 +167,32 @@ class FlowClient:
     def get_sample(self, sample_id: str) -> dict[str, Any]:
         return self.request(f"/samples/{sample_id}")
 
+    def delete_sample(self, sample_id: str) -> None:
+        """``POST /samples/{id}/delete``, then prove it: the sample must re-read as 404.
+
+        Never the ``DELETE`` verb. ``DELETE /samples/{id}`` returned 200 with the full sample
+        body three times running while the sample stayed put, and on other samples it did
+        appear to work — inconsistent, which is worse than a clean no-op because it can pass
+        a spot check. The ``/delete`` route's ``{"success": true}`` is not the evidence
+        either; only a 404 on re-fetch is. Any other outcome raises.
+
+        Story: FAILURES.md#sample-delete
+        """
+        self.request(f"/samples/{sample_id}/delete", {})
+        try:
+            self.request(f"/samples/{sample_id}")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return
+            raise RuntimeError(
+                f"sample {sample_id}: re-read after delete returned HTTP {exc.code}, which "
+                f"does not show the sample is gone. Check it directly before assuming so."
+            ) from exc
+        raise RuntimeError(
+            f"sample {sample_id} still re-reads after POST /samples/{sample_id}/delete "
+            f"reported success — it was not deleted."
+        )
+
     def create_project(self, name: str, description: str = "") -> dict[str, Any]:
         """``POST /projects/new`` with ``{name, description}``; returns the created project.
 

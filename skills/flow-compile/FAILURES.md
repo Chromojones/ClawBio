@@ -115,6 +115,17 @@ twice. Searching Flow for the study's own identifiers catches what name comparis
 raised `AttributeError` on the other — inside the repair stage, whose input is a listing.
 → `tests/unit/test_flow_client.py`
 
+### sample-delete
+Deleting a broken rep2 sample took three attempts. `DELETE /samples/{id}` returned 200 with
+the full sample body each time, and the sample was still there on every direct re-read — not a
+listing-cache lag, since on other samples the same verb was followed by a 404. Inconsistent,
+which is worse than a clean no-op: it can pass a spot check. The working route,
+`POST /samples/{id}/delete`, was already in `reference/sra-direct-import.md`, in a table of
+import facts, and was rediscovered anyway because the client had no delete method and the
+obvious REST verb was the one to hand. `FlowClient.delete_sample` uses the route and accepts
+only a 404 on re-fetch.
+→ `tests/unit/test_flow_client.py`
+
 ## Gates and state
 
 ### execution-batching
