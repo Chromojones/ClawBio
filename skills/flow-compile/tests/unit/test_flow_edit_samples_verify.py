@@ -1,16 +1,7 @@
-"""Post-edit verification must read metadata where Flow actually stores it.
+"""Post-edit verification reads metadata where Flow stores it.
 
-`flow_edit_samples.py` verified with `live.get(key)`, but the sample API nests everything:
-
-    {"metadata": {"source": {"value": "Brain", "annotation": "Postnatal"}}}
-
-so `live.get("source__annotation")` is always None and `live.get("source")` is a dict, never
-the string that was sent. Every metadata edit therefore logged "verify mismatch" even when it
-had applied perfectly (observed on all 3 E-MTAB-1008 samples). That is worse than no check:
-it trains the operator to ignore the warning that is supposed to catch a real failure.
-
-This is the same nesting trap that made an earlier session report "all tags empty" on
-GSE290281 when 17 samples in fact carried `cV5`.
+The sample API nests `{"metadata": {"source": {"value": …, "annotation": …}}}`, so a flat
+`live.get("source__annotation")` is always None and every edit would read as a mismatch.
 """
 
 import sys
@@ -66,15 +57,10 @@ class TestLiveValue:
 
 
 class TestClearingAField:
-    """A field must be clearable, because "empty" is a real value in this database.
+    """A field is cleared explicitly, because empty is a real value.
 
-    Controls carry an EMPTY `purification_agent` by convention, and a size-matched input
-    carries no tag. Correcting GSE290281's 8 mislabelled inputs therefore means *removing*
-    the IP's antibody and its `cV5` tag — but `row_to_body` dropped every empty value, so
-    those two edits vanished silently and the dry run showed only the name change.
-
-    Blanket-dropping empties is the right default (a sparse CSV must not wipe columns it
-    leaves blank), so clearing needs to be explicit rather than inferred from "".
+    Controls carry an empty `purification_agent`. A blank cell in a sparse CSV still leaves the field
+    alone, so "" cannot itself mean clear.
     """
 
     def test_blank_cell_is_still_ignored(self):
@@ -101,15 +87,10 @@ class TestClearingAField:
 
 
 class TestPubmedIsATopLevelField:
-    """`pubmed` is a sample PROPERTY, not a metadata attribute — and it must be editable.
+    """`pubmed` is a top-level sample property, editable and verified beside `name`.
 
-    It is absent from `samples batch-template --sample-type CLIP`, whose column list covers
-    only metadata attributes, which is why it looked as though Flow had no PubMed field and
-    PMIDs went into `comments` instead. `POST /samples/{id}/edit {"pubmed": "31216479"}`
-    returns 200 and the value lands at the TOP level of the sample, beside `name`.
-
-    It is not cosmetic: setting it populates the owning project's `papers` with a resolved
-    citation (title, year, journal). A PMID buried in comments loses that linkage.
+    It is absent from `batch-template`; setting it populates the project's `papers` with a resolved
+    citation.
     """
 
     def test_pubmed_is_whitelisted_for_editing(self):

@@ -1,8 +1,4 @@
-"""Shared fixtures. The demo constants used to live on `flow_compile`, which is now a driver.
-
-A driver knows the order of the stages and nothing about any particular study, so hanging demo
-file paths off it was the sort of thing that made the old entry point 1,026 lines.
-"""
+"""Shared fixtures: the demo study's file paths."""
 
 import sys
 from pathlib import Path

@@ -1,16 +1,7 @@
-"""Stage 108 must wire the confirmed barcode into the coherence check.
+"""Stage 108 derives the UMI parameters from the barcode confirmed at 03.
 
-Two silent gaps, found by audit rather than by a study:
-
-The stage read ``study.get("barcode")``, a key no stage ever writes, so the
-barcode-versus-``umi_header_format`` length check — a guardrail with its own FAILURES entry —
-ran with an empty barcode and never fired.
-
-Worse, on a raw-header study ``params_for_state`` supplies no ``umi_header_format`` at all,
-``check_umi_params`` then refuses with "needs umi_header_format", and no CLI flag exists to
-supply one. The raw route dead-ended at exit 4. The barcode confirmed at gate 1 is the source
-of the format (all-N of the barcode's length), and 108 already declares ``barcodes.json`` as
-an input; it just never opened it.
+A raw-header study gets its `umi_header_format` (all-N of the barcode's length) from
+`barcodes.json`; without it `check_umi_params` refuses and no flag can supply one.
 
 Story: FAILURES.md#read-structure
 """

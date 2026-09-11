@@ -1,16 +1,9 @@
-"""One contract, checked generically over every stage that exists.
+"""One contract, checked over every stage in `stages/`.
 
-Seventeen scripts is more surface than one command, and the plan accepted that trade on one
-condition: the guarantee lives entirely in `stages/_common.py` and is enforced by a loop over
-whatever is in `stages/`, never by per-stage assertions. A per-stage test suite would pass
-while a new stage quietly skipped `require()`, wrote outside the output directory, or invented
-its own exit codes — which is exactly how the current orchestrator accumulated three ways of
-reporting the same failure.
+Stages are discovered, not listed, so a new stage that skips `require()`, writes outside
+`--output` or invents exit codes fails here.
 
-So this file deliberately discovers stages rather than listing them. Adding a stage that breaks
-the contract fails here without anyone remembering to add a test.
-
-Exit codes, uniform:
+Exit codes:
 
     0  ok
     2  usage error

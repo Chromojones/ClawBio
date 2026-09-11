@@ -1,19 +1,8 @@
-"""Post-execution audit: an execution can finish "successfully" with samples missing.
+"""An execution can finish with samples missing.
 
-GSE78030 execution 261164407803419211 launched seven ~10 GB CAT_FASTQ merges at once. Two
-were SIGKILLed (exit 137) and the Nextflow log said:
-
-    NOTE: Process CAT_FASTQ (YTHDF1...) terminated with an error exit status (137)
-          -- Error is ignored
-
-`errorStrategy = ignore` means the pipeline carries on. YTHDF1 and YTHDC1 got no downstream
-stages at all, so the run was heading for a green finish having analysed 5 of 7 samples.
-
-The check compares each sample against the run's own deepest sample rather than against a
-named terminal stage. A first attempt hardcoded MULTIQC and flagged *every* finished run,
-because MULTIQC is a run-level aggregate with no sample attached — so no sample ever
-"reaches" it. Comparing samples to each other needs no pipeline knowledge and cannot make
-that mistake.
+With `errorStrategy = ignore` a killed process lets the run go on (GSE78030: two CAT_FASTQ merges
+SIGKILLed, 5 of 7 samples analysed). Samples are compared with the run's deepest sample;
+run-level processes such as MULTIQC have no sample and are ignored.
 """
 
 import sys
@@ -40,7 +29,7 @@ def run(spec, run_level=("MULTIQC", "CLIPSEQ_CLIPQC")):
 
 class TestFindDroppedSamples:
     def test_a_uniform_finished_run_reports_nothing(self):
-        """The false-positive regression: every sample equal must be silent."""
+        """Every sample equal is silent."""
         spec = {s: [(x, "COMPLETED") for x in FULL] for s in ("A", "B", "C")}
         assert find_dropped_samples(run(spec)) == []
 

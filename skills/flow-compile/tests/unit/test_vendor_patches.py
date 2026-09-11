@@ -1,23 +1,9 @@
-"""Two lines in `lib/vendor/` that cause silent data corruption if they are ever reverted.
+"""Two lines in `lib/vendor/` that corrupt data silently if reverted.
 
-These scripts started as copies of Goodwright's `flow_api` tools and are now simply part of
-this skill — edited in place, with the reasoning in the code beside each line. They were once
-tracked as "patches to reapply after a re-vendor" in a README that restated what the code
-already said; the code is the record now, and these tests are what keep it true.
-
-**removespace and the `/`.** It replaced both spaces and slashes with underscores in FASTQ
-header lines. For a header whose UMI sits in the comment field, that turns
-
-    @SRR123.1 1:N:0:CTACGCTCTAAA/1   ->   @SRR123.1_1:N:0:CTACGCTCTAAA_1
-
-and the last `_`-delimited field is then a constant `1` on every read in the file. UMI-collapse
-keys on that field, so every read looks like a duplicate of every other and the library
-collapses to near nothing. Leaving `/` alone makes the last field `CTACGCTCTAAA/1`, which
-varies per read, which is the UMI. Spaces still must go: the SAM QNAME ends at the first one.
-
-**The `paired` hardcode.** `"paired": "both"` was written into the analysis payload, so a
-protocol needing a specific mate silently got both. For eCLIP the crosslink is on read 2; a
-run with both mates completes cleanly and puts peaks in the wrong places.
+`removespace` keeps `/`: replacing it makes the last `_` field of
+`@SRR123.1 1:N:0:CTACGCTCTAAA/1` a constant `1`, and UMI deduplication collapses the library.
+Spaces still go, since the SAM QNAME ends at the first. The analysis payload does not hardcode
+`paired`, which decides the mate analysed.
 
 Story: FAILURES.md#vendor-patches
 """
@@ -70,11 +56,9 @@ class TestRemovespaceKeepsTheSlash:
 
 class TestTheLinesThemselves:
     def test_removespace_does_not_replace_slashes(self):
-        """An "obvious" cleanup would restore `.replace('/', '_')`. This is what notices.
+        """An "obvious" cleanup would restore `.replace('/', '_')`.
 
-        Checked against the assignment itself rather than the file text: the docstring
-        deliberately quotes the upstream line it is warning about, and a whole-file grep
-        cannot tell the warning from the bug.
+        Checked on the assignment, not the file text, so prose quoting the line cannot trip it.
         """
         code = [
             line.strip() for line in REMOVESPACE.read_text().splitlines()

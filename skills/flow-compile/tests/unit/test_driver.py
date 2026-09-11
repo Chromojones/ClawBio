@@ -1,13 +1,5 @@
-"""`flow_compile.py` as a driver: it knows the order, the stages know the work.
-
-The old entry point was 1,026 lines holding every stage body in one function whose control
-flow WAS the dependency graph. What survives is the part that could not move into a stage:
-which stage comes next, and which line this run is on. `catalog.json` and `clawbio.py` invoke
-this path, so it keeps working as a command.
-
-`--status` and `--next` exist because the stage model has a real failure mode: sixteen scripts
-is easy to lose your place in. The driver answers "where am I" from `state.json` rather than
-from the user's memory.
+"""`flow_compile.py` is a driver: it knows the stage order and the run's line, and answers
+"where am I" from `state.json`. `catalog.json` and `clawbio.py` invoke it.
 
 Story: FAILURES.md#driver
 """
@@ -121,10 +113,9 @@ class TestItStaysADriver:
 
 
 class TestNextNamesTheRequiredFlags:
-    """`--next` once printed commands that exited 2: stages 02, 03, 04, 11 and 13 take
-    required flags the driver cannot know the values of, and a printed command that dies on
-    argparse is worse than none — it reads as the thing to run. The driver now reads each
-    stage's own parser and appends the required flags as placeholders."""
+    """`--next` prints runnable commands: a stage's required flags appear as placeholders, read
+    from its parser.
+    """
 
     def test_next_appends_the_stages_required_flags(self, tmp_path):
         st.record(tmp_path, "00_setup", st.OK)

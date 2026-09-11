@@ -1,9 +1,9 @@
-"""srr_map integrity and mate pairing.
+"""`srr_map.tsv` integrity and mate pairing.
 
-`srr_map.tsv` is agent-authored, so nothing downstream can tell a transposed row from a
-correct one — a wrong GSM↔SRR pairing silently attaches the wrong reads to a sample. And
-the mate lookup used to take "the second row" as read 2, which for a single-end GSM with
-two runs declares two *unrelated* accessions to be a pair.
+The map is agent-authored: a transposed row attaches the wrong reads silently, and a single-end
+GSM with two runs is two runs, not a pair.
+
+Story: FAILURES.md#srr-map-schema
 """
 
 import sys
@@ -110,17 +110,12 @@ class TestValidateSrrMap:
 
 
 class TestLoadRequiresOnlyWhatItUses:
-    """GSE262435: a map built to the documented direct-line schema (`gsm`, `srr`, `srx`)
-    died with `SRR map must contain columns: ['fastq', 'gsm', 'mate', 'srr']`.
+    """The map needs `gsm` and `srr`; `mate` defaults to 1 and `fastq` follows ENA's naming when
+    the column is absent.
 
-    The required set was inverted relative to the SRA-direct line's real needs. `fastq` is
-    never read on that line — `build_import_sheet` maps annotation to an accession plus
-    metadata and never touches the File column — so requiring it forces the operator to
-    invent filenames nothing downloads. Meanwhile `srx`, which 109_sheet hard-refuses a run
-    accession over, was not required at all.
+    `fastq` is never read on the direct line, and `srx` is that line's requirement.
 
-    So: `gsm` and `srr` are the map. `mate` defaults to 1 and `fastq` is derived on ENA's
-    own naming convention when the column is absent; supply either and you own it.
+    Story: FAILURES.md#srr-map-schema
     """
 
     def _write(self, tmp_path, text):
@@ -186,7 +181,7 @@ class TestLoadRequiresOnlyWhatItUses:
             load_srr_map(path)
 
     def test_the_local_line_demo_map_is_unaffected(self, tmp_path):
-        """The bundled map supplies mate and fastq; it must load exactly as before."""
+        """The bundled demo map supplies mate and fastq and loads as given."""
         from lib.flow_annotate import load_srr_map
 
         frame = load_srr_map(SKILL_DIR / "demo_gse105082_srr_map.tsv")

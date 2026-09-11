@@ -1,24 +1,15 @@
-"""Only an ACCESSION match proves a study is already uploaded.
-
-The first version of `summarise_hits` treated any non-empty bucket from any query as
-"ALREADY PRESENT". Run against GSE75418 (SAFB1 in SH-SY5Y) it reported the study present on
-the strength of a single match — for the term `SHSY`, which hit TDP43 and HNRNPA1 samples in
-an unrelated project. All seven SRX accessions returned nothing.
-
-That is the worse kind of wrong. A false negative loses a check; a false positive blocks
-correct work and teaches the reader to click past the warning — the same reason
-`execution_audit` was rewritten after it flagged every finished run.
-
-The three query kinds carry completely different weight:
+"""Only an accession match proves a study is already on Flow.
 
 ``accession``
-    decisive. `SRX1453676` is unique to one experiment; if it is on the platform, this exact
-    data is on the platform.
+    decisive: `SRX1453676` names one experiment.
 ``target``
-    contextual. `SAFB1` matching means *some* SAFB1 study exists — which may well be a
-    different paper. Two labs CLIPping the same protein is normal and must not be blocked.
+    context: another lab may have CLIPped the same protein.
 ``extra``
-    advisory only. Cell lines and title words match anything.
+    advisory: cell lines and title words match anything.
+
+Fixture: GSE75418, whose only hit was `SHSY` in an unrelated project.
+
+Story: FAILURES.md#study-check
 """
 
 import sys
@@ -97,7 +88,7 @@ class TestATargetMatchIsContextNotProof:
 
 class TestBackwardsCompatibility:
     def test_without_kinds_every_match_still_counts(self):
-        """Callers that pass no `kinds` keep the old conservative behaviour."""
+        """With no `kinds`, every match counts: the conservative default."""
         assert summarise_hits({"anything": HIT}).already_present is True
 
     def test_failed_queries_still_surface(self):

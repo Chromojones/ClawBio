@@ -1,12 +1,8 @@
-"""00_setup must defuse the FLOW_* / FLOWBIO_* name trap instead of walking into it.
+"""00_setup names the FLOW_* / FLOWBIO_* mismatch rather than running credential-less.
 
-This skill reads ``FLOWBIO_USERNAME`` / ``FLOWBIO_PASSWORD`` (the vendored Flow scripts'
-names); the sibling ``flow-bio`` skill and the root CLAUDE.md use ``FLOW_USERNAME`` /
-``FLOW_PASSWORD`` / ``FLOW_TOKEN``. An agent arriving from either sets the FLOW_* names,
-00_setup found nothing, and the run proceeded credential-less to fail at the first network
-stage. ``FLOW_TOKEN`` is now honoured by ``resolve_token``; a FLOW_*-only username still
-cannot be silently adopted (later stages spawn fresh processes that read FLOWBIO_*), so the
-stage names the mismatch out loud instead.
+This skill reads `FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD`; the flow-bio skill and the root
+CLAUDE.md use `FLOW_USERNAME` / `FLOW_PASSWORD` / `FLOW_TOKEN`. `FLOW_TOKEN` is honoured; a
+FLOW_*-only username is not adopted, because later stages spawn processes that read FLOWBIO_*.
 """
 
 import os

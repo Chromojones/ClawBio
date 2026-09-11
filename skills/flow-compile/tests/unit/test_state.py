@@ -1,23 +1,8 @@
-"""The output-dir contract that lets stages resume instead of re-running.
+"""The `state.json` contract that lets a stage resume instead of re-running.
 
-The current orchestrator makes the user run the same command three times — compile, download,
-re-compile, clean, re-compile — because one command owns both `annotation.csv` and the FASTQ
-filenames, and the filenames only settle after the reads are on disk. Re-execution *is* the
-dependency mechanism.
-
-`state.json` replaces that with an explicit one. Each stage records what it read (as a content
-digest), what it wrote, and how it finished. `begin()` returns "already done" when the digest
-still matches and every declared output exists, so re-running a completed stage is free and
-re-running an *invalidated* one recomputes. Changing an upstream artefact changes the
-downstream digest, which is what makes the dependency explicit rather than implicit.
-
-Two failure modes this must not have:
-
-* **A truncated or hand-edited `state.json` must not strand the run.** It carries decisions,
-  never data — anything a stage could read from a real artefact it reads from the artefact —
-  so the recovery is always "delete it and re-run", and `load()` says so rather than raising.
-* **A stage must not be reported complete when its outputs are gone.** A digest match alone is
-  not enough; the artefacts have to still be there.
+Each stage records its inputs' digest, its outputs and how it finished. `begin()` says "already
+done" only when the digest matches and every declared output exists. The file holds decisions,
+never data, so a damaged one is fixed by deleting it, and `load()` says so.
 
 Story: FAILURES.md#state-contract
 """

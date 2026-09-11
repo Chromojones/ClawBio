@@ -1,12 +1,6 @@
-"""Running a completed stage again must do nothing, for every stage there is.
+"""Running a completed stage again does nothing, for every stage in `stages/`.
 
-The old orchestrator required running the same command three times — compile, download,
-re-compile, clean, re-compile — because one command owned both `annotation.csv` and the FASTQ
-filenames, and the filenames only settled once the reads were on disk. Re-execution WAS the
-dependency mechanism, so "run it again" was load-bearing rather than harmless.
-
-Under the stage model it must be harmless. This is checked generically over `stages/`, the same
-way the contract is, because the property has to hold for stages nobody has written yet.
+Checked generically, as the contract is, so it holds for stages not yet written.
 
 Story: FAILURES.md#state-contract
 """
@@ -47,9 +41,7 @@ def _declared_inputs(stage, out):
 def _satisfy_prerequisites(out, stage):
     """Mark this stage's declared prerequisites complete.
 
-    A re-run happens in a directory where the earlier stages already ran, so a test that omits
-    them is testing the prerequisite check, not re-entrancy. The two are checked separately:
-    prerequisites in test_stage_contract.py, re-entrancy here.
+    So the test exercises re-entrancy, not the prerequisite check (tested in test_stage_contract.py).
     """
     for name in prerequisites_of(stage):
         st.record(out, name, st.OK)
@@ -62,13 +54,10 @@ IDS = [p.stem for p in STAGES]
 class TestReentrancy:
     @pytest.mark.parametrize("stage", STAGES, ids=IDS)
     def test_a_completed_stage_short_circuits(self, stage, tmp_path):
-        """Marked done with matching inputs, the stage reports done and does not re-run.
+        """Marked done with matching inputs, a stage reports done and does not re-run.
 
-        Stages with required arguments of their own are skipped here rather than fed invented
-        values: a real re-run supplies the same arguments as the first run, and argparse
-        rightly rejects a re-run that drops half of them. The guarantee itself is tested
-        directly against `run_stage` in TestTheGuaranteeItself below, so nothing goes
-        unchecked; this loop confirms the stages that CAN be invoked bare do short-circuit.
+        Stages with required flags of their own are skipped; `TestTheGuaranteeItself` tests the
+        guarantee in `run_stage` directly.
         """
         out = tmp_path / "run"
         out.mkdir()

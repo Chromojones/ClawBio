@@ -1,23 +1,7 @@
-"""An antibody against one epitope of a composite tag is not a mismatch.
+"""An antibody against one epitope of a composite tag agrees with it.
 
-A tagged pulldown's antibody names the TAG, not the protein, so `Anti-Myc` against target
-LARP6 with annotation `nMYC` is correct by construction. That agreement test compares the
-antibody's named target to the annotation's tag with `==`.
-
-Exact equality breaks the moment the tag is composite. GSE131210 immunoprecipitates 41
-FLAG-HA-HIS-tagged proteins with anti-HA beads — HA is one of the three epitopes in the
-cassette, and the pulldown is correct by construction in exactly the sense the check already
-recognises. But `HA != FLAG-HA-HIS`, so every one of those 41 rows drew:
-
-    antibody names HA but purification target is HNRNPD — check you took the antibody from
-    the right assay
-
-41 warnings that are all false is worse than no check: the one warning in the batch that
-matters stops being visible. And this study has one — SF3B1 is deposited as `3X FLAG tagged`
-with no HA epitope at all, so anti-HA against it is a genuine inconsistency worth surfacing.
-
-Matching must therefore be by tag *component*, and must keep `3xFLAG`/`FLAG` equivalent so an
-anti-FLAG pulldown of a 3xFLAG construct stays clean.
+A tagged pulldown's antibody names the tag: anti-HA against `FLAG-HA-HIS` is correct (GSE131210,
+41 rows), as is anti-FLAG against `3xFLAG`. Anti-HA against a FLAG-only construct still warns.
 """
 
 import sys
@@ -52,8 +36,7 @@ class TestTheGse131210Rows:
 
 class TestTheCheckStillBites:
     def test_anti_ha_against_a_flag_only_tag_still_warns(self):
-        """SF3B1: deposited as 3X FLAG tagged, no HA epitope. This is the real finding the
-        41 false positives were burying."""
+        """SF3B1 is deposited as 3X FLAG tagged, with no HA epitope."""
         assert warnings(HA, "SF3B1", "n3xFLAG") != []
 
     def test_an_unrelated_antibody_still_warns(self):

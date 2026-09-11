@@ -1,20 +1,7 @@
-"""FLAG-HA-HIS is one tag, not three, and not a mutation followed by a tag.
+"""`FLAG-HA-HIS` is one tag, not three, and not a mutation followed by a tag.
 
-GSE131210 expresses 41 of its 50 samples as "FLAG-HA-HIS tagged ORF" — the FHH cassette, a
-single triple-epitope tag. The annotation grammar is `mutation-tag`, tag last, hyphen
-separated, with composite tags listed explicitly in `TAGS` (this is why `3xFLAG-HBH` is there
-as one entry rather than being assembled).
-
-Without an entry, `nFLAG-HA-HIS` is rejected as bad grammar. The two repairs that grammar
-error invites are both wrong:
-
-- `nFLAG` or `nHA` alone — records a single-epitope construct that was not what was expressed.
-- letting `FLAG-HA` parse as a mutation named `FLAG` on a tag `HA` — the regex would happily
-  read `dNTR-nMYC`-shaped input that way, silently turning an epitope into a protein
-  alteration.
-
-The PCBP1 cancer-mutation samples exercise both halves at once: target `PCBP1`, mutation
-`100Q`, tag `nFLAG-HA-HIS`, which must parse as exactly that and nothing else.
+The annotation grammar is `mutation-tag`, tag last; composite tags are listed whole in `TAGS`.
+GSE131210's PCBP1 rows must parse as target `PCBP1`, mutation `100Q`, tag `nFLAG-HA-HIS`.
 """
 
 import sys

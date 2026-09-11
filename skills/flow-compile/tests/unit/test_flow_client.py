@@ -1,19 +1,7 @@
-"""One place that talks to the network, and one answer to "which project is this sample in?".
+"""Every HTTP call the skill makes, and one answer to which project a sample is in.
 
-Every HTTP call in the skill lived where it was first needed. `_http_get` was written twice
-(`sra_header_preview` with Range support, `paper_metadata_enrich` with HTTPError wrapping —
-neither had the other's feature). `API_BASE` was defined twice outside `lib/vendor/`.
-`RestFlowApi` knew two endpoints and lived inside a module about project assignment.
-
-The sharper problem is `project_id_of`, which existed **three** times because the Flow API
-returns the field in two shapes: nested (`{"project": {"id": "P1"}}`) from `GET /samples/{id}`,
-and bare (`{"project": "P1"}`) from listings. Two of the three handle both. The third —
-`import_repair.py:101`, `(sample.get("project") or {}).get("id") or ""` — raises AttributeError
-on the bare shape, so the repair stage crashes on exactly the listing payload it exists to
-repair.
-
-`download_url` is here because the route is not guessable and was found by trial: it sits under
-`/api/` (unlike the app-level URLs) and takes a **Data** id despite the `downloads` prefix.
+`project_id_of` reads both shapes the API returns: nested from `GET /samples/{id}`, bare from
+listings.
 
 Story: FAILURES.md#flow-client
 """
@@ -54,10 +42,7 @@ class TestProjectIdShapes:
 
 class TestTheThirdCopyWasBroken:
     def test_import_repair_survives_the_bare_shape(self):
-        """`(sample.get("project") or {}).get("id")` raised AttributeError on a bare string.
-
-        The repair stage runs against listing payloads, which is the shape it could not read.
-        """
+        """A listing's bare `project` string is read, not dereferenced as a dict."""
         from lib.import_check import build_repair_plan
 
         plan = build_repair_plan(
@@ -99,7 +84,7 @@ class TestOneApiBase:
 
 
 class TestDownloadRoute:
-    """Found by trial. Not guessable, so it is pinned."""
+    """The data route is not guessable: under `/api/`, keyed by Data id."""
 
     def test_the_route_sits_under_api(self):
         url = fc.download_url("391774392749683306", "SRR123_1.fastq.gz")
@@ -113,7 +98,7 @@ class TestDownloadRoute:
 
 
 class TestHttpGet:
-    """Both features from both original copies, in one function."""
+    """Byte ranges and URL-naming errors, in one function."""
 
     def test_range_header_is_sent_when_asked(self, monkeypatch):
         seen = {}
@@ -164,7 +149,7 @@ class TestHttpGet:
 
 
 class TestTokenResolution:
-    """FLOW_API_TOKEN → explicit → file, matching the flowbio CLI."""
+    """Explicit, then FLOW_API_TOKEN, then FLOW_TOKEN, then the token file."""
 
     def test_explicit_wins(self, monkeypatch):
         monkeypatch.setenv("FLOW_API_TOKEN", "from-env")
@@ -240,11 +225,9 @@ class TestClient:
 
 
 class TestCreateProject:
-    """`POST /projects/new` with {name, description} — read from the app bundle's own
-    create-project call, because neither flowbio nor the flow-ai notes document a write
-    endpoint for projects. Flow has a family of write endpoints that return 200 while
-    doing nothing (FAILURES.md#import-check territory), so creation is not trusted until
-    the project is re-read and the name matches."""
+    """`POST /projects/new` with {name, description}, trusted only once the project re-reads with
+    that name: some Flow writes return 200 without taking effect.
+    """
 
     def _fake(self, responses, calls):
         class _Resp:
@@ -278,7 +261,7 @@ class TestCreateProject:
         assert calls[1].full_url.endswith("/projects/991")
 
     def test_a_200_that_created_nothing_is_refused(self, monkeypatch):
-        """The re-read is the point: a response with no id must raise, not return."""
+        """A response with no id raises."""
         monkeypatch.setattr(fc.urllib.request, "urlopen", self._fake([{"status": "ok"}], []))
         try:
             fc.FlowClient("tok").create_project("GSE1 CLIP")
@@ -299,13 +282,11 @@ class TestCreateProject:
 
 
 class TestPagination:
-    """`GET /projects/{id}/samples` pages, and its envelope `count` is the PROJECT TOTAL,
-    not the page size. The default page size is 10, so a bare listing of a 24-sample project
-    returns 10 samples and an envelope that says 24 — and nothing read the 24.
+    """Listings page, and the envelope `count` is the project total, not the page size.
 
-    Both consumers fail badly on a short listing. The dedup pre-flight reports "none, clean
-    import" and the study is uploaded twice; verification reports every unfetched sample as
-    missing from the import. The second is noisy, the first is silent and destructive.
+    A short listing would make the dedup pre-flight report a clean import.
+
+    Story: FAILURES.md#listing-pagination
     """
 
     def _pager(self, pages):
@@ -348,8 +329,7 @@ class TestPagination:
         assert len(seen) == 1
 
     def test_a_short_collection_refuses_rather_than_returning_a_subset(self, monkeypatch):
-        """The envelope promises 24; the pages stop delivering at 10. Returning those 10 is
-        the failure this exists to prevent, so it raises and names both numbers."""
+        """The envelope promises 24 and the pages stop at 10: raise, naming both numbers."""
         pages = [
             {"count": 24, "page": 1, "samples": [{"id": str(i)} for i in range(10)]},
             {"count": 24, "page": 2, "samples": []},
@@ -373,17 +353,11 @@ class TestPagination:
 
 
 class TestDeleteSample:
-    """`DELETE /samples/{id}` is not a delete. It returned 200 with the full sample body three
-    times running, and the sample was still there on every direct re-read. On other samples
-    the same verb did appear to work (a 404 followed), so it is inconsistent rather than a
-    clean no-op — which is worse, because it can pass a spot check.
+    """Delete is `POST /samples/{id}/delete`, accepted only when the sample re-reads as 404.
 
-    `POST /samples/{id}/delete` is the route that works, and its `{"success": true}` is still
-    not the evidence. A deleted sample is one that re-reads as 404.
+    `DELETE /samples/{id}` returns 200 whether or not it deleted anything.
 
-    The route was already in `reference/sra-direct-import.md`, in a table of import facts. It
-    was rediscovered the hard way anyway, because the client had no delete method and the
-    obvious REST verb was the one to hand.
+    Story: FAILURES.md#sample-delete
     """
 
     def _fake(self, responses, calls):
@@ -430,7 +404,7 @@ class TestDeleteSample:
         assert all(c.get_method() != "DELETE" for c in calls)
 
     def test_a_sample_that_re_reads_is_not_deleted(self, monkeypatch):
-        """The failure seen live: success reported, sample still there."""
+        """Success reported, sample still there: raise."""
         monkeypatch.setattr(fc.urllib.request, "urlopen", self._fake(
             [{"success": True}, {"id": "555", "name": "SNRPB_rep2"}], []))
         try:

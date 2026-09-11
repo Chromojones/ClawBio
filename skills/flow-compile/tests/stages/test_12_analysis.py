@@ -1,10 +1,7 @@
-"""The 18-per-execution ceiling must hold without anyone remembering a flag.
+"""The 18-per-execution ceiling holds without a flag.
 
-Stage 12 read ``study.get("sample_count")``, a key no stage wrote, so the ceiling that
-replaced the fourth hard stop was only checked when the operator happened to pass
-``--samples`` — and a rule enforced only when remembered is not a rule. 04_annotate is the
-sole writer of annotation content, so the count of its rows is the count of samples, and it
-records it; 12 then enforces the ceiling by default.
+04_annotate records the sample count and 12 enforces the ceiling from it; `--samples` overrides
+for a partial re-run.
 
 Story: FAILURES.md#execution-batching
 """

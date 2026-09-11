@@ -1,17 +1,9 @@
-"""Stage 101's live path — the branch no test had ever executed.
+"""Stage 101's live path, with the ENA fetch stubbed.
 
-Every other test of this stage supplies `--headers`, so the ENA fetch that `sra-direct-import.md`
-calls mandatory was never run by anything. Three defects were sitting in it:
+Checks the wiring: the stage asks for each SRR run (ENA serves FASTQ per run, not per SRX), and
+the UMI-in-comment refusal fires at the stage, not only in the library.
 
-* it imported `preview_headers`, which does not exist in `lib.sra_header_preview` (the module
-  defines `preview_run` / `preview_runs`), so the branch died as an ImportError;
-* it passed `row["accession"]`, the SRX **experiment**, to a lookup that serves FASTQ per SRR
-  **run** — the distinction §0a of the reference states explicitly;
-* it classified header *state* only, so `inspection_from_header_records` — the check that
-  refuses SRA-direct when the UMI is stranded in the comment — was reachable from no stage at
-  all, and the GSE297587 protection existed only as a library function.
-
-The fetch is stubbed here: what is under test is the stage's wiring, not the network.
+Story: FAILURES.md#defline-provenance
 """
 
 import importlib.util
@@ -83,7 +75,7 @@ def _stub(monkeypatch, records, source="ena"):
 
 class TestTheLivePathRuns:
     def test_it_does_not_die_on_a_missing_import(self, routed, monkeypatch):
-        """The regression: `from lib.sra_header_preview import preview_headers`."""
+        """The live branch imports only names `lib.sra_header_preview` defines."""
         _stub(monkeypatch, CLEAN)
         code = _stage_module().main(["--output", str(routed)])
         assert code == 0

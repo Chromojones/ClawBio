@@ -1,20 +1,9 @@
-"""Ask the project what it holds before importing. A status note is not evidence.
+"""Ask the project what it holds before importing; a status note is not evidence.
 
-E-MTAB-2700's `ANALYSIS_STATUS.md` said **BLOCKED — everything ready, EBI file server down**,
-and stated plainly that both jobs had reported `sample_ids: []` so "a retry cannot duplicate".
+A stale note on E-MTAB-2700 led to a re-import that made 48 samples in a 24-sample project. The
+trimmed listing from `GET /projects/{id}/samples` suffices here: only names are needed.
 
-That was true when written. Two days later the original imports had in fact completed —
-`watch_import.log` recorded `cell: COMPLETED, 12 samples` / `virion: COMPLETED, 12 samples` —
-and nobody updated the note. Re-running the import on the strength of the note produced **48
-samples in a 24-sample project**, every one duplicated, which then had to be untangled by
-creation date and deleted.
-
-The note was my own writing, which is exactly why it was believed. The project itself was one
-request away and could not have been stale.
-
-Note which endpoint this needs: the **trimmed** listing from `GET /projects/{id}/samples` is
-the right one here, because a pre-flight only needs names. That same trimmed shape is useless
-for `import_verify`, which needs metadata — see `test_import_verify.py`.
+Story: FAILURES.md#import-check
 """
 
 import sys
@@ -69,10 +58,8 @@ class TestTheTrimmedListingIsCorrectHere:
 
 
 class TestAFailedLookupMustNotReadAsAnEmptyProject:
-    """The dangerous direction: "I saw nothing" and "I could not look" are opposites here.
-
-    A failed lookup silently returning zero already produced one no-op upload that reported
-    success, so an unusable payload raises instead of yielding an empty set.
+    """"I saw nothing" and "I could not look" are opposites: an unusable payload raises instead of
+    yielding an empty set.
     """
 
     def test_a_payload_without_a_samples_key_raises(self):
@@ -97,9 +84,9 @@ class TestAFailedLookupMustNotReadAsAnEmptyProject:
 
 
 class TestATruncatedListingMustNotReadAsACleanImport:
-    """The same "I could not look" trap one level down. A listing page carries the project
-    total in `count`, so a payload holding fewer samples than it promises is provably
-    incomplete — and reporting that as "no collisions" is how a study gets uploaded twice.
+    """A listing holding fewer samples than its `count` is provably incomplete, and refused.
+
+    Story: FAILURES.md#listing-pagination
     """
 
     def test_a_short_envelope_raises(self):

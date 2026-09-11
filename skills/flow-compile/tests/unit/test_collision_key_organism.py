@@ -1,22 +1,8 @@
-"""The replicate-collision key must include the biological source.
+"""The replicate-collision key includes organism and cell or tissue.
 
-GSE58448 is coilin-GFP iCLIP in two species: 5 replicates in mouse P19 and 2 in human HeLa.
-Mouse replicate 1 and human replicate 1 share target `COIL`, tag `cGFP` and condition
-`BAC transgene, endogenous-level expression`, so the check fired:
-
-    2 samples share target COIL and replicate 1 ... a distinction was lost
-
-No distinction was lost. They are different organisms in different cell lines — the key
-simply could not see it.
-
-This is the second false positive of the same shape. E-MTAB-2700 fired on `nT7` vs `nGFP`
-arms until the tag joined the key. Both times the tempting fix was to push the distinguishing
-value into `Condition` to quiet the check, which would corrupt the metadata to satisfy a
-guardrail. The right fix is the key.
-
-`Cell or Tissue` and `Organism` both go in: a study can legitimately run the same protein in
-two cell lines of one species (and GSE76475 already relies on `Condition` separating
-fractions within one line).
+GSE58448 runs coilin-GFP iCLIP in mouse P19 and human HeLa; their replicate 1 rows share target,
+tag and condition and are distinct samples. Moving the difference into `Condition` to quiet the
+check would corrupt the metadata.
 """
 
 import sys

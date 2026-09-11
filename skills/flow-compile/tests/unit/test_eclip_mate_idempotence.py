@@ -1,17 +1,7 @@
-"""`apply_eclip_crosslink_mate_filenames` runs twice in the orchestrator. Is that load-bearing?
+"""`apply_eclip_crosslink_mate_filenames` is idempotent, and exactly one stage calls it.
 
-`flow_compile.py` calls it at line 647 and again at 667, with the header-cleaning step in
-between (which rewrites the `File` column, and so could plausibly undo the first call). Before
-the stage split collapses those to one call site, the double call has to be shown to be either
-redundant or necessary — the plan flagged it as a risk precisely because "it is called twice"
-and "it must be called twice" look identical in a diff.
-
-It promotes `File 2` into `File` for eCLIP rows and blanks `File 2`, because paired-end eCLIP
-carries the randomer and the crosslink on read 2. Applying that to an already-promoted row is
-a no-op only if the blanked `File 2` makes the second pass skip the promotion — which it does,
-but by way of a falsy check that a future edit could easily lose.
-
-So: pinned by test, on a fixture where the first call actually changes something.
+It promotes `File 2` to `File` for paired eCLIP and blanks `File 2`; a second pass is a no-op
+only because the blank `File 2` skips the promotion.
 
 Story: FAILURES.md#eclip-mate-filenames
 """
@@ -85,12 +75,7 @@ class TestWhatItLeavesAlone:
 
 
 class TestItIsActuallyWiredIn:
-    """Proving idempotence is worthless if nothing calls it.
-
-    The old orchestrator called this twice. The stage rewrite called it zero times, which is a
-    quieter bug than calling it twice: an eCLIP study uploads read 1, the barcode-only mate,
-    and every peak lands in the wrong place with nothing failing.
-    """
+    """A stage calls it; otherwise paired eCLIP uploads read 1, the barcode-only mate."""
 
     def test_a_stage_promotes_the_crosslink_mate(self):
         from pathlib import Path
@@ -103,7 +88,7 @@ class TestItIsActuallyWiredIn:
         assert callers, "no stage promotes the eCLIP crosslink mate"
 
     def test_exactly_one_stage_does(self):
-        """Two writers of the File column is how the old triple-re-run loop started."""
+        """Two writers of the File column would make the annotation stale."""
         from pathlib import Path
 
         stages = Path(__file__).resolve().parent.parent / "stages"

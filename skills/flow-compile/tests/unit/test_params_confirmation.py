@@ -1,15 +1,7 @@
-"""The fourth gate must not come back through the generated script.
+"""The runner 12 writes does not re-gate.
 
-`12_analysis` is a check, not a gate: once `108_params` is released with `--accept-params` the
-parameters *are* the decision, and asking again at submission is how a gate stops meaning
-anything. The stage honours that — but the runner it wrote did not. `run_analysis.sh` exited 3
-unless the operator hand-copied `pipeline_params.json` to `analysis_params.confirmed.json`,
-and pointed at a `CONFIRM_ANALYSIS_PARAMS.md` that `write_analysis_params_hook` would have
-written if anything had called it. So the script demanded a file nothing told anyone to make,
-to re-answer a question already settled two stages earlier.
-
-The comparison machinery went with it. `compare_confirmed_params` existed only to diff the
-derived params against a copy of themselves.
+`12_analysis` is a check, not a gate: 108's `--accept-params` is the decision. The runner must not
+exit 3 or demand a confirmation copy of the params.
 
 Story: FAILURES.md#params-confirmation
 """
@@ -68,7 +60,7 @@ class TestTheMachineryIsGone:
         assert not hasattr(pp, "compare_confirmed_params")
 
     def test_the_dead_hook_is_retired(self):
-        """`write_analysis_params_hook` wrote the review file nothing ever asked for."""
+        """`write_analysis_params_hook` stays gone."""
         import lib.pipeline_params as pp
 
         assert not hasattr(pp, "write_analysis_params_hook")

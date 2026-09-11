@@ -1,9 +1,7 @@
-"""Hardening for the two biggest judgement surfaces in annotation building.
+"""The two biggest judgement calls in annotation: protein target and experimental method.
 
-`infer_protein_target` fed a confidently-wrong non-empty value into four downstream
-places (purification agent, sample name, target annotation, barcode replicate logic), and
-`infer_experimental_method` could reroute an entire study through the wrong protocol
-branch on one word of boilerplate prose.
+A wrong target feeds the agent, sample name, target annotation and barcode logic; a wrong method
+reroutes the whole study.
 """
 
 import sys
@@ -21,7 +19,7 @@ from lib.flow_annotate import (  # noqa: E402
 
 
 class TestProteinTargetRejectsNonTargets:
-    """The comma-lead branch used to return the first token unconditionally."""
+    """Non-target tokens are never returned as the protein target."""
 
     def test_cell_line_lead_is_not_a_target(self):
         assert infer_protein_target("HeLa, PTBP1 eCLIP, rep1") != "HELA"
@@ -102,10 +100,7 @@ class TestExperimentalMethod:
 
 
     def test_prefixed_method_names_are_recognised(self):
-        """Lab-specific prefixes must not hide the method behind a word boundary.
-
-        `\bpar[\s-]?clip\b` cannot match `fPAR-CLIP` because `f` and `P` are both word
-        characters — so GSE266116 resolved to the silent `iCLIP` default on every field.
+        """Lab prefixes (`fPAR-CLIP`, GSE266116) must not hide the method behind a word boundary.
         """
         assert infer_experimental_method("", "m6Am … [fPAR-CLIP]") == "PAR-CLIP"
         assert infer_experimental_method("WT_fPAR-CLIP") == "PAR-CLIP"
@@ -115,7 +110,7 @@ class TestExperimentalMethod:
         assert infer_experimental_method("irCLIP libraries were prepared") == "irCLIP"
 
     def test_flash_frozen_still_does_not_match_after_prefix_support(self):
-        """Regression: loosening the boundary must not resurrect the flash-frozen misfire."""
+        """Prefix support does not make `flash-frozen` read as FLASH."""
         assert infer_experimental_method(
             "Cells were flash-frozen in liquid nitrogen. iCLIP was performed."
         ) == "iCLIP"

@@ -1,16 +1,7 @@
-"""How many samples may ride one execution, and why that replaces a whole gate.
+"""No more than 18 samples per execution: a rule, enforced rather than approved.
 
-The analysis submission used to be the fourth hard stop. It does not need to be. Once the
-parameters are approved at 108 there is nothing left for a person to decide — the parameters
-ARE the decision, and re-approving them at submission time asks the same question twice. What
-made the submission risky was never the parameters; it was the batch size, and that is a rule
-a machine can check.
-
-`-n` on the analysis script is the number of BATCHES, not samples per batch, which is the easy
-thing to get backwards: passing `-n 18` for a 200-sample study makes 18 executions of 11
-samples, and passing it for a 12-sample study makes 18 executions of one. The rule is expressed
-here in the units it is actually known in — samples per execution — and the batch count is
-derived.
+`-n` on the analysis script is the number of batches, not samples per batch, so the rule is
+stated in samples and the batch count derived.
 
 Story: FAILURES.md#execution-batching
 """

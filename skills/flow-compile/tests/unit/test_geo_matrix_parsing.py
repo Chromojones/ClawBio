@@ -1,12 +1,7 @@
-"""GEO series-matrix parsing, split out of the old `test_flow_compile.py`.
+"""GEO series-matrix parsing.
 
-These never had anything to do with the orchestrator; they tested `lib/geo_matrix.py` and only
-lived there because that file imported the demo constants. They now come from `conftest.py`.
-
-The replicate-core test is the one worth keeping in view: GSM2817677 carries `CGGA` and
-GSM2817678 carries `GGCA`, and the two samples differ only by that core. A resolver that read
-the barcode pattern but ignored the per-sample core would hand both replicates the same
-barcode, demultiplex them into each other, and produce a study-shaped result with no error.
+GSM2817677 carries `CGGA` and GSM2817678 `GGCA`, differing only by that core; a resolver that
+ignored it would demultiplex each replicate into the other.
 """
 
 import sys

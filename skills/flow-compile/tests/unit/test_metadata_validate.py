@@ -1,10 +1,10 @@
-"""Tests for metadata accuracy guardrails (antibody, source, target/tag, 5' barcode).
+"""Metadata accuracy checks: antibody, source, target/tag, 5' barcode.
 
-Regression fixtures come from two real studies that broke the naive scrape:
+Fixtures come from two real studies:
   * GSE215250 (PARP13 eCLIP, PMID 38495826) — two candidate antibodies in Key Resources,
     GEO says HEK293 but the line is HEK293T, and SMInput rows must not carry the IP target.
-  * GSE105082 (demo)              — !Sample_source_name_ch1 is "ATCC Cell Lines", a supplier
-    phrase, while the real line is HeLa.
+  * GSE105082 (demo) — !Sample_source_name_ch1 is "ATCC Cell Lines", a supplier phrase, while
+    the real line is HeLa.
 """
 
 import sys
@@ -78,7 +78,7 @@ class TestPurificationAgentValidation:
         assert issues and issues[0][0] == ERROR
 
     def test_v5_antibody_is_an_error(self):
-        """The skill itself synthesizes this string; it carries no vendor or catalog."""
+        """An agent string with no vendor or catalog is an error."""
         issues = validate_purification_agent("V5-antibody", target="MBNL2")
         assert issues and issues[0][0] == ERROR
 
@@ -168,7 +168,7 @@ class TestTargetAndAnnotation:
         ) == []
 
     def test_non_gene_target_is_an_error(self):
-        """infer_protein_target's fallback can emit ANTI-FLAG / RABBIT."""
+        """`ANTI-FLAG` and `RABBIT` are not gene targets."""
         for bad in ("ANTI-FLAG", "RABBIT"):
             issues = validate_target_and_annotation(target=bad, annotation="", agent="")
             assert issues and issues[0][0] == ERROR
@@ -238,10 +238,8 @@ class TestAnnotationTableValidation:
 
 
 class TestTheDeadHookIsRetired:
-    """`write_metadata_hook` wrote `CONFIRM_METADATA.md` + `metadata_validation.json` for the
-    monolith. No stage ever called it after the rewrite — `05_metadata` renders
-    `metadata_report.md` + `metadata_issues.json` itself — yet the docs still named its
-    artefacts as the ones to review, sending a reader to files no run produces."""
+    """`write_metadata_hook` and its artefacts stay gone; 05_metadata writes `metadata_report.md`.
+    """
 
     def test_it_is_gone(self):
         import lib.metadata_validate as mv
@@ -277,11 +275,9 @@ class TestAbControl:
 
 
 class TestTaggedPulldownAgreement:
-    """A tag pulldown's antibody names the TAG, not the protein — that is not a mismatch.
+    """A tag pulldown's antibody names the tag, not the protein.
 
-    `Mouse Anti-Myc (Cell Signaling 9B11)` against target `LARP6` with annotation `nMYC` is
-    correct by construction. Warning on it produced 15 false positives on GSE297587 and
-    would have fired on every anti-V5 row of GSE290281 too.
+    `Mouse Anti-Myc (Cell Signaling 9B11)` against target `LARP6` with annotation `nMYC` is correct.
     """
 
     def test_antibody_matching_the_tag_is_not_a_mismatch(self):
@@ -349,16 +345,10 @@ class TestMutationTagAnnotation:
         assert validate_target_and_annotation(target="LARP6", annotation="dNTR", agent="") == []
 
 class TestAntibodyWithoutAVendor:
-    """When no catalog reagent exists, the agent is the bare canonical form.
+    """With no catalog reagent, the agent is the bare canonical form.
 
-    E-MTAB-1008 (Sugimoto 2012) immunoprecipitated Nova with an antibody the paper
-    acknowledges as shared by Robert B Darnell. There is nothing to buy and no catalog to
-    cite. Researcher convention: the agent stays `<Species> Anti-<TARGET>` and the
-    provenance ("gift from X") is recorded in **Comments**, not inside the agent string.
-
-    The vendor-less *prose* forms stay rejected — `NOVA antibody`, `anti-NOVA antibody`,
-    `V5-antibody` are scraped phrasings that identify no reagent and signal an unfinished
-    lookup, which is a different failure from a genuine gift antibody.
+    A gift antibody (E-MTAB-1008's Nova) is `<Species> Anti-<TARGET>`, with provenance in Comments.
+    Vendor-less prose (`NOVA antibody`, `V5-antibody`) names no reagent and stays rejected.
     """
 
     def test_bare_canonical_form_is_resolvable(self):
@@ -413,21 +403,11 @@ class TestAntibodyWithoutAVendor:
 
 
 class TestReplicateCollision:
-    """Two rows sharing target + condition + replicate number means a distinction was lost.
+    """Rows sharing target, tag, condition and replicate have lost a distinction.
 
-    GSE290281's first batch uploaded all 4 runs of each protein as IPs, so the pair that were
-    size-matched INPUTS carried the IP's target and antibody:
-
-        RNPS1_Hs_HEK293T_Rep1_SRR32456785   <- IP        rep 1
-        RNPS1_Hs_HEK293T_Rep1_SRR32456787   <- **input** rep 1, mislabelled
-
-    The existing control check could not see this: it keys off the sample NAME containing
-    'input'/'SMInput', and the naming step had failed in exactly the same way. A guardrail
-    that depends on the field which is also wrong catches nothing.
-
-    Replicate collision is name-independent evidence — two samples cannot both be replicate 1
-    of the same target under the same condition. Condition must match too, or legitimate
-    designs (GSE76475's RBFOX1 Rep1 in HMW *and* soluble fractions) would false-positive.
+    The usual cause is a size-matched input recorded as the IP (GSE290281). The check is independent
+    of the sample name, which can be wrong the same way; condition is in the key so fractionated
+    designs (GSE76475) pass.
     """
 
     def _rows(self, specs):
@@ -486,13 +466,9 @@ class TestReplicateCollision:
         assert "SRR32456787" in msgs or "SRR32456785" in msgs
 
     def test_control_targets_are_exempt_from_collision(self):
-        """SMInput is a shared placeholder, not a protein — every IP's input carries it.
+        """SMInput is a shared placeholder: every IP's input carries it.
 
-        Without this exemption the check fires on every correctly-labelled study: GSE290281
-        has 9 inputs, all target SMInput, so `SMInput + rep1` collides 5 ways in one batch.
-        A guardrail that screams on correct data gets switched off, so the exemption matters
-        as much as the check. Detection is unaffected — the bug it was written for had two
-        rows carrying target RNPS1, not SMInput.
+        Without the exemption, every correctly labelled study collides.
         """
         df = self._rows([
             ("CPSF5_HEK293T_Hs_INPUT_rep1", "SMInput", "", ""),
@@ -523,14 +499,9 @@ class TestReplicateCollision:
         assert len(hits) == 1 and "RNPS1" in hits[0].message
 
     def test_same_target_different_tag_is_not_a_collision(self):
-        """E-MTAB-2700 expresses each target as BOTH a T7- and a GFP-tagged construct.
+        """E-MTAB-2700 expresses each target as an nT7 and an nGFP construct.
 
-        `APOBEC3G` + `producer cell` + replicate 1 exists twice — once as `nT7`, once as
-        `nGFP`. Nothing is lost: Flow renders `TARGET:annotation`, so the tag is part of the
-        sample's identity and the two rows are fully distinguishable. Keying the check on
-        target+condition+replicate alone flagged all 12 of them, which would have pushed the
-        tag into `Condition` purely to satisfy the check — contorting the data around a
-        guardrail instead of fixing it.
+        Flow renders `TARGET:annotation`, so the tag is part of the sample's identity.
         """
         df = self._rows([
             ("APOBEC3G_T7_rep1", "APOBEC3G", "Anti-T7", "producer cell"),
@@ -549,7 +520,7 @@ class TestReplicateCollision:
         assert any("replicate" in i.message.lower() for i in validate_annotation_table(df))
 
     def test_gse290281_inputs_still_collide_with_their_ips(self):
-        """Regression: the bug this check was built for shared a tag, so it must still fire."""
+        """The input-recorded-as-IP case shares a tag, so it still fires."""
         df = self._rows([
             ("RNPS1_Hs_HEK293T_Rep1_SRR32456785", "RNPS1", self.AGENT, ""),
             ("RNPS1_Hs_HEK293T_Rep1_SRR32456787", "RNPS1", self.AGENT, ""),
@@ -559,15 +530,7 @@ class TestReplicateCollision:
 
 
 class TestT7Tag:
-    """T7 is a standard epitope tag and must be in the vocabulary.
-
-    E-MTAB-2700 (Apolonia 2015) expresses APOBEC3G/3F as both T7- and GFP-tagged
-    constructs, immunoprecipitated with anti-T7 (Novagen) or anti-GFP (Roche). Half the
-    study is T7-tagged, and `nT7` was rejected as invalid tag grammar purely because the
-    vocabulary listed FLAG/GFP/V5/HA/MYC/HBH/HIS/TAP/SNAP/HALO/MS2 but not T7.
-
-    The tag is the T7 gene 10 leader peptide (MASMTGGQQMG) — as standard as FLAG.
-    """
+    """T7 is a standard epitope tag (E-MTAB-2700's anti-T7 pulldowns)."""
 
     def test_t7_is_valid_at_either_terminus(self):
         for ann in ("nT7", "cT7"):
@@ -594,16 +557,11 @@ class TestT7Tag:
 
 
 class TestAnnotationsThatAreNotTags:
-    """The annotation grammar required the value to END in a tag, so two legitimate designs
-    were rejected.
+    """An annotation need not end in a tag.
 
-    A **point mutation** is a property of the purified protein whether or not the construct
-    is tagged — `TARDBP:M337P` is the standard way to name an ALS variant pulldown, and
-    pushing it into `Condition` loses the link to the target it belongs to.
-
-    A **no-crosslink control** is the other. It is not a control *target* — the same protein
-    is purified with the same antibody — so `SMInput`/`IgG` do not describe it. What differs
-    is that the UV step was omitted, which belongs on the target as `noUV`.
+    A point mutation (`TARDBP:M337P`) belongs on the target whether or not it is tagged. A
+    no-crosslink control purifies the same protein with the same antibody, so it is `noUV` on the
+    target, not a control target.
     """
 
     def _checks(self, annotation, target="TARDBP"):

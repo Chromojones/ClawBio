@@ -1,30 +1,14 @@
-"""Asking for a run gets you its whole experiment, and the job says COMPLETED.
+"""A run accession imports its whole experiment, and the job says COMPLETED.
 
-`flowbio samples import` accepts a run accession and silently substitutes its parent
-experiment. Measured on GSE78030::
+Measured on GSE78030::
 
-    requested SRR3175580              2,213,904,326 bytes   (1 run)
-    delivered SRX1590001              10,075,864,988 bytes  (4 runs)
-    job status                        COMPLETED
+    requested SRR3175580     2,213,904,326 bytes   (1 run)
+    delivered SRX1590001    10,075,864,988 bytes   (4 runs)
 
-ENA is not the cause and neither is fetchngs: `filereport?accession=SRR3175580&result=read_run`
-returns exactly one row, which is the same endpoint fetchngs resolves against. The
-substitution happens in Flow's wrapper.
+The substitution is Flow's: ENA's filereport returns one run. Per-run samples are unreachable
+through import, and the size gate costs a run at its parent's size.
 
-Two consequences, both of which cost real time before they were understood.
-
-**Per-run samples are unreachable through import.** GSE78030's 7 experiments hold 26 runs
-(4+4+4+4+4+3+3), one biological replicate each. Importing 26 SRRs would have produced 26
-samples each carrying its entire experiment: ~250 GB duplicated, every sample mixing all four
-barcodes. The only route to per-replicate samples was a 71.2 GB local round-trip.
-
-**The size gate reads the wrong number.** `import_size` is fed the bytes of what was
-requested. For a run accession that is the run's own size, so a sheet of 26 runs looks like
-71 GB when it will actually pull ~250 GB. A ceiling checked against the wrong figure is not a
-ceiling.
-
-So before submitting, every run accession is resolved to its parent and the sheet is costed on
-what will actually arrive, not on what was asked for.
+Story: FAILURES.md#import-guards
 """
 
 import sys

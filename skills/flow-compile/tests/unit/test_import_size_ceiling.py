@@ -1,45 +1,11 @@
-"""An SRA-direct import has a size ceiling, and hitting it looks like an outage.
+"""An SRA-direct import has a size ceiling, and hitting it looks like a network failure.
 
-GSE63262 (Drosophila SR proteins) is **132.7 GB across 36 runs** — by far the largest study
-attempted. Submitted as one import it died with::
+GSE63262 (132.7 GB, 36 runs) died in one job with wget's `exit status 4` while ENA was
+reachable. The ceiling is bounded by measured imports, not known: the gate warns above the
+largest success and refuses at the known failure. The splitter keeps a protein's replicates
+together.
 
-    ERROR ~ Error executing process > 'NFCORE_FETCHNGS:FETCHNGS:SRA_FASTQ_FTP (SRX765636_SRR1659972)'
-    Caused by: error exit status (4)
-
-32 fetch processes completed, 36 errored or failed. `exit status 4` is wget's *network
-failure* code, so the message points squarely at ENA — and ENA was fine: a byte-range fetch
-of that exact file returned `206` in 1.1 s, and the ENA API returned `200`, both from this
-machine minutes after the job died. Half the fetches in the same job succeeded against the
-same host. The study was simply too big to pull in one execution.
-
-Two ways this wastes a day if ungated:
-
-1. **The reported reason is never the real one.** Flow surfaced *"Nextflow 26.04.6 is
-   available - Please consider updating your version to it"* as the failure message. That is
-   the fifth study where that version notice masked the actual cause. Believing it sends you
-   to upgrade Nextflow.
-2. **`exit status 4` reads as "ENA is down".** The previous time an import died in
-   `SRA_FASTQ_FTP` (E-MTAB-2700) EBI genuinely *was* down, so the identical signature has a
-   precedent that makes the wrong diagnosis feel confirmed. Reachability must be tested
-   before the size explanation is discarded.
-
-The check is therefore on **total bytes per import job**, not run count: 36 runs is
-unremarkable, 132.7 GB is not.
-
-Measured, on this Flow instance:
-
-=====================  ==========  ========
-study                  bytes       outcome
-=====================  ==========  ========
-E-MTAB-2700 (24 smp)   ~0.2 GB     imported
-GSE252683 (12 runs)    ~8 GB       imported
-GSE63262 (36 runs)     132.7 GB    FAILED
-=====================  ==========  ========
-
-So the ceiling is bounded *between* 8 GB and 132.7 GB and is not otherwise known. The module
-must not invent a precise limit it cannot support — it warns above the largest success and
-refuses only above the known failure, and the batch splitter keeps replicates of a protein
-together so a partial import never strands one replicate of a pair.
+Story: FAILURES.md#import-guards
 """
 
 import sys
@@ -98,7 +64,7 @@ class TestTheCeiling:
         assert any(c.severity == ERROR for c in checks)
 
     def test_the_refusal_names_size_not_the_network(self):
-        """The whole point is to pre-empt the `exit status 4` misdiagnosis."""
+        """The refusal names size, pre-empting the `exit status 4` misdiagnosis."""
         by_accession = {f"SRX{i}": {f"SRR{i}": 3.7 * GB} for i in range(36)}
         message = " ".join(c.message for c in check_import_size(
             rows(*[(f"SRX{i}", "SR") for i in range(36)]), by_accession))
@@ -126,15 +92,7 @@ class TestTheCeiling:
         assert KNOWN_FAILURE_BYTES == GSE63262_BYTES
 
     def test_the_exact_study_that_failed_is_refused(self):
-        """The regression case, at its true size — not a rounded stand-in.
-
-        The first cut of this module set the threshold to a tidied `132_700_000_000`. The
-        study's real total is `132_689_117_735`, 10.9 million bytes below it, so GSE63262 —
-        the failure the module exists to prevent — only warned. The test fixture said
-        36 x 3.7 GB, which rounds *up* past the threshold and hid it. Only running the check
-        against the actual sheet exposed it.
-
-        Bounds must be measured values, never tidied ones.
+        """GSE63262 at its true size, `132_689_117_735` bytes: bounds are measured, never rounded.
         """
         by_accession = {"SRX0": {"SRR0": GSE63262_BYTES}}
         checks = check_import_size(rows(("SRX0", "SR")), by_accession)

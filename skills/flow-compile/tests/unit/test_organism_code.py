@@ -1,21 +1,8 @@
-"""Organism must be Flow's two-letter code — never the Latin or common name.
+"""Organism is Flow's two-letter code, never the Latin or common name.
 
-GSE159997's upload sheet carried ``Mus musculus``. All 18 rows were rejected::
-
-    -> failed: {'organism': ['Does not exist.']}
-
-The failure is cheap when it happens (nothing uploads, nothing partial), but it arrives
-**after** the FASTQs have been staged and the uploader has started walking rows — for a
-12.8 GB study that is a long way to travel for a vocabulary error the sheet could have
-caught for free.
-
-The tempting reading was that `samples import` and `samples upload` take different
-vocabularies. They do not: every sheet that has ever worked, on either path, uses the code
-(`Hs`, `Mm`). The Latin name was simply wrong everywhere.
-
-Codes are taken from ``GET /api/organisms``. The ten below are the live set; unknown codes
-are refused rather than warned about, because "Does not exist." is the only other feedback
-available and it costs a round trip to the API to get it.
+The API rejects anything else with `Does not exist.`, after the reads are staged (GSE159997:
+`Mus musculus`, 18 rows). Codes are the live set from `GET /api/organisms`; unknown codes are
+refused.
 """
 
 import sys
@@ -115,8 +102,7 @@ class TestWiredIntoTheGate:
 
 
 class TestOneOrganismTable:
-    """`lib/organism.py` normalised only Hs/Mm/Gg and blanked every other organism, while the
-    validator accepted Flow's ten codes. One table now serves both."""
+    """`lib/organism.py` and the validator share one table of Flow's ten codes."""
 
     def test_the_validator_and_the_normaliser_share_one_table(self):
         from lib import metadata_validate, organism

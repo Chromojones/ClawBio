@@ -12,7 +12,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-#: The one definition. `credentials` imports it from here.
+#: Overridable with FLOWBIO_API_BASE.
 API_BASE = os.environ.get("FLOWBIO_API_BASE", "https://app.flow.bio/api").rstrip("/")
 
 USER_AGENT = "flow-compile/1.0"

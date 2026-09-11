@@ -1,30 +1,11 @@
-"""A repair that stops halfway looks exactly like one that finished.
+"""A repair is complete only when a re-read shows every sample correct.
 
-Every SRA-direct study needs the same fix-up after import: ``samples import`` accepts
-``purification_target__annotation`` and ``source__annotation``, stores neither, and attaches no
-project. `import_verify` finds those gaps; something has to close them.
+`samples import` stores neither `purification_target__annotation` nor `source__annotation`, so
+each direct-line study needs a post-import edit. A loop that counts its own edits reports success
+when it dies partway (GSE131210: 11 of 34), so completion is measured by re-reading, and the plan
+is rebuilt from observed state so a re-run converges.
 
-The closing loop is itself a failure point. On GSE131210 a 34-sample repair died at sample 11
-with::
-
-    urllib.error.URLError: <urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING]>
-
-leaving 11 samples correct and 23 untouched — and nothing said so. The loop had reported its
-own progress rather than re-reading the study, so "I wrote 11 edits" was the only evidence
-available, and it reads as success. This is the third transient disconnect in the ledger, so
-it is a normal event, not an exotic one.
-
-Two rules fall out, and both are about not trusting the writer:
-
-1. **Completion is measured by re-reading every sample**, never by counting edits issued. A
-   plan of 34 with 11 applied is INCOMPLETE, and must say so loudly enough that nobody moves
-   on to submitting an execution.
-2. **The plan is rebuilt from observed state**, so re-running is safe and cheap: samples
-   already correct are skipped, and a resumed run converges rather than rewriting everything.
-
-`import_verify.find_import_discrepancies` already reports sheet rows with no matching sample,
-so it would have caught the partial state had it been called. This module exists so that
-calling it is the only way to declare the repair done.
+Story: FAILURES.md#import-check
 """
 
 import sys
@@ -80,7 +61,7 @@ class TestBuildingThePlan:
         assert build_repair_plan(SHEET, samples, project_id="P1") == []
 
     def test_a_partially_repaired_study_plans_only_the_remainder(self):
-        """The GSE131210 shape: some done, some untouched."""
+        """Some samples done, some untouched: plan only the rest."""
         samples = [live(SHEET[0]["name"], annotation="nFLAG-HA-HIS", project="P1"),
                    live(SHEET[1]["name"])]
         plan = build_repair_plan(SHEET, samples, project_id="P1")
@@ -106,7 +87,7 @@ class TestReportingCompletion:
         assert SHEET[1]["name"] in result.describe()
 
     def test_completion_ignores_how_many_edits_were_issued(self):
-        """The crash reported 11 writes and was 23 short. Edits issued is not evidence."""
+        """Edits issued is not evidence of completion."""
         samples = [live(SHEET[0]["name"], annotation="nFLAG-HA-HIS", project="P1"),
                    live(SHEET[1]["name"])]
         assert summarise_repair(SHEET, samples, project_id="P1", edits_applied=99).complete is False

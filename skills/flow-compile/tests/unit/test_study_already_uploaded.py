@@ -1,36 +1,20 @@
-"""Search the whole DATABASE for the study, not the project you just created.
+"""Search all of Flow for the study, not the project just created.
 
-GSE80202 was already on Flow as project `929598612629946169`, public, with all 7 samples and
-the paper attached. It was imported again anyway.
-
-`import_preflight.find_already_present()` ran and reported "none (clean import)". It was
-telling the truth and was useless, for two compounding reasons:
-
-1. **Scope.** It checks the *target* project. The target was a project created seconds
-   earlier, so it was empty by construction — the check could not have returned anything
-   else. A pre-flight whose answer is determined before it runs is theatre.
-2. **Key.** It matches on sample *name*. The existing samples were named
-   `Nacc1_N2A_Mm_rep1`; the incoming ones `NACC1_N2A_Mm_endogenous_rep1_SRX2415967`. Two
-   uploaders never choose the same name, so name matching would have missed these even
-   database-wide.
-
-The durable key is what the data IS, not what someone called it: the **run/experiment
-accession**, which appears in the deposited filename, and the **target protein**.
-
-`GET /api/search?q=<term>` (note `q`, not `query` — `query` returns
-`{"error": {"q": ["This field is required"]}}`) indexes sample names, project names, and
-data filenames. Measured against the live instance:
+A new project is empty by construction, and uploaders never share sample names (GSE80202 was
+imported twice). `GET /api/search?q=` (`q`, not `query`) indexes sample names, project names and
+data filenames, measured live:
 
 ===================  ==========================================
 `q=SRR5099205`       `data: 4`   → hit, via the filename
 `q=SRX2415967`       `data: 4`   → hit, via the filename
 `q=Zfp871`           `projects: 1, samples: 4`
-`q=GSM2424749`       nothing — GEO ids are NOT indexed
-`q=28157508`         nothing — PubMed ids are NOT indexed
+`q=GSM2424749`       nothing — GEO ids are not indexed
+`q=28157508`         nothing — PubMed ids are not indexed
 ===================  ==========================================
 
-So the queries that work are accessions and protein names. GSM and PMID look like obvious
-keys and silently return nothing, which is exactly how a check ends up proving nothing.
+So the queries are accessions and protein names.
+
+Story: FAILURES.md#study-check
 """
 
 import sys
@@ -69,10 +53,8 @@ class TestTheQueriesWeBuild:
         assert "SMInput" not in build_search_queries(SHEET)
 
     def test_geo_and_pubmed_are_not_queried_because_they_are_not_indexed(self):
-        """Measured: `q=GSM2424749` and `q=28157508` both return nothing.
-
-        Including them would add queries that can only ever come back empty, making a
-        clean result look better-evidenced than it is.
+        """`q=GSM2424749` and `q=28157508` return nothing; querying them only makes a clean result look
+        better evidenced.
         """
         queries = build_search_queries(SHEET)
         assert "GSM2424749" not in queries

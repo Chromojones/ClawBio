@@ -1,30 +1,8 @@
-"""When a control has an antibody, the refusal must name the term that allows one.
+"""A control refused for carrying an antibody is pointed at `AbControl`.
 
-GSE131210 (easyCLIP, Porter et al. 2021) has two HCT116 samples GEO describes as::
-
-    Unmodified cells, immunopurified with anti-HA but without epitope
-
-The antibody is real, named, and deliberately the same one used for the IPs; what is absent is
-the epitope. The skill already has exactly the right term for this — `AbControl`, in
-`ANTIBODY_CONTROL_TARGETS`, which *requires* an antibody rather than forbidding one.
-
-Knowing that depends on already knowing it. The three obvious guesses are `SMInput`, `IgG` and
-`noAbCtrl`, all of which mean *no antibody*, and all of which refuse with::
-
-    control target noAbCtrl must have an empty purification agent, got 'Mouse Anti-HA (Sigma H3663)'
-
-That message is true and complete about what is wrong and silent about what is right. Faced
-with it, the obvious repairs are both damaging: drop the antibody to satisfy the gate, which
-deletes the one fact the sample exists to record and turns an antibody control into a
-beads-only control; or invent a new target such as `mockIP`, which passes with only a warning
-and then reads downstream as a genuine IP against a protein of that name.
-
-So the gate could push a careful person into mislabelling the sample. The fix is one clause:
-when a control target refuses a non-empty agent, name `AbControl`.
-
-The two terms are one word apart and mean opposite things — `noAbCtrl` is no antibody,
-`AbControl` is an antibody against a target that is not there — so the pointer has to appear
-exactly where the confusion happens.
+`noAbCtrl`, `SMInput` and `IgG` take no antibody; `AbControl` requires one, against a target that
+is absent (GSE131210: anti-HA on unmodified cells). Without the pointer, the obvious repairs are
+deleting the antibody or inventing a target.
 """
 
 import sys
@@ -80,8 +58,7 @@ class TestTheRefusalPointsSomewhere:
         assert "Mouse Anti-HA (Sigma H3663)" in message
 
     def test_the_legacy_no_antibody_literal_is_not_redirected(self):
-        """`no antibody` is a legacy spelling of an EMPTY agent, not a real antibody.
-        Pointing it at `AbControl` would push correct-but-old data to the wrong target."""
+        """`no antibody` spells an empty agent; pointing it at `AbControl` would be wrong."""
         checks = validate_purification_agent("no antibody", target="noAbCtrl", annotation="")
         assert "AbControl" not in " ".join(c.message for c in checks)
         assert all(c.severity != ERROR for c in checks)

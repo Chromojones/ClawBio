@@ -1,17 +1,7 @@
-"""`noAbCtrl` is a control target in its own right, distinct from `SMInput`.
+"""`noAbCtrl` is a control target distinct from `SMInput`.
 
-GSE75418 (SAFB1 iCLIP) includes a sample GEO annotates `antibody: none` — beads with no
-antibody at all. It yielded 595,480 reads against 14–40 million for the IPs, and the paper
-reports it recovered ~0.08% of the SAFB1 read count.
-
-That is **not** a size-matched input. `SMInput` means input material carried through the
-protocol; `noAbCtrl` means the immunoprecipitation was performed with no antibody. Both take
-an empty `purification_agent`, but they answer different questions and collapsing them would
-misdescribe the experiment.
-
-Before this, `noAbCtrl` failed the gate with "purification agent is empty" — the check that
-correctly demands an antibody for a real IP, firing on a row whose whole point is not having
-one.
+`SMInput` is input material carried through the protocol; `noAbCtrl` is a pulldown with no
+antibody (GSE75418's beads-only sample). Both take an empty `purification_agent`.
 """
 
 import sys

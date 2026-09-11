@@ -1,29 +1,8 @@
-"""A cross-check that compares nothing must not report agreement.
+"""A cross-check that compares nothing does not report agreement.
 
-Before submitting a CLIP execution the submitter resolves 21 reference files from the genome
-prep execution, then cross-checks them against a *completed* run of the same organism — two
-independent sources, so a silently wrong reference cannot reach the pipeline. It is a good
-check and it has the same hole the platform-wide duplicate search once had::
-
-    shared = set(prep) & set(reference_run)
-    if any(prep[k] != reference_run[k] for k in shared): refuse
-
-When the two executions share no keys, ``shared`` is empty, no comparison happens, and the
-submitter prints ``0 cross-checked`` and proceeds. Zero disagreements is not agreement.
-
-Two live ways to reach that state:
-
-- **The reference run is a different organism.** GSE63262 is the first *Drosophila* study, so
-  there is no completed fly CLIP run; the constant still pointed at a mouse execution
-  (`413563648057607928`) inherited from the previous study's script. Mouse and fly happen to
-  share key names, so this one refuses loudly — but only by luck of the key naming.
-- **The reference run's `data_params` is shaped differently** — empty, or keyed by file id
-  rather than role. Then the intersection really is empty and the check evaporates.
-
-The distinction that matters is between *agreed*, *disagreed*, and *not compared*, and the
-third must never be reported as the first. When there is genuinely no completed run to compare
-against — which is the normal state for the first study of any organism — that has to be an
-explicit, recorded decision, not the accidental output of an empty set intersection.
+Two reference mappings that share no keys give zero disagreements, which is not agreement.
+Agreed, disagreed and not compared are separate outcomes, and the first study of an organism
+(GSE63262, Drosophila) must state why nothing was compared.
 """
 
 import sys
@@ -69,7 +48,7 @@ class TestTheEmptyIntersection:
         assert "not" in text
 
     def test_it_does_not_read_as_a_pass(self):
-        """`0 cross-checked` printed beside a proceeding submit is the whole bug."""
+        """`0 cross-checked` is not a pass."""
         assert cross_check_reference(PREP, {}).ok is False
 
 

@@ -1,13 +1,10 @@
-"""Tests for the remote FASTQ header preview (gates `flowbio samples import`).
+"""The remote FASTQ header preview that gates `flowbio samples import`.
 
-ENA renders `@<run>.<n> <original spot name>`, which is the form Flow itself fetches — the
-preview must see the study exactly as the import will, so ENA is the primary path.
+ENA renders `@<run>.<n> <original spot name>`, the form Flow fetches, so ENA is the primary path.
+`fastq-dump --origfmt`, the fallback, drops the comment field the UMI check reads, so the verdict
+depends on the fetch source.
 
-`fastq-dump` does NOT rewrite deflines to `@SRR…N`, and `:rbc:` survives every dump form
-(measured, sra-tools 3.2.1). The UMI is lost at the whitespace boundary instead: the SAM
-QNAME ends at the first space. The fallback stays distrusted for the inverse reason —
-`--origfmt` removes the comment field the check reads. See the class at the foot of this
-file.
+Story: FAILURES.md#defline-provenance
 """
 
 import sys
@@ -48,7 +45,7 @@ class TestParseEnaFilereport:
         assert len(parse_ena_fastq_urls(ENA_TSV_SINGLE)) == 1
 
     def test_column_order_is_not_assumed(self):
-        """Regression: the ftp path must be located by content, not by field index."""
+        """The FASTQ URL is found by content, not by field index."""
         swapped = (
             "fastq_ftp\trun_accession\n"
             "ftp.sra.ebi.ac.uk/vol1/fastq/ERR039/ERR039788/ERR039788.fastq.gz\tERR039788\n"
@@ -97,13 +94,10 @@ class TestInspectionFromRecords:
 
 
 class TestUmiInHeaderBlocksSraDirect:
-    """A UMI already in the header cannot survive SRA-direct import.
+    """A UMI in the header cannot survive SRA-direct import.
 
-    ENA's defline prepends `<run>.<n> `, pushing the ORIGINAL header — which carries the
-    `rbc:` UMI — into the comment field. Aligners drop the comment, so the BAM read name has
-    no UMI and UMICollapse fails with `No match found` (GSE297587, execution
-    971697795553261239). The preview sees these headers, so it must refuse the path up front
-    rather than let the study reach a failed execution.
+    ENA's defline pushes the original header, with its `rbc:` UMI, into the comment; aligners drop
+    the comment and UMICollapse fails with `No match found` (GSE297587).
     """
 
     ENA_UMI_IN_COMMENT = [
@@ -137,22 +131,18 @@ class TestUmiInHeaderBlocksSraDirect:
 
 
 class TestTheFallbackCannotClearTheCommentVerdict:
-    """`fastq-dump --origfmt` erases the very whitespace the comment check reads.
+    """`fastq-dump --origfmt` has no comment field, so it cannot clear the verdict.
 
-    Measured on SRR33628723 (sra-tools 3.2.1), the same run as the UMI-in-comment case above:
+    Measured on SRR33628723 (sra-tools 3.2.1)::
 
         ENA fastq_ftp         @SRR33628723.1 NS500784:…:1rbc:TAGGATAAA/1   UMI in the comment
-        fastq-dump (default)  @SRR33628723.1 NS500784:…:1rbc:TAGGATAAA length=83   same
-        fastq-dump --origfmt  @NS500784:…:1rbc:TAGGATAAA                  no space at all
+        fastq-dump (default)  @SRR33628723.1 NS500784:…:1rbc:TAGGATAAA length=83
+        fastq-dump --origfmt  @NS500784:…:1rbc:TAGGATAAA                  no comment field
 
-    The old docstring blamed `fastq-dump` for rewriting deflines to `@SRR…N` and destroying
-    `:rbc:` — it does neither; `:rbc:` is present in all three. The real hazard is the
-    opposite: `--origfmt` prints the original spot name ALONE, so the comment field does not
-    exist, `umi_is_stranded_in_comment` sees no space, and the refusal that blocks SRA-direct
-    silently disappears. The study then reaches the execution that dies at UMICollapse.
+    ENA and Flow render `@<run>.<n> <spot name>`, so what `--origfmt` shows as the name becomes the
+    comment.
 
-    The verdict is still decidable, because the rendering is deterministic: ENA and Flow fetch
-    `@<run>.<n> <spot name>`, so whatever `--origfmt` shows in the name becomes the comment.
+    Story: FAILURES.md#defline-provenance
     """
 
     ORIGFMT_WITH_UMI = "@NS500784:933:H5W2CBGXN:1:11101:8390:10741:N:0:1rbc:TAGGATAAA"
@@ -176,7 +166,7 @@ class TestTheFallbackCannotClearTheCommentVerdict:
         assert umi_is_stranded_in_comment(self.ENA_WITH_UMI, source="ena") is True
 
     def test_a_spaceless_ena_header_stays_safe(self):
-        """Without the accession prefix ENA genuinely has no comment; only the fallback lies."""
+        """With no accession prefix ENA has no comment field; only the fallback hides one."""
         from lib.sra_header_preview import umi_is_stranded_in_comment
 
         assert umi_is_stranded_in_comment(self.ORIGFMT_WITH_UMI, source="ena") is False
@@ -190,7 +180,7 @@ class TestTheFallbackCannotClearTheCommentVerdict:
         assert "cannot be used" in insp.notes
 
     def test_without_sources_the_old_behaviour_stands(self):
-        """Callers that pass no provenance are assumed to be on the ENA path."""
+        """With no provenance, a header is read as ENA's."""
         insp = inspection_from_header_records(
             {"SRR33628723": [self.ENA_WITH_UMI, "NAGCA", "+", "#AAFF"]})
         assert insp.umi_in_comment is True

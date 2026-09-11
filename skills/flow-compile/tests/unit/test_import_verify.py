@@ -1,21 +1,8 @@
 """A completed import is not evidence the metadata arrived.
 
-GSE252683 imported 12/12 samples, job ``COMPLETED``, every read attached. Six of the
-sheet's eighteen columns had nevertheless been thrown away: `flowbio samples import`
-accepts ``purification_target__annotation`` and ``source__annotation``, returns success,
-and stores neither. All twelve samples lost ``nFLAG`` / ``Flp-In T-REx`` / ``neuroblastoma``
-and no error was raised at any point.
-
-That is the same silent-drop shape as the project field (fact 2 in
-``reference/sra-direct-import.md``), and the fix is the same: read the samples back and
-compare them to the sheet that produced them.
-
-Two decoy failure modes are pinned here because both cost a debug cycle on the live data:
-
-* the **project listing** endpoint returns trimmed samples with no ``metadata`` block, so
-  verifying against it reports every field of every sample as missing;
-* reads live under ``filesets[].data``, not a top-level ``data`` key, so the obvious
-  ``len(sample["data"])`` reports 0 files for a fully populated sample.
+The import job discards `__annotation` columns and reports success (GSE252683: 12/12 imported,
+every annotation lost), so samples are read back and compared with the sheet. Two decoys: the
+project listing returns `metadata` empty, and reads sit under `filesets[].data`, not `data`.
 """
 
 import sys
@@ -82,7 +69,7 @@ class TestACleanImportIsSilent:
 
 
 class TestTheDroppedAnnotation:
-    """The GSE252683 regression, verbatim."""
+    """GSE252683's shape, verbatim: every annotation dropped by a COMPLETED import."""
 
     def test_dropped_target_annotation_is_reported(self):
         live = live_sample()
@@ -109,16 +96,9 @@ class TestTheDroppedAnnotation:
 
 class TestTheDecoysThatCostADebugCycle:
     def test_a_trimmed_listing_sample_is_refused_not_reported_as_60_errors(self):
-        """`/projects/{id}/samples` returns `metadata` as an EMPTY DICT, not as absent.
+        """The listing sends `metadata` as an empty dict, not absent: only a populated block counts.
 
-        Verbatim keys from the live endpoint. A first version of this guard tested
-        `"metadata" not in sample` against a fabricated shape with the key removed — it
-        passed the test and would have sailed straight past the real listing, producing
-        exactly the 60 phantom discrepancies it was written to prevent. Presence of the key
-        proves nothing; only a populated block does.
-
-        Reporting this as "every field is missing" is worse than useless: it buries a real
-        drop in noise and trains the reader to ignore the check.
+        Reporting every field as missing would bury a real drop.
         """
         trimmed = {
             "id": "414565780120168206", "name": SHEET_ROW["name"], "metadata": {},

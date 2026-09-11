@@ -1,25 +1,10 @@
-"""Three gaps the GSE207656 and GSE131210 cleanups exposed.
+"""PAR-iCLIP detection, and two agent forms.
 
-**1. `PAR-iCLIP` is invisible to method inference.** GSE207656's series title is
-*"PAR-iCLIP MCMV infection"*. The `PAR-CLIP` pattern is `par[\\s-]?clip`, which cannot match
-`PAR-iCLIP` because the next token is `iclip`, not `clip`. Inference then reaches the plain
-`iclip` pattern, matches the tail of the very same word, and returns `iCLIP`. All 9 samples
-were labelled `iCLIP` for months.
+`PAR-iCLIP` is 4sU labelling with iCLIP chemistry, carrying both truncation and T-to-C signals;
+`iclip` must not match the tail of the word (GSE207656). An agent may state its reagent form
+(`Anti-HA magnetic beads`) or a vendor without a catalog (`Anti-CSDE1 (Invitrogen)`).
 
-That mislabel is not cosmetic. PAR-iCLIP is 4-thiouridine labelling with iCLIP library
-chemistry, so it carries BOTH signals: the circularisation puts a truncation at the read 5'
-end, and the 4sU adds T-to-C transitions the CLIP pipeline never scores. Recorded as `iCLIP`
-the second signal is invisible; recorded as `PAR-CLIP` the first would be wrongly discarded.
-
-**2. An antibody cannot state its reagent form.** `Anti-HA magnetic beads` is what the
-GSE131210 methods describe, and the agent regex ends after the optional parenthetical, so the
-trailing words fail to parse and the value is rejected outright. Recording bare `Anti-HA`
-instead loses the fact that the pulldown used beads rather than a free antibody.
-
-**3. A vendor with no catalog number is rejected.** GSE159997's antibody is
-`Anti-CSDE1 (Invitrogen)`: the vendor is published, the catalog number is not. The parser
-demands both, so a *more* informative value scores worse than the bare form it falls back to.
-Vendor-without-catalog is a real, common state and must be expressible.
+Story: FAILURES.md#protocol-detection
 """
 
 import sys
@@ -105,6 +90,6 @@ class TestVendorWithoutCatalog:
         assert checks == []
 
     def test_the_generic_forms_are_still_refused(self):
-        """The values this skill once synthesized must stay rejected."""
+        """Generic synthesized forms stay rejected."""
         assert normalize_purification_agent("CPSF5 antibody") == ""
         assert normalize_purification_agent("V5-antibody") == ""

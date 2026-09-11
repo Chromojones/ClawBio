@@ -1,31 +1,9 @@
 """What the accession sheet may carry, checked against flowbio's own constant.
 
-`project` was on the forbidden list with the reason "the import API has no project field —
-assign after import". That was true of flowbio 0.10.0, whose `RESERVED_COLUMNS` really was
-`(accession, name, organism, sample_type)`. Every imported study therefore landed unattached
-and needed a second pass with `flow_project_assign.py`, and the claim was written into the
-skill in five places.
-
-flowbio 0.12.0 reserves `("accession", "name", "organism", "project", "pubmed", "sample_type")`
-and `AccessionSheetRow.to_spec()` maps them to `project_id` and `pubmed`. The post-import
-assignment step is no longer required for a fresh import; it stays as a repair for the studies
-imported before this.
-
-These tests read flowbio's constant rather than restating it, so a downgrade or an upstream
-change fails here instead of silently unattaching a study.
-
-Two things that did NOT change, both verified against the live API:
-
-* **The import job still drops `__annotation` columns.** The CLI forwards them as ordinary
-  metadata keys — `_build_row` puts every non-reserved column into `metadata` — so the loss is
-  server-side, in the import job rather than the client. `POST /samples/{id}/edit` accepts the
-  same flat `purification_target__annotation` key and honours it, which is why the post-import
-  edit pass works.
-* **A colon in a value is not an annotation separator.** Flow's UI *renders* an annotated
-  attribute as `value:annotation`, but that is display only. Setting `source` to
-  `"U87:TESTANNOT"` on sample 499341935928905194 stored the colon literally
-  (`value='U87:TESTANNOT'`, `annotation='Glioblastoma'` unchanged). The server's model keeps
-  `annotation` as its own field.
+flowbio ≥ 0.12.0 reserves `accession`, `name`, `organism`, `project`, `pubmed` and `sample_type`.
+Two limits hold, verified live: the import job drops `__annotation` columns (server-side; the
+post-import edit restores them), and a colon in a value is stored literally, not read as an
+annotation separator.
 
 Story: FAILURES.md#import-sheet-columns
 """

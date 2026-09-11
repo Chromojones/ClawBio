@@ -1,21 +1,7 @@
-"""`paired=first`/`second` on SINGLE-end data produces an empty samplesheet.
+"""`paired=first`/`second` on single-end data produces an empty samplesheet.
 
-GSE75418 and GSE68800 are both single-end. Both were submitted with `paired="second"` —
-inherited from a submit script copied out of GSE113638, whose default suits the paired-end
-eCLIP it was written for. The pipeline emitted rows with both read columns blank::
-
-    MSI1_U251_Hs_WT_rep3_SRX1023997,1,,
-    SAFB1_SHSY5Y_Hs_heatshock_rep6_SRX1473616,1,,
-
-and died at `SAMPLE_BASE_SAMPLESHEET_CHECK` with::
-
-    ERROR: Please check samplesheet -> Invalid number of populated columns (minimum = 3)!
-
-That message never mentions reads, mates or `paired`, so it reads as a malformed sheet rather
-than an impossible mate selection. Both executions had to be deleted and resubmitted.
-
-The layout is knowable before submitting — ENA's `library_layout` says SINGLE or PAIRED — so
-this is checkable up front rather than ~40 s into a run.
+The pipeline then fails with `Invalid number of populated columns`, which never mentions mates
+(GSE75418, GSE68800). ENA's `library_layout` makes it checkable before submission.
 """
 
 import sys

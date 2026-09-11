@@ -1,15 +1,7 @@
-"""A gate must block, and must be releasable only by a human artefact.
+"""A gate blocks, and only a human artefact releases it.
 
-The barcode and analysis-parameter hooks are hard stops: the run pauses, the evidence is
-written out, and the only way past is supplying a confirmed file. Two properties matter, and
-neither is obvious from reading the stage.
-
-**A gate is not a failure.** Exit 3, not 4. The old orchestrator printed a warning and carried
-on for both "this barcode is awaiting approval" and "this barcode contradicts the reads", which
-is how an unapproved barcode could reach an upload.
-
-**A gated stage does not satisfy a prerequisite.** `state.require()` must refuse to let a later
-stage run against a stage that stopped at a gate, or the gate is decorative.
+A gate exits 3, not 4: awaiting approval is not a failure. A gated stage does not satisfy a
+prerequisite, or the gate is decorative.
 
 Story: FAILURES.md#approval-hooks
 """
@@ -139,13 +131,7 @@ class TestAGatedStageBlocksTheNextOne:
 
 
 class TestGateFourReachesTheSubmission:
-    """Hard stop 4 has to be in the path the stages actually take.
-
-    `lib/flow_stages.write_analysis_script` generates `run_analysis.sh`, and that script holds
-    the confirmed-parameters check — the one fixed in phase 4 to compare by value rather than
-    with `cmp -s`. No stage generated it, so the fix sat in a file nothing produced. That is the
-    same shape as the eCLIP crosslink mate: correct code, wired to nothing.
-    """
+    """The analysis runner is on the stages' path, and it re-asks nothing 108 settled."""
 
     def test_a_stage_generates_the_analysis_script(self):
         from pathlib import Path
@@ -169,10 +155,8 @@ class TestGateFourReachesTheSubmission:
 
 
 class TestTheGatePointsAtTheReviewFile:
-    """`write_proposal_bundle` writes both `barcode_proposals.json` and the human-readable
-    `CONFIRM_BARCODES.md`, but the gate named only the JSON — so the review file the docs
-    call the artefact was discoverable only by listing the directory. On GSE262435 the
-    operator found it despite the stage, not because of it."""
+    """The barcode gate names `CONFIRM_BARCODES.md`, the file a person reviews, not only the JSON.
+    """
 
     def test_it_names_the_markdown_review_file(self, tmp_path):
         out = tmp_path / "run"; out.mkdir()

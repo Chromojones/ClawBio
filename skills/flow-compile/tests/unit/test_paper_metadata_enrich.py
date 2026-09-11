@@ -53,13 +53,13 @@ def test_is_generic_purification_agent():
 
 
 def test_generic_detection_catches_self_synthesized_values():
-    """Strings this skill itself used to emit must be flagged, not accepted."""
+    """Generic agent strings are flagged, not accepted."""
     assert is_generic_purification_agent("CPSF5 antibody")
     assert is_generic_purification_agent("V5-antibody")
 
 
 def test_iclap_literal_is_not_generic():
-    """Regression: the check used to search the agent value for the word 'iclap'."""
+    """An agent value containing `iclap` is not generic by that alone."""
     assert not is_generic_purification_agent("Strep/His affinity tag purification")
     assert not is_generic_purification_agent("no antibody")
 
@@ -90,10 +90,7 @@ def test_enrich_annotation_from_paper_local_text():
 
 
 class TestOfflineMeansOffline:
-    """`00_setup --offline` records that no network is available, but the enrichment fetched
-    Europe PMC anyway whenever a PMID was present — so an offline run made live calls, and
-    two tests in this suite went red at random under load. The switch has to reach the fetch.
-    """
+    """`00_setup --offline` reaches the enrichment: no Europe PMC fetch."""
 
     def _explode(self, monkeypatch):
         import lib.paper_metadata_enrich as pme

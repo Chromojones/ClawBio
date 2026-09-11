@@ -1,9 +1,7 @@
-"""`00_setup --offline` must reach the paper fetch.
+"""An `--offline` run makes no network call at 04_annotate.
 
-`04_annotate` enriched from Europe PMC whenever the series matrix carried a PMID, regardless
-of whether the run had declared itself offline. A run with no network then stalled behind a
-45s timeout, and this suite went red at random because two tests reached the live API under
-load.
+A PMID in the matrix would otherwise send 04 to Europe PMC, and an offline run stalls on the
+timeout.
 """
 
 import importlib.util

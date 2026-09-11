@@ -1,16 +1,7 @@
-"""The metadata gate must reject an over-long `comments`, not leave it to the server.
+"""The metadata gate rejects `comments` over 1000 characters.
 
-A 1000-character cap on `comments` has bitten three times: GSE76475 (which produced
-`MAX_COMMENTS_CHARS`), GSE58448, and U1A IP1. Each time the constant existed and each time it
-was bypassed, because it lives in `lib/sra_import.py` — the module that builds import sheets —
-while the sheets in question were assembled by hand and validated with
-`validate_annotation_table`, which never looked at comment length.
-
-So the guardrail was real, documented, and silent for the exact workflow that needed it. The
-fix is to put the check where the validation actually runs.
-
-Failure mode without it: `samples import` rejects the whole batch, or `samples upload`
-rejects every row one at a time — after the reads are already staged.
+The cap lives in `sra_import`, and hand-built sheets are validated by `validate_annotation_table`,
+so the check runs there too. Otherwise the server rejects the batch after the reads are staged.
 """
 
 import sys
@@ -60,7 +51,7 @@ class TestTheLimit:
 
 class TestWiredIntoTheGate:
     def test_the_table_validator_catches_it(self):
-        """This is the whole point — the gate that actually runs must see it."""
+        """The gate that actually runs sees it."""
         issues = validate_annotation_table(table("x" * 1182))
         assert any(i.field == "Comments" and i.severity == ERROR for i in issues)
 

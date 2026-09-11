@@ -1,18 +1,7 @@
-"""The four things that must be true before a sheet is submitted, and the one they got wrong.
+"""What must hold before a sheet is submitted: size, run expansion, sample-type fields, mates.
 
-`import_size`, `run_expansion`, `sample_type_fields` and `paired_selection` all answer "is this
-sheet safe to submit?" and all three of the first carried their own `Check` dataclass. Merging
-them is mostly tidying, with one exception that is not tidying at all:
-
-**The size gate counted the wrong bytes.** `total_bytes()` sums the size of each accession *as
-written in the sheet*. But asking Flow for a run accession imports its entire parent experiment
-— verified on GSE78030, where importing `SRR3175580` produced one sample carrying all four runs
-of `SRX1590001`, 10.07 GB rather than the requested run. `run_expansion` knew this and the size
-gate did not, so a sheet of run accessions was measured at a fraction of what it would actually
-transfer, and the 132.7 GB ceiling that GSE63262 taught us could be walked straight past.
-
-The two modules were written a week apart and never introduced. This merge introduces them:
-`check_import_size` now measures *effective* bytes.
+The size gate measures effective bytes: a run accession imports its whole parent experiment
+(`SRR3175580` delivered all four runs of `SRX1590001`, 10.07 GB).
 
 Story: FAILURES.md#import-guards
 """
@@ -51,7 +40,7 @@ BY_ACCESSION = {
 
 class TestTheSizeGateMeasuresWhatIsActuallyTransferred:
     def test_a_run_row_is_measured_as_its_experiment(self):
-        """The whole point: asking for one run imports all four."""
+        """Asking for one run imports all four."""
         got = total_bytes(
             [{"accession": "SRR3175580"}], BY_ACCESSION,
             parent_of_run=PARENT_OF_RUN, runs_by_experiment=RUNS_BY_EXPERIMENT,
@@ -72,7 +61,7 @@ class TestTheSizeGateMeasuresWhatIsActuallyTransferred:
         ) == 10_070_000_000
 
     def test_expansion_can_push_a_sheet_over_the_ceiling(self):
-        """The failure this merge prevents: 20 runs measured small, imported large."""
+        """20 runs measured small are imported large."""
         by_acc, parents, runs = {}, {}, {}
         rows = []
         for i in range(20):

@@ -1,18 +1,7 @@
-"""The annotation is built once, because nothing renames the reads any more.
+"""The annotation is built once: exactly one stage writes it, and nothing renames the reads.
 
-The old orchestrator asked the user to run the same command three times, and the reason was
-specific: header cleaning rewrote every FASTQ to `*.cleaned.fastq.gz`, so the annotation
-sheet's `File` column was stale the moment cleaning ran. `_apply_cleaned_filenames` rebuilt the
-column against the new names, and the second `apply_eclip_crosslink_mate_filenames` call sat
-directly after it for the same reason. The sheet had to be rebuilt because the files had been
-renamed.
-
-`removespace` now runs inside the clip-seq pipeline. Nothing renames anything locally, the
-filenames chosen at annotation time are the filenames uploaded, and the metadata can be built
-in a single pass.
-
-That only stays true while exactly one stage writes annotation content. Two writers of the
-`File` column is how the loop started, so it is checked rather than intended.
+Header cleaning runs in the clip-seq pipeline, so the filenames chosen at annotation are the ones
+uploaded. A second writer of the `File` column would make the sheet stale.
 
 Story: FAILURES.md#state-contract
 """
@@ -28,12 +17,7 @@ STAGES = sorted(p for p in (SKILL_DIR / "stages").glob("*.py") if not p.name.sta
 
 class TestOneWriter:
     def test_exactly_one_stage_writes_the_annotation(self):
-        """Reading it is fine and several stages do; writing it must be one place.
-
-        The first version of this test asked which files mentioned both the filename and
-        `to_csv` anywhere, which flagged 210_upload for reading the annotation and writing a
-        different sheet.
-        """
+        """Several stages read the annotation; one writes it. 210 writes a different sheet."""
         import re
 
         writers = [

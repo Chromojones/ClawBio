@@ -1,20 +1,10 @@
-"""Check the data is public BEFORE doing any metadata work.
+"""Is the study public? Checked before any metadata work.
 
-AUTS2 (PMID 41278797) is an ideal candidate on paper: eCLIP of a genuinely new protein in
-human neural progenitors, exactly the brain context we are short of. Its Data Availability
-statement names three GEO accessions, all of which read as ordinary published data.
+GEO's `form=text` returns SOFT for a public accession and an HTML page for a private one, so
+"did SOFT come back" is the signal, not the word "private". Fixture: AUTS2 (PMID 41278797),
+whose GEO series are private until 2029.
 
-Every one of them is private, **scheduled for release on 07 Aug 2029**. That cost a full
-literature dig — abstract, Europe PMC, PMC efetch, bioRxiv full text, methods extraction —
-before the first line of metadata could have been written.
-
-One HTTP request, made first, would have ended it. The check is cheap, decisive, and belongs
-in front of the pipeline rather than in the middle of it.
-
-The parsing itself has one trap worth pinning: GEO's `form=text` endpoint returns SOFT text
-for a public accession and an **HTML page** for a private one, so "did I get SOFT back" is
-the actual signal. Sniffing for the word "private" alone would misread a public series whose
-summary happens to discuss private data.
+Story: FAILURES.md#study-check
 """
 
 import sys
@@ -72,7 +62,7 @@ class TestAPublicSeries:
 
 
 class TestAnEmbargoedSeries:
-    """The AUTS2 regression, verbatim."""
+    """AUTS2's GEO response, verbatim."""
 
     def test_private_html_reads_as_not_public(self):
         result = parse_geo_response("GSE304933", PRIVATE_HTML)
@@ -96,7 +86,7 @@ class TestAnEmbargoedSeries:
 
 class TestAnEmptyOrTruncatedResponse:
     def test_an_empty_body_is_not_silently_treated_as_public(self):
-        """A failed fetch became an empty row once already and produced phantom findings."""
+        """A failed fetch is not a public series."""
         result = parse_geo_response("GSE159997", "")
         assert result.public is False
         assert "empty" in result.reason.lower()

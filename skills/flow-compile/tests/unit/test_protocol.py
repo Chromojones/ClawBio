@@ -1,18 +1,7 @@
-"""One place that knows what a CLIP protocol is called and what follows from it.
+"""One place that knows CLIP protocol names and what follows from them.
 
-`is_eclip_method` existed twice with two sources of truth — `pipeline_params` read a module
-constant, `flow_annotate` inlined the same set as a literal. Two definitions of "is this
-eCLIP?" is one more than a codebase can keep honest, and this parameter decides which mate
-carries the crosslink.
-
-Protocol *detection* also lived in `flow_annotate._match_method` while the question "is this
-annotation eCLIP?" lived in `flow_compile._annotation_is_eclip` — orchestrator logic that
-belongs with the other protocol knowledge.
-
-The ordering constraint is load-bearing and easy to lose: `PAR-iCLIP` must be tested before
-both `PAR-CLIP` and `iCLIP`, because `par[\\s-]?clip` cannot match "PAR-iCLIP" (the next token
-is `iclip`, not `clip`) and the bare `iclip` pattern then matches the tail of that same word.
-GSE207656 read as `iCLIP` for months for exactly this reason.
+One definition of eCLIP decides which mate carries the crosslink. `PAR-iCLIP` is tested before
+`PAR-CLIP` and `iCLIP`, whose patterns would each match part of it.
 
 Story: FAILURES.md#protocol-detection
 """

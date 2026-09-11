@@ -1,14 +1,9 @@
-"""eCLIP mate selection.
+"""eCLIP mate selection: paired-end eCLIP carries the crosslink on read 2, seCLIP on its only read.
 
-Paired-end eCLIP carries the crosslink on **read 2** (the randomer is trimmed from R2's
-5' end and the crosslink sits immediately after it). The Yeo pipeline says so explicitly —
-`samtools view -f 128` (second-in-pair) — and `eclipdemux` trims the randomer from
-"the front of 2nd read in pair".
+The Yeo pipeline selects `samtools view -f 128` (second in pair), and `eclipdemux` trims the
+randomer from the front of read 2.
 
-seCLIP is genuinely single-end: read 1 is the only read and carries the crosslink.
-
-An earlier version of this module uploaded read 1 for all eCLIP, which analysed the wrong
-end of the molecule for every paired-end study.
+Story: FAILURES.md#eclip-mate-filenames
 """
 
 import sys

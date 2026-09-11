@@ -1,28 +1,9 @@
-"""One finding type and one verdict type, replacing seventeen.
+"""Two result shapes: `Finding` (one problem, in a list) and `Verdict` (one question answered,
+with evidence).
 
-Every guardrail in this skill returns a result, and each was given its own class as it was
-written. There are now four byte-identical `Check` dataclasses (`import_size`, `run_expansion`,
-`sample_type_fields`, plus `metadata_validate`'s `NamedTuple` variant), five copies of
-`ERROR`/`WARNING`, three `format_report()` functions, and seventeen result classes in total.
+`Finding` indexes as `(severity, message)` because the metadata tests read it positionally.
 
-They are two shapes wearing seventeen names:
-
-* **Finding** — something wrong with one row/sample, returned as a list. Covers all four
-  `Check`s, `MetadataIssue`, `AnnotationWarning`, `Discrepancy`, `DroppedSample`.
-* **Verdict** — one question answered, returned singly, with evidence and a `describe()`.
-  Covers `PairedCheck`, `UmiParamCheck`, `UmiSafety`, `CrossCheck`, `Availability`,
-  `RepairResult`, `AssignmentResult`.
-
-The migration must be invisible to the 522 existing tests, and the compatibility surface is
-narrower than it looks but sharper. `metadata_validate.Check` is a `NamedTuple` whose docstring
-says "Indexable as (severity, message) by design", and `tests/test_metadata_validate.py` relies
-on that in 20+ places::
-
-    assert issues and issues[0][0] == ERROR
-
-That is *positional* access, so `__iter__` is not enough — `Finding` needs `__getitem__`.
-Getting this wrong breaks a 607-line test file in a way that looks like a logic regression
-rather than a container change.
+Story: FAILURES.md#result-type-sprawl
 """
 
 import sys
@@ -44,7 +25,7 @@ from lib.results import (  # noqa: E402
 
 class TestFindingIsTheOldCheck:
     def test_positional_access_matches_the_namedtuple(self):
-        """`issues[0][0] == ERROR` appears 20+ times in test_metadata_validate.py."""
+        """`issues[0][0] == ERROR` is how the metadata tests read findings."""
         f = Finding(ERROR, "bad antibody", field="Purification Agent")
         assert f[0] == ERROR
         assert f[1] == "bad antibody"
@@ -75,7 +56,7 @@ class TestFindingCarriesTheOtherShapes:
         assert (f.row, f.subject) == (3, "SAMPLE_1")
 
     def test_discrepancy_fields(self):
-        """import_verify.Discrepancy splits the message into expected/actual."""
+        """A discrepancy carries expected and actual."""
         f = Finding(ERROR, "annotation dropped", subject="S1",
                     field="purification_target__annotation", expected="nFLAG", actual="")
         assert f.expected == "nFLAG" and f.actual == ""
@@ -120,8 +101,7 @@ class TestVerdict:
 
 class TestRenderFindings:
     def test_it_reports_the_total_not_just_the_failures(self):
-        """Every format_report() copy leads with "N of M" — a bare failure list hides
-        how much was checked."""
+        """The report leads with "N of M"; a bare failure list hides how much was checked."""
         out = render_findings([Finding(ERROR, "bad")], title="Import check", total=24)
         assert "24" in out and "1" in out
 

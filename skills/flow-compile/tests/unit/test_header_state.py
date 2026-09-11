@@ -1,31 +1,12 @@
-"""Four header states, not two booleans — and the one the detector could not see.
+"""Four header states, and the parameters each implies.
 
-`fastq_headers.inspect_header_lines()` returns `(has_rbc, barcode_in_header)`. Two booleans
-cannot express the four states an eCLIP FASTQ actually arrives in, and the gap is not
-cosmetic. Measured against the RBP ENCODE project on Flow:
+    execution param       actual header (RBP ENCODE project on Flow)
+    encode_eclip=false    @HWI-D00611:153:…:25252 2:N:0:GAATTCGTTAATCTTA
+    encode_eclip=true     @TAAAG:HWI-D00611:119:…:90397 2:N:0:TCCGGAGATATAGCCT
 
-    execution param            actual header
-    encode_eclip=false         @HWI-D00611:153:…:25252 2:N:0:GAATTCGTTAATCTTA
-    encode_eclip=true          @TAAAG:HWI-D00611:119:…:90397 2:N:0:TCCGGAGATATAGCCT
-
-The second is `eclipdemux` output: the randomer is **prepended to the title**. Verified as a
-randomer and not a fixed barcode — 5 nt, **949 distinct values across 5,371 reads**, with
-near-uniform base composition (deviation from 25% of 3.1–15.2 per position).
-
-`inspect_header_lines` returns `(False, False)` for it — **the same answer it gives for a raw
-header**. So a derivation trusting it sets `move_umi_to_header=true` and re-extracts five bases
-from a read whose randomer has already been moved to the header: five real bases of insert are
-stripped, and deduplication then keys on sequence that is not the UMI. Nothing errors.
-
-It also returns `(True, False)` for **both** `:rbc:` forms, so the mid-header versus
-end-of-header distinction that `reference/eclip-analysis-params.md` calls decisive for
-`encode_eclip` cannot be derived from it either.
-
-Both reference documents are wrong in the same direction. `SKILL.md` said "eCLIP + `:rbc:` →
-`encode_eclip=true`", ignoring position. `reference/eclip-analysis-params.md` corrected that
-but added "Never set `encode_eclip=true` without `:rbc:` in sampled headers" — which the live
-ENCODE data contradicts, because the portal's own files carry a prepended randomer and no
-`:rbc:` at all.
+The second is `eclipdemux` output: a 5-nt randomer prepended to the read name (949 distinct
+values across 5,371 reads). `inspect_header_lines` answers `(False, False)` for it and for a raw
+header, and `(True, False)` for both `:rbc:` positions, so it cannot drive the parameters.
 
 Story: FAILURES.md#eclip-header-states
 """
@@ -58,7 +39,7 @@ class TestTheStateTheDetectorCouldNotSee:
         assert classify_header(ENCODE_PREPENDED) == RANDOMER_PREFIX
 
     def test_it_is_not_confused_with_raw(self):
-        """`inspect_header_lines` returned (False, False) for both. That is the bug."""
+        """`inspect_header_lines` gives (False, False) for both; the state must differ."""
         assert classify_header(ENCODE_PREPENDED) != classify_header(ENCODE_RAW)
 
     def test_raw_is_raw(self):
@@ -83,26 +64,21 @@ class TestRbcPosition:
         assert classify_header(ICLIP_RBC_END) == RBC_END
 
     def test_the_two_are_distinguishable(self):
-        """`inspect_header_lines` returned (True, False) for both."""
+        """`inspect_header_lines` gives (True, False) for both; the state must differ."""
         assert classify_header(ENCODE_RBC_MID) != classify_header(ICLIP_RBC_END)
 
     def test_mid_header_must_not_set_encode_eclip(self):
-        """`encode_eclip` runs `encode_moveumi`, which takes the FIRST colon-delimited field
-        of the read name as the UMI and moves it to the end as `_rbc:<umi>`:
+        """`encode_moveumi` takes the first colon field of the read name as the UMI.
 
-            header = record.id.split(":")
-            rearranged = ":".join(header[1:]) + "_rbc:" + header[0]
+        On `@HWI-D00611:…:rbc:CACTTG` that field is the instrument name, so every read's UMI would be
+        `HWI-D00611` and UMICollapse would collapse the library.
 
-        On a prepended randomer (`@TAAAG:HWI-…`) that field IS the randomer. On an
-        already-extracted `:rbc:` header (`@HWI-D00611:…:rbc:CACTTG`) it is the INSTRUMENT
-        NAME, so every read comes out `…_rbc:HWI-D00611` — a UMI constant across the library.
-        UMICollapse then treats every read at a position as one duplicate and the library
-        collapses to nothing, on a run that finishes green.
+        Story: FAILURES.md#encode-moveumi
         """
         assert params_for_state(RBC_MID, experimental_method="eCLIP")["encode_eclip"] == "false"
 
     def test_end_of_header_does_not_even_for_eclip(self):
-        """Position decides, not presence. This is the SKILL.md error."""
+        """Position decides, not presence."""
         assert params_for_state(RBC_END, experimental_method="eCLIP")["encode_eclip"] == "false"
 
     def test_both_rbc_forms_keep_the_separator(self):

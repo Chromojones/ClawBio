@@ -1,13 +1,7 @@
-"""The docs make claims about the code. These check the claims that can be checked.
+"""The docs make claims about the code; these check the ones that can be checked.
 
-Two failures in this rebuild were documentation, not code. `SKILL.md` told a reader to write
-`no antibody` for controls while the reference said empty and the validator warned on the
-literal string; and "the import sheet has no `project` column" was stated in five places, true
-when written and false after a library upgrade. Prose that contradicts the code is worse than
-absent prose, because it is followed.
-
-So: every `FAILURES.md` anchor a module cites must exist, every stage must appear in the stage
-reference, and `SKILL.md` must stay inside the project's 500-line conformance rule.
+FAILURES.md anchors resolve, every stage is documented, and the flags, schemas, imports and
+artefacts the docs name exist. SKILL.md meets the ClawBio conformance checklist.
 """
 
 import re
@@ -91,12 +85,7 @@ class TestStageReference:
         assert missing == [], f"undocumented stages: {missing}"
 
     def test_the_gates_documented_are_the_gates_implemented(self):
-        """Counted from the stages themselves, so the doc cannot drift from the code.
-
-        There were four. Submission at 12_analysis was dropped because it re-asked what 108
-        had already settled, and a gate that re-asks a settled question trains its operator to
-        click through.
-        """
+        """Counted from the stages, so the doc cannot drift from the code."""
         gating = sorted(
             p.stem for p in (SKILL_DIR / "stages").glob("*.py")
             if not p.name.startswith("_") and "raise Gate(" in p.read_text()
@@ -113,12 +102,9 @@ class TestStageReference:
             assert f"GATE {n}" in text, f"GATE {n} missing"
 
     def test_the_exit_codes_are_documented(self):
-        """In BOTH files, each checked against `_common.py`.
+        """In SKILL.md and reference/stages.md, each checked against `_common.py`.
 
-        The exit-code table is the one thing deliberately stated twice: SKILL.md has to be
-        readable on its own, and the codes are how you read the flowchart. Duplication is safe
-        only while both copies are pinned to the source, which is what this does — change a
-        code in `_common.py` and both documents fail here.
+        SKILL.md must read on its own, so the table is stated twice; both copies are pinned to the source.
         """
         from stages._common import CHECK_FAILED, GATE, OK, PREREQUISITE, USAGE
 
@@ -135,12 +121,7 @@ class TestSkillMd:
         assert n < 500, f"SKILL.md is {n} lines"
 
     def test_it_does_not_restate_field_rules(self):
-        """It once told the reader to write `no antibody`, which the validator warns about.
-
-        The check is for the *instruction*, not the string. SKILL.md now cites that episode as
-        the reason it stopped restating rules, and a plain grep cannot tell the warning from
-        the thing it warns about — the third time this rebuild has written a test that matched
-        its own documentation. So: any line mentioning the phrase must be marked historical.
+        """SKILL.md does not instruct `no antibody`; a paragraph naming the phrase marks it historical.
         """
         for para in SKILL.read_text().split("\n\n"):
             if "no antibody" in para:
@@ -161,7 +142,7 @@ class TestSkillMd:
             assert ref in text, f"SKILL.md does not link {ref}"
 
     def test_the_gotchas_section_stays_empty(self):
-        """Fifteen bullets of rules living in the wrong file is where the drift began."""
+        """Field rules live in the references, not in SKILL.md gotchas."""
         text = SKILL.read_text()
         body = text.split("## Gotchas", 1)[1].split("##", 1)[0]
         assert "- " not in body, "rules are accumulating in SKILL.md again"
@@ -198,11 +179,9 @@ class TestNoDanglingLinks:
 
 
 class TestClawBioConformance:
-    """The project's 17-point SKILL.md checklist, run as a test instead of by hand.
+    """The project's 17-point SKILL.md checklist, as a test.
 
-    `/pr-audit` enforces this on every PR and the section names are matched exactly, so a
-    lowercased heading fails an audit that a human reading the file would pass. Checking it
-    here means the answer is known before the PR rather than after.
+    `/pr-audit` matches section names exactly, so casing matters.
     """
 
     def _frontmatter(self):
@@ -246,16 +225,14 @@ class TestClawBioConformance:
         assert list((SKILL_DIR / "tests").rglob("test_*.py"))
 
     def test_the_description_does_not_promise_what_was_removed(self):
-        """It advertised PubMed alert scanning after `pubmed_stage.py` was deleted."""
+        """The description advertises only what the skill does."""
         fm = self._frontmatter().lower()
         assert "pubmed alert" not in fm
         assert "alert scan" not in fm
 
 
 class TestGateCountProse:
-    """SKILL.md said "four points where a person signs off" and "the four gates" while its
-    own hard-stops section, `reference/stages.md`, and the code all said three. The GATE-4
-    check above could not see prose numbers, so the count is checked as words too."""
+    """The gate count in SKILL.md prose matches the code: three."""
 
     def test_the_prose_never_claims_a_fourth_gate(self):
         text = SKILL.read_text().lower()
@@ -270,10 +247,8 @@ class TestGateCountProse:
 
 
 class TestDemoMd:
-    """DEMO.md kept documenting the removed monolithic CLI — `--case`, `--run-automated`,
-    `--flow-project-id` — for months after the stage split, and a fresh agent following it
-    failed on the first command with exit 2. Every flag a fenced bash block passes to a
-    script in this skill must exist in that script's source."""
+    """Every flag a DEMO.md bash block passes to a script in this skill exists in that script.
+    """
 
     def _commands(self):
         """(script_path, [flags]) for each command line in a fenced bash block."""
@@ -314,11 +289,10 @@ class TestDemoMd:
 
 
 class TestDocumentedSchemasLoad:
-    """The DEMO.md test above checks documented FLAGS. Nothing checked documented FILE
-    SCHEMAS, and that is the hole GSE262435 fell through: SKILL.md and
-    `sra-direct-import.md` both described `srr_map.tsv` as (`gsm`, `srr`, `srx`) while the
-    loader demanded (`gsm`, `srr`, `mate`, `fastq`), so a map built to the documentation
-    died at stage 02. Every documented column list is now fed to the real loader."""
+    """Every documented `srr_map.tsv` column list loads in the real loader.
+
+    Story: FAILURES.md#srr-map-schema
+    """
 
     def _documented_schemas(self):
         """(doc, [columns]) for each line describing srr_map.tsv with a backticked list."""
@@ -355,10 +329,9 @@ class TestDocumentedSchemasLoad:
 
 
 class TestTheGeoFetchRecipeMatchesTheCode:
-    """GEO's default accession page is behind reCAPTCHA and unusable from a fetch tool; the
-    `form=text` SOFT endpoint works. Every agent rediscovers this the hard way, so the recipe
-    is documented — and pinned here, because a documented URL that drifts from `geo_url()`
-    sends the reader somewhere the skill does not actually go."""
+    """The documented GEO recipe is `geo_url()`: the `form=text` SOFT endpoint, since the default
+    accession page is behind reCAPTCHA.
+    """
 
     def test_the_documented_url_is_the_one_the_code_builds(self):
         from lib.study_check import geo_url
@@ -375,11 +348,7 @@ class TestTheGeoFetchRecipeMatchesTheCode:
 
 
 class TestReferenceDocsNameRealThings:
-    """The DEMO.md test above checks DEMO.md's flags. These check every reference doc, which
-    is where the monolith's residue accumulated: flags from a CLI that no longer exists
-    (`--case`, `--gse`, `--flow-project-id`), and artefacts written by hooks nothing calls
-    (`CONFIRM_METADATA.md`). A doc naming a file no run produces sends the reader nowhere.
-    """
+    """Reference docs name only flags that exist and artefacts a run writes."""
 
     #: Flags belonging to tools this skill drives rather than defines.
     _EXTERNAL_FLAGS = {
@@ -414,8 +383,7 @@ class TestReferenceDocsNameRealThings:
     def test_every_artefact_named_is_one_a_stage_writes(self):
         """A filename counts only if a stage, or lib code a stage reaches, names it.
 
-        A writer that exists but that no stage calls produces nothing in a run, so its
-        artefact is as dead as one with no writer at all.
+        A writer no stage calls produces nothing in a run.
         """
         written = _reachable_literals()
         external = {"srr_map.tsv", "samplesheet.csv", "Testtemplate.xlsx", "edits.csv"}

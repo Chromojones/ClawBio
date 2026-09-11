@@ -1,14 +1,7 @@
-"""GSE105082 end to end through the stages, replacing the old `run_pipeline` case tests.
+"""GSE105082 end to end through the stages.
 
-The old test drove one function that did everything and asserted on its combined output. The
-same ground is covered here by running the stages in order, which additionally checks the
-thing the old design could not express: that each stage stops the run when it should, and that
-a stage does not have to be executed twice for a later one to see its work.
-
-The barcode assertions are the study's real ones. GSE105082's GSM2817677 carries `NNNCGGANNN`,
-recoverable from the GEO record, and GSM2817678 carries `NNNGGCANNN` — the two differ only in
-their fixed core, which is what makes this a good case: a resolver that ignored the core would
-give both samples the same barcode and nothing downstream would notice.
+The barcodes are the study's own: GSM2817677 carries `NNNCGGANNN` and GSM2817678 `NNNGGCANNN`,
+differing only in the fixed core, so a resolver that ignored the core would give both one barcode.
 """
 
 import json
@@ -129,7 +122,7 @@ class TestPastTheGate:
         assert row["Sample Name"] == "DHX9_Hs_HeLa_Rep1_SRR6181530"
 
     def test_04_runs_once_not_three_times(self, confirmed):
-        """The failure this rebuild exists to remove: re-execution as a dependency mechanism."""
+        """The annotation is built in one pass; re-running is not a dependency mechanism."""
         args = ("--geo-matrix", str(GSE105082_MATRIX), "--srr-map", str(GSE105082_SRR_MAP))
         assert _stage("04_annotate", confirmed, *args).returncode == 0
         again = _stage("04_annotate", confirmed, *args)

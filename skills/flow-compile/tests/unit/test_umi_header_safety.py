@@ -1,24 +1,15 @@
-"""`removespace.py` is only safe when the UMI separator appears ONCE in the read name.
+"""Does the field a UMI parser would take actually vary across reads?
 
-GSE297587 (LARP6) folded its comment into the read name and used ``umi_separator=rbc:``.
-That worked because ``rbc:`` occurs exactly once, so "everything after the separator" has
-only one possible meaning and the trailing ``/1`` → ``_1`` rode along harmlessly.
-
-GSE159997 (CSDE1) carries its UMI as a bare underscore field::
+With `umi_separator=rbc:` (GSE297587) the separator occurs once, so the UMI is unambiguous.
+GSE159997 carries its UMI as a bare `_` field::
 
     @SRR12885981.1 D00733:360:CCM6UANXX:1:1102:1162:2364_CATGCCGGATAT/1
 
-`removespace.py` turns spaces and slashes into underscores, giving::
+so with `umi_separator="_"` the cleaned read name has several split points. A field that is
+constant across reads is wrong under every parsing convention, and deduplicating on it collapses
+the library on a run that finishes green.
 
-    @SRR12885981.1_D00733:360:CCM6UANXX:1:1102:1162:2364_CATGCCGGATAT_1
-
-Now ``umi_separator="_"`` has **four** candidate split points. A parser that takes the last
-field reads the UMI as ``1`` — identical for every read in the file. Dedup would then collapse
-every read at a crosslink position to a single count, silently, on a run that finishes green.
-
-The check is deliberately empirical rather than a rule about parsers: **does the field the
-parser would take actually vary across reads?** A constant UMI is wrong under every parsing
-convention, so this catches the failure without needing to know which convention the tool uses.
+Story: FAILURES.md#read-structure
 """
 
 import sys
@@ -64,7 +55,7 @@ class TestTheLarp6ShapeStaysAllowed:
 
 
 class TestTheCsde1Trap:
-    """The GSE159997 regression — a green run that silently collapses everything."""
+    """The GSE159997 shape: several split points, a constant final field."""
 
     def test_naive_removespace_output_is_refused(self):
         folded = [fold_comment_into_name(h) for h in CSDE1_RAW]
@@ -83,7 +74,7 @@ class TestTheCsde1Trap:
         assert check_umi_safety(folded, separator="_").separator_count > 1
 
     def test_a_name_ending_in_the_real_umi_is_safe(self):
-        """The fix: rewrite so the read name ends with the UMI and nothing follows it."""
+        """A read name that ends with the UMI is safe."""
         rewritten = [
             "@SRR12885981.1_CATGCCGGATAT",
             "@SRR12885981.2_GAAGCCGGATTT",

@@ -1,26 +1,10 @@
-"""`move_umi_to_header=true` without `umi_separator` kills UMICollapse.
+"""`move_umi_to_header=true` needs `umi_separator`, or UMICollapse fails.
 
-Four consecutive studies — GSE75418, GSE68800, GSE80202, GSE58448 — were submitted with::
+UMICollapse otherwise dies with `IllegalStateException: No match found` at `SAMRead.getUMI`,
+after trimming, mapping and sorting (GSE75418, GSE68800, GSE80202, GSE58448). The params are
+inconsistent on their own, so they are checked before submission.
 
-    {"move_umi_to_header": "true", "umi_header_format": "NNNNNNNNN",
-     "skip_umi_dedupe": "false", "crosslink_position": "start", "encode_eclip": "false"}
-
-and no `umi_separator`. The pipeline extracts the barcode and writes it into the read name,
-but UMICollapse is then told nothing about how to find it again, and dies::
-
-    java.lang.IllegalStateException: No match found
-        at umicollapse.util.SAMRead.getUMI(SAMRead.java:36)
-
-E-MTAB-2700, which completed 605/605, carries the same shape **plus** `"umi_separator": "_"`.
-
-The failure is loud but late: it arrives after trimming, mapping and sorting, so a 7-sample
-study burns most of a run before anything says so. And because the exception names
-`SAMRead.getUMI` rather than a parameter, it reads as a UMI-in-the-data problem — the same
-trap as the LARP6 header case, which produces a byte-identical stack trace for an entirely
-different reason.
-
-These params are checkable before submitting: they are internally inconsistent on their own,
-without reference to the reads.
+Story: FAILURES.md#read-structure
 """
 
 import sys

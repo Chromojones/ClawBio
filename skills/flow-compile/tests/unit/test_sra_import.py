@@ -1,11 +1,9 @@
-"""Tests for the SRA-direct import sheet (flowbio samples import).
+"""The SRA-direct import sheet for `flowbio samples import`.
 
-Empirical constraints these tests lock in, discovered against the live API with
-GSE215250 (PARP13 eCLIP):
-  * the accession must be an SRX/ERX **experiment**; SRR run accessions return HTTP 500
-  * `project` is reserved from flowbio 0.12.0 (see test_import_sheet_columns.py); below that
-    version it was swallowed as metadata and the study landed unattached
-  * `strandedness` is rejected for CLIP (422) even though batch-template lists it
+Verified against the live API with GSE215250 (PARP13 eCLIP): the accession is an SRX/ERX
+experiment, since a run is silently expanded to its experiment; `project` and `pubmed` are
+reserved from flowbio 0.12.0; `strandedness` is rejected for CLIP (422) although batch-template
+lists it.
 """
 
 import sys
@@ -87,7 +85,7 @@ class TestBuildImportSheet:
         assert list(sheet["accession"]) == ["SRX17851507", "SRX17851508"]
 
     def test_forbidden_columns_never_emitted(self):
-        """`project` is not a sheet field; `strandedness` is rejected for CLIP."""
+        """`strandedness` is rejected for CLIP, and a direct-line sheet has no local reads."""
         sheet = build_import_sheet(_annotation())
         for col in FORBIDDEN_SHEET_COLUMNS:
             assert col not in sheet.columns
@@ -134,16 +132,11 @@ class TestWriteArtifacts:
 
 
 class TestCommentsLengthLimit:
-    """Flow caps `comments` at 1000 characters; the import rejects the whole batch over it.
+    """Flow caps `comments` at 1000 characters, and one long row fails the whole import.
 
-    GSE76475 hit this: an 11-row sheet was refused outright with
-
-        validation_error … 7.metadata.comments … at most 1000 characters (it has 1025)
-
-    One long row kills the entire import, and the message identifies the row only by
-    position, so the sheet must be checked locally before the call. Comments are where this
-    skill records the evidence for every judgement call, so they grow naturally — truncating
-    silently would discard provenance, hence a loud error naming the offending samples.
+    The API names the row only by position (GSE76475: `7.metadata.comments … it has 1025`). Comments
+    hold the evidence for judgement calls, so truncating would lose provenance: the error names the
+    samples.
     """
 
     def _sheet(self, comment: str) -> pd.DataFrame:
@@ -168,24 +161,12 @@ class TestCommentsLengthLimit:
 
 
 class TestRunAccessionIsSilentlyExpanded:
-    """An SRR is accepted by the import — and silently expanded to its parent experiment.
+    """An SRR is accepted by the import and silently expanded to its parent experiment.
 
-    The docstring long said run accessions "fail with HTTP 500". Re-tested 2026-08-12 against
-    GSE78030 and that is no longer true, but the real behaviour is worse than an error:
-    importing `SRR3175580` produced ONE sample carrying all four runs of SRX1590001 —
+    Importing `SRR3175580` (GSE78030) produced one sample carrying all four runs of SRX1590001, with
+    the job COMPLETED. The refusal gives that reason.
 
-        SRX1590001_SRR3175580.fastq.gz   2.2 GB
-        SRX1590001_SRR3175581.fastq.gz   2.8 GB
-        SRX1590001_SRR3175582.fastq.gz   2.4 GB
-        SRX1590001_SRR3175583.fastq.gz   2.6 GB
-
-    A study whose replicates are separate runs of one experiment therefore cannot be imported
-    per replicate: 26 SRRs would yield 26 samples each holding its whole experiment, ~250 GB
-    of duplication, every sample mixing all four barcodes. The job reports COMPLETED, so
-    nothing surfaces the problem downstream.
-
-    The accession check stays, but the reason it gives must match reality — an operator who
-    reads "HTTP 500" and sees a successful import will reasonably conclude the rule is stale.
+    Story: FAILURES.md#import-guards
     """
 
     def test_run_accession_is_still_rejected(self):

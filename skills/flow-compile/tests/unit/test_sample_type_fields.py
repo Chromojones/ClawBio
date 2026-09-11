@@ -3,19 +3,8 @@
     $ flowbio samples batch-template --sample-type CLIP
     Required columns: name, reads1, five_prime_barcode_sequence, purification_target, strandedness
 
-Supplying exactly that set to `samples upload` returns::
-
-    Error: {'strandedness': ['Not a valid attribute for this sample type.']}
-
-`strandedness` is RNA-Seq only. The template says CLIP requires it, the API rejects it, and
-both are shipped by the same client. Ten E-MTAB-13331 uploads failed on it in one batch, and
-the same contradiction is recorded in this skill's own design notes from the PARP13 run
-months earlier, which is the point: knowing it is not enough, because the template is the
-thing you naturally trust when building a sheet.
-
-The failure is at least loud. What makes it worth a guard is the cost shape: `samples upload`
-takes one sample per call, so the rejection arrives after the reads have been transferred,
-and it repeats for every sample in the batch.
+`samples upload` then returns `{'strandedness': ['Not a valid attribute for this sample type.']}`,
+one sample at a time after its reads transfer. `strandedness` is RNA-Seq only.
 """
 
 import sys

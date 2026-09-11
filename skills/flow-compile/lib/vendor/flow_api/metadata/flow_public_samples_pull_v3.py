@@ -15,7 +15,7 @@ Credentials: FLOWBIO_USERNAME / FLOWBIO_PASSWORD or --username / --password.
 Example:
   export FLOWBIO_USERNAME=...
   export FLOWBIO_PASSWORD=...
-  python3 flow_public_samples_pull_v3.py --output-csv /home/mikej10/advbfx/projects/flow_public_samples_pull_v3.csv
+  python3 flow_public_samples_pull_v3.py --output-csv flow_public_samples.csv
 """
 
 from __future__ import annotations
