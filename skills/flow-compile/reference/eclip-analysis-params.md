@@ -165,9 +165,11 @@ This single check drives every parameter. **Inspect headers before choosing para
 > it to nothing, on an execution that finishes green.
 
 > **Paired-end eCLIP files downloaded from the ENCODE portal already have the barcode
-> extracted into the read header** (`:rbc:` form). Do not re-extract them — set
-> `encode_eclip=true`. Files pulled from SRA/ENA for the *same* experiment are usually
-> **raw** and need extraction. Always check; do not assume from the accession.
+> extracted into the read header** (`:rbc:` form). Do not re-extract them:
+> `move_umi_to_header=false`, `umi_separator=rbc:`, **`encode_eclip=false`** — they are
+> already in the form `encode_moveumi` produces. Files pulled from SRA/ENA for the *same*
+> experiment are usually **raw** and need extraction. Always check; do not assume from the
+> accession.
 
 `lib/fastq_headers.py` detects only the `:rbc:` form and cannot tell a `RANDOMER:title`
 header from a raw one. Use `lib/header_state.py` instead; it classifies all four.
@@ -201,9 +203,9 @@ Match with `fastq_headers.RBC_TAG`, never a literal `":rbc:"`.
 | Param | Rule |
 |-------|------|
 | `move_umi_to_header` | `true` when the randomer is still in the read sequence; `false` once it is in the header |
-| `umi_separator` | `_` for raw extraction; `rbc:` for ENCODE pre-extracted |
+| `umi_separator` | `_` for raw extraction; `:` for a prepended randomer; `rbc:` once the UMI is in `:rbc:` form |
 | `umi_header_format` | all-`N` of the randomer length — **`NNNNNNNNNN`** for the eclipdemux default |
-| `encode_eclip` | `true` **only** for `:rbc:` ENCODE-style headers |
+| `encode_eclip` | `true` **only** for a prepended randomer (`@NNNNN:instrument…`), eCLIP family; `false` for every `:rbc:` header |
 | `crosslink_position` | `start` — 5′ end of the uploaded read (read 2 for PE eCLIP) |
 | `skip_umi_dedupe` | `false` (dedup is the whole point of the randomer) |
 | `star_params` | `--alignEndsType Extend5pOfRead1` extends the 5′ end of the *uploaded* read; correct when read 2 is uploaded as the single read |
