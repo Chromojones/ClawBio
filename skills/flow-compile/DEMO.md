@@ -1,9 +1,8 @@
 # flow-compile — demo (GSE105082 / GSM2817677)
 
 Runs the stages offline against the bundled data: the trunk, both approval gates it can
-reach, and a dry-run upload. Every command below is the current stage CLI — this file once
-documented a removed monolithic driver, and an agent following it failed on the first
-command, so its flags are now checked against the scripts by `tests/unit/test_docs.py`.
+reach, and a dry-run upload. Every flag below is checked against the scripts by
+`tests/unit/test_docs.py`.
 
 | Field | Value |
 |-------|-------|

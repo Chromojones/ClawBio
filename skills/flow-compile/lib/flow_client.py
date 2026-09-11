@@ -28,27 +28,6 @@ def project_id_of(sample: dict[str, Any] | None) -> str:
     return "" if project is None else str(project)
 
 
-def http_get(url: str, *, byte_range: int | None = None, timeout: int = 60) -> bytes:
-    """GET with an optional byte range; an HTTP error names the URL."""
-    headers = {"User-Agent": USER_AGENT}
-    if byte_range:
-        headers["Range"] = f"bytes=0-{byte_range}"
-    request = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.read()
-    except urllib.error.HTTPError as exc:
-        raise RuntimeError(f"HTTP {exc.code} for {url}") from exc
-
-
-def download_url(data_id: str, filename: str, *, base: str = "") -> str:
-    """The route that serves a data file's bytes: under `/api/`, keyed by Data id, with the filename
-    quoted so a separator cannot escape the route.
-    """
-    root = (base or API_BASE).rstrip("/")
-    return f"{root}/downloads/{data_id}/{urllib.parse.quote(str(filename), safe='')}"
-
-
 def resolve_token(explicit: str = "") -> str:
     """A Flow token: explicit, then `FLOW_API_TOKEN` (flowbio CLI), then `FLOW_TOKEN` (flow-bio
     skill), then `~/.config/flow/api-token`.

@@ -24,10 +24,7 @@ NON_METADATA_COLUMNS = frozenset(RESERVED_SHEET_COLUMNS)
 ANNOTATION_SUFFIX = "__annotation"
 
 
-
-
 #: Sheet columns that are not sample metadata and so are never compared field-by-field.
-
 
 
 @dataclass(frozen=True)
@@ -57,8 +54,6 @@ def live_metadata(sample: dict, column: str) -> str:
 def count_reads(sample: dict) -> int:
     """Number of data files attached, counted where Flow actually keeps them."""
     return sum(len(fileset.get("data") or []) for fileset in (sample.get("filesets") or []))
-
-
 
 
 def find_import_discrepancies(
@@ -166,8 +161,6 @@ def format_report(discrepancies: list[Discrepancy], *, total_rows: int) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-
-
 #: Sheet columns that are not sample metadata and are never repaired.
 
 #: Suffix marking a column that lives as the ``annotation`` of its parent attribute rather
@@ -183,36 +176,6 @@ class RepairEdit:
     fields: dict = field(default_factory=dict)
     #: True when the sheet row produced no sample at all — a failed import, not a repair.
     missing: bool = False
-
-
-@dataclass
-class RepairResult:
-    complete: bool
-    total_rows: int
-    matched_samples: int
-    outstanding: list[str] = field(default_factory=list)
-    missing: list[str] = field(default_factory=list)
-
-    def describe(self) -> str:
-        if self.complete:
-            return (f"repair complete — {self.matched_samples}/{self.total_rows} samples "
-                    f"re-read and every field matches the sheet.")
-        lines = [
-            f"repair INCOMPLETE — {self.matched_samples}/{self.total_rows} sheet rows have a "
-            f"sample, {len(self.outstanding)} still differ from the sheet."
-        ]
-        if self.missing:
-            lines.append(f"  no sample at all for: {', '.join(self.missing[:8])}"
-                         + (" …" if len(self.missing) > 8 else ""))
-        if self.outstanding:
-            lines.append(f"  fields still wrong on: {', '.join(self.outstanding[:8])}"
-                         + (" …" if len(self.outstanding) > 8 else ""))
-        lines.append(
-            "  Do NOT submit an execution. Re-run the repair — it is idempotent and will plan "
-            "only the remainder. A half-repaired study is indistinguishable from a finished "
-            "one except by re-reading it."
-        )
-        return "\n".join(lines)
 
 
 def _observed(sample: dict, column: str) -> str:
@@ -260,31 +223,6 @@ def build_repair_plan(
         if wrong:
             plan.append(RepairEdit(sample_id=str(sample.get("id") or ""), name=name, fields=wrong))
     return plan
-
-
-def summarise_repair(
-    sheet_rows: list[dict],
-    live_samples: list[dict],
-    *,
-    project_id: str = "",
-    edits_applied: int = 0,
-) -> RepairResult:
-    """Is the repair finished? Settled by re-reading every sample; `edits_applied` is ignored.
-    """
-    del edits_applied
-    plan = build_repair_plan(sheet_rows, live_samples, project_id=project_id)
-    missing = [e.name for e in plan if e.missing]
-    outstanding = [e.name for e in plan if not e.missing]
-    matched = len(sheet_rows) - len(missing)
-    return RepairResult(
-        complete=not plan,
-        total_rows=len(sheet_rows),
-        matched_samples=matched,
-        outstanding=outstanding,
-        missing=missing,
-    )
-
-
 
 
 def names_from_listing(payload: dict | None) -> set[str]:

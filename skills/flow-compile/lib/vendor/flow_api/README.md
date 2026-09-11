@@ -12,8 +12,6 @@ sample metadata without the parent advbfx tree.
 | `analysis/flowrunanalysis_flowbio.py` | `flowAPIscripts/analysis/flowrunanalysis_flowbio.py` |
 | `preprocessing/removespace.py` | `flowAPIscripts/preprocessing/removespace.py` |
 
-Resolved by `lib/script_paths.resolve_flow_script()` (vendor copy first, then advbfx fallback).
-
 ## Post-upload sample updating (`metadata/`)
 
 Used to correct or annotate samples **after** they are on Flow (see

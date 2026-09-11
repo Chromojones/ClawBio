@@ -19,7 +19,6 @@ from lib.import_guards import (  # noqa: E402
     check_import_size,
     check_paired_selection,
     check_upload_fields,
-    effective_bytes,
     split_into_batches,
     strip_rejected,
     total_bytes,
@@ -51,8 +50,6 @@ class TestTheSizeGateMeasuresWhatIsActuallyTransferred:
         """Callers that cannot resolve parents must not silently get zero."""
         assert total_bytes([{"accession": "SRR3175580"}], BY_ACCESSION) == 2_500_000_000
 
-    def test_effective_bytes_agrees(self):
-        assert effective_bytes("SRR3175580", PARENT_OF_RUN, RUNS_BY_EXPERIMENT) == 10_070_000_000
 
     def test_an_experiment_row_is_unchanged_by_expansion(self):
         assert total_bytes(
@@ -132,12 +129,3 @@ class TestPairedSelection:
         assert check_paired_selection("second", layouts={"PAIRED"}).ok is True
 
 
-class TestShims:
-    def test_old_paths_still_import(self):
-        from lib.import_guards import check_import_size as a
-        from lib.import_guards import check_paired_selection as b
-        from lib.import_guards import effective_bytes as c
-        from lib.import_guards import strip_rejected as d
-
-        assert (a, b, c, d) == (check_import_size, check_paired_selection,
-                                effective_bytes, strip_rejected)

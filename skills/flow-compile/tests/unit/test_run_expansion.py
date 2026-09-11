@@ -18,11 +18,7 @@ SKILL_DIR = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(SKILL_DIR))
 
 from lib.import_guards import (  # noqa: E402
-    ERROR,
-    WARNING,
-    check_run_expansion,
     effective_accession,
-    effective_bytes,
 )
 
 # Verbatim from ENA for GSE78030.
@@ -47,45 +43,3 @@ class TestResolution:
         assert effective_accession("SRR9999999", PARENT) == "SRR9999999"
 
 
-class TestCosting:
-    def test_a_run_is_costed_at_its_parents_size(self):
-        """The whole point: 2.2 GB requested, 10.1 GB delivered."""
-        assert effective_bytes("SRR3175580", PARENT, GSE78030) == 10_075_864_988
-
-    def test_an_experiment_is_costed_at_its_own_size(self):
-        assert effective_bytes("SRX1590001", PARENT, GSE78030) == 10_075_864_988
-
-    def test_the_naive_figure_is_the_one_that_misleads(self):
-        naive = GSE78030["SRX1590001"]["SRR3175580"]
-        assert effective_bytes("SRR3175580", PARENT, GSE78030) > naive * 4
-
-
-class TestTheCheck:
-    def test_a_run_whose_parent_has_siblings_is_refused(self):
-        checks = check_run_expansion(["SRR3175580"], PARENT, GSE78030)
-        assert any(c.severity == ERROR for c in checks)
-
-    def test_the_refusal_names_both_accessions_and_the_real_size(self):
-        message = " ".join(c.message for c in check_run_expansion(["SRR3175580"], PARENT, GSE78030))
-        assert "SRR3175580" in message and "SRX1590001" in message
-        assert "10.1" in message or "10,075,864,988" in message
-
-    def test_it_says_per_run_import_is_impossible(self):
-        message = " ".join(c.message for c in check_run_expansion(["SRR3175580"], PARENT, GSE78030))
-        assert "local" in message.lower()
-
-    def test_a_run_that_is_its_experiments_only_run_only_warns(self):
-        """Nothing extra is delivered, so it is not an error, but the substitution still
-        happens and the sheet should name the experiment."""
-        single = {"SRX2": {"SRR2": 500}}
-        checks = check_run_expansion(["SRR2"], {"SRR2": "SRX2"}, single)
-        assert checks and all(c.severity == WARNING for c in checks)
-
-    def test_experiment_accessions_pass_clean(self):
-        assert check_run_expansion(["SRX1590001", "SRX1590006"], PARENT, GSE78030) == []
-
-    def test_two_runs_of_the_same_experiment_are_reported_once_as_a_duplicate(self):
-        """Importing both delivers the same experiment twice."""
-        checks = check_run_expansion(["SRR3175580", "SRR3175581"], PARENT, GSE78030)
-        message = " ".join(c.message for c in checks)
-        assert "twice" in message.lower() or "duplicate" in message.lower()

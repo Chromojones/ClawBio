@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path as _Path
 
 
-
 #: The skill root, so a generated script can import lib/ wherever it is run from.
 SKILL_DIR = _Path(__file__).resolve().parent.parent
 
@@ -15,9 +14,6 @@ import re
 from pathlib import Path
 
 import pandas as pd
-
-
-from lib.script_paths import resolve_flow_script as resolve_advbfx_script
 
 
 
@@ -34,16 +30,6 @@ def sample_name_filter_from_annotation(annotation: pd.DataFrame) -> str:
     if not srrs:
         return ".*"
     return "|".join(re.escape(s) for s in srrs)
-
-
-def experimental_method_from_annotation(annotation: pd.DataFrame) -> str:
-    if "Experimental Method" not in annotation.columns:
-        return "iCLIP"
-    methods = annotation["Experimental Method"].dropna().astype(str).str.strip()
-    methods = [m for m in methods if m]
-    return methods[0] if methods else "iCLIP"
-
-
 
 
 def write_analysis_script(

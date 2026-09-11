@@ -7,8 +7,7 @@ import re
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
-from dataclasses import asdict, dataclass
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd

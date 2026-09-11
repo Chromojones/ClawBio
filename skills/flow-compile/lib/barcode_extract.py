@@ -165,27 +165,3 @@ def write_proposal_bundle(output_dir: Path, proposals: list[BarcodeProposal]) ->
     return path
 
 
-def all_confirmed(proposals: list[BarcodeProposal]) -> bool:
-    return bool(proposals) and all(p.status == "confirmed" for p in proposals)
-
-
-def apply_confirmed_to_resolutions(proposals: list[BarcodeProposal]):
-    """Convert confirmed proposals to BarcodeResolution-like dicts for annotate stage."""
-    from lib.barcode_resolver import BarcodeResolution
-
-    out: list[BarcodeResolution] = []
-    for p in proposals:
-        if p.status != "confirmed":
-            continue
-        out.append(
-            BarcodeResolution(
-                gsm=p.gsm,
-                five_prime=p.five_prime,
-                three_prime=p.umi_barcode,
-                protocol=p.protocol,
-                confidence="high",
-                sources=[e.kind for e in p.evidence],
-                notes=p.agent_notes,
-            )
-        )
-    return out

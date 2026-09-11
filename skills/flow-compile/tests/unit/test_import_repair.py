@@ -1,9 +1,8 @@
-"""A repair is complete only when a re-read shows every sample correct.
+"""The post-import repair plan.
 
 `samples import` stores neither `purification_target__annotation` nor `source__annotation`, so
-each direct-line study needs a post-import edit. A loop that counts its own edits reports success
-when it dies partway (GSE131210: 11 of 34), so completion is measured by re-reading, and the plan
-is rebuilt from observed state so a re-run converges.
+each direct-line study needs a post-import edit. The plan is built from observed state: a re-run
+plans only what is still wrong, and a missing sample is a failed import, not a repair.
 
 Story: FAILURES.md#import-check
 """
@@ -17,7 +16,6 @@ sys.path.insert(0, str(SKILL_DIR))
 from lib.import_check import (  # noqa: E402
     RepairEdit,
     build_repair_plan,
-    summarise_repair,
 )
 
 SHEET = [
@@ -73,33 +71,3 @@ class TestBuildingThePlan:
         assert any(e.missing for e in plan)
 
 
-class TestReportingCompletion:
-    def test_all_applied_is_complete(self):
-        samples = [live(r["name"], annotation="nFLAG-HA-HIS", project="P1") for r in SHEET]
-        result = summarise_repair(SHEET, samples, project_id="P1")
-        assert result.complete is True
-
-    def test_a_half_finished_repair_is_not_complete(self):
-        samples = [live(SHEET[0]["name"], annotation="nFLAG-HA-HIS", project="P1"),
-                   live(SHEET[1]["name"])]
-        result = summarise_repair(SHEET, samples, project_id="P1")
-        assert result.complete is False
-        assert SHEET[1]["name"] in result.describe()
-
-    def test_completion_ignores_how_many_edits_were_issued(self):
-        """Edits issued is not evidence of completion."""
-        samples = [live(SHEET[0]["name"], annotation="nFLAG-HA-HIS", project="P1"),
-                   live(SHEET[1]["name"])]
-        assert summarise_repair(SHEET, samples, project_id="P1", edits_applied=99).complete is False
-
-    def test_fewer_samples_than_rows_is_not_complete(self):
-        """Verifying only the samples you managed to read would pass on a truncated set."""
-        samples = [live(SHEET[0]["name"], annotation="nFLAG-HA-HIS", project="P1")]
-        result = summarise_repair(SHEET, samples, project_id="P1")
-        assert result.complete is False
-        assert "1" in result.describe() and "2" in result.describe()
-
-    def test_the_description_warns_against_moving_on(self):
-        samples = [live(SHEET[0]["name"], annotation="nFLAG-HA-HIS", project="P1"),
-                   live(SHEET[1]["name"])]
-        assert "execution" in summarise_repair(SHEET, samples, project_id="P1").describe().lower()

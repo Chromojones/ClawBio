@@ -176,11 +176,6 @@ _FLASH_FROZEN_RE = re.compile(r"flash[\s-]*fro(?:zen|ze)", re.I)
 _PFX = r"(?<![A-Za-z])[a-z]{0,3}"
 
 
-
-def _match_method(text: str) -> str:
-    return protocol_mod.match_method(text)
-
-
 def infer_experimental_method(protocol: str, series_title: str = "") -> str:
     """The CLIP protocol, preferring the series title over protocol prose. An unknown protocol falls
     back to iCLIP and is surfaced by the metadata gate.

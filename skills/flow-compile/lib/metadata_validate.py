@@ -7,10 +7,7 @@ for review.
 
 from __future__ import annotations
 
-import json
 import re
-from dataclasses import asdict, dataclass
-from pathlib import Path
 
 import pandas as pd
 
@@ -446,7 +443,6 @@ def _name_tokens(name: str) -> set[str]:
     return {t for t in re.split(r"[^A-Za-z0-9]+", str(name or "").upper()) if t}
 
 
-
 def _annotation_tag(annotation: str) -> str:
     """The tag of an annotation, upper-cased, mutation and n/c prefix stripped: `100Q-nFLAG-HA-HIS`
     → `FLAG-HA-HIS`. "" when the annotation names no tag.
@@ -744,7 +740,4 @@ def validate_annotation_table(
     issues.extend(find_replicate_collisions(annotation))
     return issues
 
-
-def has_blocking_issues(issues: list[MetadataIssue]) -> bool:
-    return any(i.severity == ERROR for i in issues)
 

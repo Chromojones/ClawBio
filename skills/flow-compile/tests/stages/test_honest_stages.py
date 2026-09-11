@@ -106,6 +106,47 @@ class Test01SaysWhatItDidNotCheck:
         assert "search: not run" in proc.stdout
 
 
+ON_FLOW = {"projects": [], "samples": [],
+           "data": [{"id": "1", "filename": "SRX1453676_SRR1.fastq.gz"}]}
+NEIGHBOUR = {"projects": [{"id": "808005400407594329", "name": "Global-iCLIP_05_26"}],
+             "samples": [], "data": []}
+NOTHING = {"projects": [], "samples": [], "data": []}
+
+
+class Test01ReadsTheSearch:
+    """`--search-results` is read by the stage: an accession match stops the run."""
+
+    def _run(self, tmp_path, results):
+        out = tmp_path / "run"
+        out.mkdir()
+        st.record(out, "00_setup", st.OK)
+        st.set_study(out, accession="GSE75418")
+        search = tmp_path / "search.json"
+        search.write_text(json.dumps(results))
+        return out, _stage("01_study", out, "--search-results", str(search))
+
+    def test_no_match_proceeds(self, tmp_path):
+        out, proc = self._run(tmp_path, {"SRX1453676": NOTHING, "SAFB1": NOTHING})
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert json.loads((out / "study_check.json").read_text())["already_uploaded"] is False
+
+    def test_an_accession_match_stops_the_run(self, tmp_path):
+        _, proc = self._run(tmp_path, {"SRX1453676": ON_FLOW})
+        assert proc.returncode == 4, proc.stdout + proc.stderr
+        assert "ALREADY PRESENT" in proc.stdout + proc.stderr
+        assert "Traceback" not in proc.stderr
+
+    def test_a_target_match_is_shown_not_blocking(self, tmp_path):
+        _, proc = self._run(tmp_path, {"SRX1453676": NOTHING, "SAFB1": NEIGHBOUR})
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert "808005400407594329" in proc.stdout
+
+    def test_a_failed_accession_query_stops_the_run(self, tmp_path):
+        _, proc = self._run(tmp_path, {"SRX1453676": None, "SAFB1": NOTHING})
+        assert proc.returncode == 4, proc.stdout + proc.stderr
+        assert "INCONCLUSIVE" in proc.stdout + proc.stderr
+
+
 @pytest.fixture
 def local_ready(tmp_path):
     """A local-line run with parameters released, reads recorded at 201."""

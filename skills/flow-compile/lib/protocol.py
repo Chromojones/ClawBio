@@ -13,9 +13,6 @@ import re
 #: Assays for which `encode_eclip` is meaningful. The single definition.
 ECLIP_FAMILY = frozenset({"eclip", "seclip"})
 
-#: Backwards-compatible alias for `pipeline_params.ECLIP_METHODS`.
-ECLIP_METHODS = ECLIP_FAMILY
-
 #: Protocols this skill detects but does not process.
 UNSUPPORTED = frozenset({"FLASH", "uvCLAP", "PAR-CLIP"})
 

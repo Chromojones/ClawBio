@@ -8,16 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lib.results import ERROR, Finding as Check, INFO, WARNING
-
-#: Accession prefixes that denote a RUN rather than an experiment.
-_RUN_PREFIXES = ("SRR", "ERR", "DRR")
-
-
-
-
-def is_run_accession(accession: str) -> bool:
-    return str(accession or "").strip().upper().startswith(_RUN_PREFIXES)
+from lib.results import ERROR, Finding as Check, WARNING
 
 
 def effective_accession(accession: str, parent_of_run: dict) -> str:
@@ -27,57 +18,6 @@ def effective_accession(accession: str, parent_of_run: dict) -> str:
     accession = str(accession or "").strip()
     return parent_of_run.get(accession, accession)
 
-
-def effective_bytes(accession: str, parent_of_run: dict, runs_by_experiment: dict) -> int:
-    """Bytes the import will actually pull, i.e. the parent experiment's total."""
-    experiment = effective_accession(accession, parent_of_run)
-    return int(sum((runs_by_experiment.get(experiment) or {}).values()))
-
-
-def check_run_expansion(
-    accessions: list[str], parent_of_run: dict, runs_by_experiment: dict
-) -> list[Check]:
-    """Will this sheet fetch something other than what it names?"""
-    checks: list[Check] = []
-    seen_experiments: dict[str, str] = {}
-
-    for accession in accessions:
-        accession = str(accession or "").strip()
-        if not accession:
-            continue
-        experiment = effective_accession(accession, parent_of_run)
-
-        if experiment != accession:
-            siblings = runs_by_experiment.get(experiment) or {}
-            total = int(sum(siblings.values()))
-            own = int(siblings.get(accession, 0))
-            if len(siblings) > 1:
-                checks.append(Check(
-                    ERROR,
-                    f"{accession} is a run; the import will fetch its parent {experiment} "
-                    f"instead, which holds {len(siblings)} runs totalling "
-                    f"{total / 1e9:.1f} GB against the run's own {own / 1e9:.1f} GB. The "
-                    f"resulting sample mixes every barcode in the experiment. Name "
-                    f"{experiment} in the sheet and accept a pooled sample, or take the "
-                    f"reads through a local download to split them per run.",
-                ))
-            else:
-                checks.append(Check(
-                    WARNING,
-                    f"{accession} is a run and will be fetched as its parent {experiment}. "
-                    f"That experiment holds only this run, so nothing extra arrives, but the "
-                    f"sheet should name {experiment} so it matches what lands.",
-                ))
-
-        if experiment in seen_experiments and seen_experiments[experiment] != accession:
-            checks.append(Check(
-                ERROR,
-                f"{seen_experiments[experiment]} and {accession} both resolve to "
-                f"{experiment}, so it would be imported twice and the study duplicated.",
-            ))
-        seen_experiments.setdefault(experiment, accession)
-
-    return checks
 
 #: Largest import observed to succeed in one job: GSE63262 batch 1 (B52 + Rbp1, both
 #: replicates), which landed in ~28 minutes after the whole 132.7 GB study had failed. This
@@ -93,8 +33,6 @@ KNOWN_FAILURE_BYTES = 132_689_117_735
 #: Default ceiling when splitting. Sits just above the largest measured success and far
 #: below the known failure; it is a working figure, not a measured limit.
 DEFAULT_BATCH_BYTES = 35_000_000_000
-
-
 
 
 def _sizes_for(accession: str, by_accession: dict) -> list[float] | None:
@@ -214,8 +152,6 @@ def split_into_batches(
 REJECTED_BY_SAMPLE_TYPE: dict[str, frozenset[str]] = {
     "CLIP": frozenset({"strandedness"}),
 }
-
-
 
 
 def _rejected(sample_type: str) -> frozenset[str]:

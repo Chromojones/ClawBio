@@ -113,12 +113,3 @@ class TestAnnotationSurvivesTheSheetButNotTheJob:
         }]))
         assert sheet.loc[0, "purification_target__annotation"] == "dCTR-nMYC"
 
-    def test_a_colon_is_not_an_annotation_separator(self):
-        """Verified live: the colon is stored in the value, the annotation is untouched.
-
-        Flow's UI renders `value:annotation`, which is display only. Encoding an annotation
-        that way would write a literal colon into the target name.
-        """
-        from lib.sra_import import annotation_is_transportable_in_value
-
-        assert annotation_is_transportable_in_value() is False

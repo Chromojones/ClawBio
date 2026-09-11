@@ -77,14 +77,16 @@ class TestTheGse80202Regression:
         assert hits.already_present is True
         assert "SRX2415967" in hits.matched_queries
 
-    def test_a_target_hit_on_projects_is_reported(self):
+    def test_a_target_hit_on_projects_is_reported_for_review(self):
+        """A target match is context: it names the project without blocking the import."""
         results = {"ZFP871": {"projects": [{"id": "929598612629946169",
                                             "name": "Multilayered control of alternative splicing"}],
                               "samples": [{"id": "680624169803349319",
                                            "name": "Zfp871_N2A_Mm_c14_FLAG_rep1"}],
                               "data": []}}
         hits = summarise_hits(results)
-        assert hits.already_present is True
+        assert hits.already_present is False
+        assert hits.related_matches == ["ZFP871"]
         assert "929598612629946169" in {p["id"] for p in hits.projects}
 
     def test_the_report_names_the_project_so_it_can_be_opened(self):
@@ -98,8 +100,7 @@ class TestACleanResult:
         results = {"SRX999": {"projects": [], "samples": [], "data": [], "executions": []}}
         hits = summarise_hits(results)
         assert hits.already_present is False
-        # asserts the claim, not the phrasing — the wording gained the word "accession"
-        # once match precedence landed (see test_hit_precedence.py)
+        # asserts the claim, not the phrasing
         assert "does not appear to be on the platform" in hits.describe().lower()
 
     def test_user_and_group_hits_are_ignored(self):

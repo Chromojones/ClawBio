@@ -1,15 +1,8 @@
-"""Derive Flow CLIP pipeline params from FASTQ header inspection and barcode format."""
+"""Analysis-stage helpers: the header format a barcode implies, the eCLIP test, and the
+18-per-execution ceiling.
+"""
 
 from __future__ import annotations
-
-from lib.fastq_headers import HeaderInspection
-
-DEFAULT_STAR_PARAMS = (
-    "--outFilterMultimapNmax 100 --outFilterMultimapScoreRange 1 --outSAMattributes All "
-    "--alignSJoverhangMin 8 --alignSJDBoverhangMin 1 --outFilterType BySJout "
-    "--alignIntronMin 20 --alignIntronMax 1000000 --outFilterScoreMin 10 "
-    "--alignEndsType Extend5pOfRead1 --twopassMode Basic --limitOutSJcollapsed 4000000"
-)
 
 
 def barcode_to_header_format(five_prime: str) -> str:
@@ -20,71 +13,9 @@ def barcode_to_header_format(five_prime: str) -> str:
     return "N" * len(cleaned)
 
 
-DEFAULT_TRIMGALORE_PARAMS = "--fastqc --length 10 -q 20"
-UVCLAP_TRIMGALORE_PARAMS = (
-    f"{DEFAULT_TRIMGALORE_PARAMS} --three_prime_clip_R1 10 --three_prime_clip_R2 5"
-)
-
-from lib.protocol import ECLIP_METHODS  # single definition
-from lib.results import Verdict
-
-
 def is_eclip_method(experimental_method: str) -> bool:
     from lib.protocol import is_eclip_method as _impl
     return _impl(experimental_method)
-
-
-def derive_clip_pipeline_params(
-    inspection: HeaderInspection | None,
-    *,
-    five_prime_barcode: str = "",
-    experimental_method: str = "",
-    skip_umi_dedupe: str = "false",
-) -> dict[str, str]:
-    """Params from a two-boolean header inspection. No stage uses it: `header_state.params_for_state`
-    is the derivation, and handles the four header states this cannot tell apart.
-    """
-    eclip = is_eclip_method(experimental_method)
-
-    if inspection and inspection.has_rbc:
-        move = "false"
-        separator = "rbc:"
-        header_format = ""
-        encode = "true" if eclip else "false"
-    else:
-        move = "true"
-        separator = "_"
-        header_format = barcode_to_header_format(five_prime_barcode)
-        encode = "false"
-
-    params: dict[str, str] = {
-        "move_umi_to_header": move,
-        "umi_separator": separator,
-        "skip_umi_dedupe": skip_umi_dedupe,
-        "crosslink_position": "start",
-        "encode_eclip": encode,
-        "star_params": DEFAULT_STAR_PARAMS,
-    }
-    if header_format:
-        params["umi_header_format"] = header_format
-    return params
-
-
-def summarize_params_for_report(params: dict[str, str], inspection: HeaderInspection | None) -> str:
-    lines = [
-        "## Flow pipeline params (from header inspection)",
-        "",
-        f"- **move_umi_to_header:** `{params.get('move_umi_to_header')}`",
-        f"- **umi_separator:** `{params.get('umi_separator')}`",
-        f"- **encode_eclip:** `{params.get('encode_eclip')}`",
-    ]
-    if params.get("trimgalore_params"):
-        lines.append(f"- **trimgalore_params:** `{params['trimgalore_params']}`")
-    if params.get("umi_header_format"):
-        lines.append(f"- **umi_header_format:** `{params['umi_header_format']}`")
-    if inspection:
-        lines.append(f"- **Header note:** {inspection.notes}")
-    return "\n".join(lines) + "\n"
 
 
 #: Samples per execution. Above this, Flow executions become unreliable in practice; the figure

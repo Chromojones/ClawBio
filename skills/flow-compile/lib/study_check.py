@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from lib.results import ERROR, Finding as Check, INFO, Verdict, WARNING  # noqa: F401
 
 #: "…is currently private and is scheduled to be released on Aug 07, 2029."
 _PRIVATE_RE = re.compile(
@@ -96,25 +95,9 @@ _DATA_BUCKETS = ("projects", "samples", "data", "executions")
 #: Targets shared across studies — querying them returns every eCLIP project on the platform.
 _GENERIC_TARGETS = {"SMINPUT", "INPUT", "IGG", "GFP", "CONTROL", "NO ANTIBODY"}
 
-
-def query_kinds(sheet_rows: list[dict], *, extra: list[str] | None = None) -> dict[str, str]:
-    """Label each query by the weight of a match: `accession` proves the data is present, `target`
-    only that the protein has been studied, `extra` terms match almost anything.
-    """
-    kinds: dict[str, str] = {}
-    for row in sheet_rows:
-        accession = str(row.get("accession", "")).strip()
-        if accession:
-            kinds[accession] = "accession"
-    for row in sheet_rows:
-        target = str(row.get("purification_target", "")).strip()
-        if target and target.upper() not in _GENERIC_TARGETS:
-            kinds.setdefault(target, "target")
-    for term in extra or []:
-        term = str(term).strip()
-        if term:
-            kinds.setdefault(term, "extra")
-    return kinds
+#: An SRA/ENA/DDBJ run, experiment or project names one dataset, so a match on it is decisive.
+#: A target or title word only says the protein has been studied.
+_ACCESSION_RE = re.compile(r"^[SED]R[RXP]\d+$", re.I)
 
 
 @dataclass
@@ -202,9 +185,10 @@ def build_search_queries(sheet_rows: list[dict], *, extra: list[str] | None = No
     return queries
 
 
-def summarise_hits(results: dict[str, dict | None], *, kinds: dict[str, str] | None = None) -> Hits:
-    """Fold `{query: response}` into a verdict. A `None` response is an error, reported separately
-    from an empty result.
+def summarise_hits(results: dict[str, dict | None]) -> Hits:
+    """Fold `{query: response}` into a verdict. A match on an accession-shaped query is decisive;
+    any other match is shown for review. A `None` response is an error, and a failed accession
+    query leaves the verdict inconclusive.
     """
     hits = Hits(total_queries=len(results))
     for query, response in results.items():
@@ -223,13 +207,11 @@ def summarise_hits(results: dict[str, dict | None], *, kinds: dict[str, str] | N
                     hits.data.append(item)
         if matched:
             hits.matched_queries.append(query)
-            kind = (kinds or {}).get(query, "accession")   # no kinds -> old conservative behaviour
-            if kind == "accession":
+            if _ACCESSION_RE.match(query.strip()):
                 hits.decisive_matches.append(query)
             else:
                 hits.related_matches.append(query)
-    if kinds:
-        hits.inconclusive = any(kinds.get(q) == "accession" for q in hits.failed_queries)
+    hits.inconclusive = any(_ACCESSION_RE.match(q.strip()) for q in hits.failed_queries)
     hits.already_present = bool(hits.decisive_matches)
     return hits
 

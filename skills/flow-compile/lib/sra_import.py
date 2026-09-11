@@ -75,13 +75,6 @@ def _accession_for_row(row: pd.Series) -> str:
     return ""
 
 
-def annotation_is_transportable_in_value() -> bool:
-    """Can an annotation ride in its attribute's value as `value:annotation`? No: Flow stores the
-    colon literally and keeps `annotation` as its own field.
-    """
-    return False
-
-
 def annotation_to_flow_row(row) -> dict[str, str]:
     """One annotation row in Flow's keys: what the sheet sends and what `11_verify` compares."""
     record: dict[str, str] = {}

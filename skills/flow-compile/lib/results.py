@@ -76,14 +76,6 @@ def blocking(findings: list[Finding]) -> list[Finding]:
     return [f for f in findings if f.severity == ERROR]
 
 
-def findings_to_json(findings: list[Finding]) -> list[dict]:
-    return [
-        {k: getattr(f, k) for k in
-         ("severity", "message", "field", "row", "subject", "expected", "actual")}
-        for f in findings
-    ]
-
-
 def render_findings(findings: list[Finding], *, title: str, total: int, note: str = "") -> str:
     """A report that leads with how much was checked ("N of M"), not only what failed."""
     lines = [f"# {title}", ""]

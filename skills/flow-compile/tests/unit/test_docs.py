@@ -24,15 +24,9 @@ def _cited_anchors():
     return anchors
 
 
-def _reachable_literals() -> set[str]:
-    """Every string literal in a stage, or in a lib function a stage reaches by name."""
+def _reach():
+    """(lib definitions by name, the names a stage reaches, every string literal on the way)."""
     import ast
-
-    defs = {}
-    for path in SKILL_DIR.glob("lib/*.py"):
-        for node in ast.parse(path.read_text()).body:
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-                defs.setdefault(node.name, node)
 
     def names(node):
         found = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
@@ -43,16 +37,41 @@ def _reachable_literals() -> set[str]:
     def literals(node):
         return {n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
 
-    stages = [ast.parse(p.read_text()) for p in SKILL_DIR.glob("stages/*.py")]
-    text = set().union(*(literals(s) for s in stages))
-    reach, frontier = set(), {n for s in stages for n in names(s) if n in defs}
+    defs, tables = {}, set()
+    for path in SKILL_DIR.glob("lib/*.py"):
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                defs.setdefault(node.name, node)
+            elif not isinstance(node, (ast.Import, ast.ImportFrom)):
+                tables |= names(node)   # a module-level table may name a function
+
+    entry = [ast.parse(p.read_text())
+             for p in (*SKILL_DIR.glob("stages/*.py"), SKILL_DIR / "flow_compile.py")]
+    text = set().union(*(literals(s) for s in entry))
+    reach, frontier = set(), ({n for s in entry for n in names(s)} | tables) & defs.keys()
     while frontier:
         name = frontier.pop()
         reach.add(name)
         text |= literals(defs[name])
         frontier |= {m for m in names(defs[name]) if m in defs and m not in reach}
+    return defs, reach, text
+
+
+def _reachable_literals() -> set[str]:
+    """Every string literal in a stage, or in a lib function a stage reaches by name."""
+    text = _reach()[2]
     # a literal may carry a filename inside a longer string, e.g. an f-string part
     return {w for s in text for w in re.findall(r"[A-Za-z_0-9]+\.[a-z]+", s)} | text
+
+
+class TestEveryLibDefinitionRuns:
+    def test_a_stage_reaches_it_or_the_agent_is_told_to_call_it(self):
+        """A lib definition no stage reaches, and no doc or printed message names, is dead code."""
+        defs, reach, text = _reach()
+        told = "\n".join([*text, *(p.read_text() for p in (*SKILL_DIR.glob("reference/*.md"), SKILL))])
+        dead = sorted(n for n in defs
+                      if n not in reach and not re.search(rf"\b{re.escape(n)}\b", told))
+        assert dead == [], f"nothing runs these: {dead}"
 
 
 class TestFailuresIndex:

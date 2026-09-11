@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from lib.results import ERROR, Finding as Check, INFO, Verdict, WARNING  # noqa: F401
 
 #: At or above this deviation from an even 25%, a position is a fixed base (barcode).
 FIXED_MIN_DEV = 40.0
@@ -158,68 +157,4 @@ def check_umi_params(params: dict, *, barcode: str = "") -> UmiParamCheck:
 
     return UmiParamCheck(True)
 
-#: Below this many distinct values, a field is a label, not a UMI. Two barcodes across
-#: thousands of reads is a multiplex tag; a real UMI has hundreds of distinct values.
-_MIN_DISTINCT = 3
 
-
-@dataclass
-class UmiSafety:
-    """Whether the parsed UMI field can be trusted."""
-
-    safe: bool
-    separator_count: int = 0
-    distinct_values: int = 0
-    reason: str = ""
-
-
-def fold_comment_into_name(header: str) -> str:
-    """What ``removespace.py`` does: spaces and slashes become underscores."""
-    return header.replace(" ", "_").replace("/", "_")
-
-
-def check_umi_safety(headers: list[str], *, separator: str) -> UmiSafety:
-    """Would `umi_separator` extract a real UMI from these read names? Reads the last
-    separator-delimited field; a constant one is a label, not a UMI.
-    """
-    names = [h.lstrip("@").split()[0] for h in headers if h.strip()]
-    if not names:
-        return UmiSafety(safe=False, reason="no headers sampled — nothing was verified")
-
-    counts = [n.count(separator) for n in names]
-    if not any(counts):
-        return UmiSafety(
-            safe=False, separator_count=0,
-            reason=f"separator {separator!r} is not present in the read name",
-        )
-
-    tails = [n.rsplit(separator, 1)[-1] for n in names]
-    distinct = len(set(tails))
-    max_count = max(counts)
-
-    if distinct < _MIN_DISTINCT:
-        detail = (
-            "constant across every read" if distinct == 1
-            else f"only {distinct} distinct values across {len(names)} reads"
-        )
-        return UmiSafety(
-            safe=False, separator_count=max_count, distinct_values=distinct,
-            reason=(
-                f"the field after the last {separator!r} is {detail} — this is a label, not a "
-                f"UMI. Deduplication would collapse every read at a position into one count, "
-                f"silently, on a run that finishes green. Rewrite the header so the read name "
-                f"ENDS with the UMI."
-            ),
-        )
-
-    if max_count > 1:
-        return UmiSafety(
-            safe=True, separator_count=max_count, distinct_values=distinct,
-            reason=(
-                f"{separator!r} occurs up to {max_count} times, but the trailing field varies "
-                f"({distinct} distinct) so the extraction resolves — still prefer a header "
-                f"ending in the UMI."
-            ),
-        )
-
-    return UmiSafety(safe=True, separator_count=max_count, distinct_values=distinct)

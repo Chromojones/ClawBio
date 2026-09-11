@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lib import state as st  # noqa: E402
 from lib.import_guards import check_import_size, check_upload_fields, strip_rejected  # noqa: E402
-from stages._common import CheckFailed, parser_for, run_stage  # noqa: E402
+from stages._common import parser_for, run_stage  # noqa: E402
 
 NAME = "109_sheet"
 REQUIRES = ("108_params",)

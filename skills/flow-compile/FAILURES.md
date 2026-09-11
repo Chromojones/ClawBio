@@ -56,7 +56,7 @@ Composition finds the barcode/UMI boundary but cannot settle the UMI's last base
 position 13 measured 7.9% off even — between random (~4%) and genomic (12–21%) — because it is
 the terminal N of a synthesized oligo. So the layout is a RANGE, with no `umi_len` attribute to
 tempt anyone, and the length comes from the authors' pipeline config.
-→ `tests/unit/test_inline_layout_boundary.py`, `tests/unit/test_umi_params_coherent.py`, `tests/unit/test_umi_header_safety.py`
+→ `tests/unit/test_inline_layout_boundary.py`, `tests/unit/test_umi_params_coherent.py`
 
 ## Import and upload
 

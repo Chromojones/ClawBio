@@ -60,10 +60,11 @@ def body(args, out: Path) -> dict:
 
     if args.search_results and args.search_results.exists():
         hits = summarise_hits(json.loads(args.search_results.read_text()))
-        report["already_uploaded"] = bool(hits.any_hits)
-        lines.append(f"already on Flow: {'YES — ' + hits.summary if hits.any_hits else 'no'}")
-        if hits.any_hits:
-            findings.append(Finding(ERROR, hits.summary))
+        report["already_uploaded"] = hits.already_present
+        if hits.already_present or hits.inconclusive:
+            findings.append(Finding(ERROR, hits.describe()))
+        else:
+            lines.append(f"already on Flow: {hits.describe()}")
     else:
         lines.append("search: not run — pass --search-results to check for a prior upload")
 
