@@ -103,7 +103,8 @@ to the title — and only for the eCLIP family.
 | `run_analysis.sh` | `flowrunanalysis_flowbio.py` | `12_analysis`; passes `--params-json pipeline_params.json` |
 | `sra_import.sh` | `flowbio samples import` | `sra_import.write_import_scripts` (direct line) |
 
-Credentials: `FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD` (not flow-ai `~/.config/flow/api-token` unless you choose token auth later).
+Credentials: `FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD`, or a token — `FLOW_API_TOKEN`, `FLOW_TOKEN`,
+or `~/.config/flow/api-token`, checked in that order by `flow_client.resolve_token`.
 
 ## Organism on Flow
 
