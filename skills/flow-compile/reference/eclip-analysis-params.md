@@ -80,7 +80,7 @@ GSE290281 read 2 additionally begins with a constant `TCGATATC` and carries ~16%
 | **Read 2** | `[randomer N5/N10][insert starting at the crosslink]` | *(none)* |
 | **Crosslink** | **5′ end of read 2** | 5′ end of read 1 |
 | **UMI / dedup** | randomer on **read 2** | randomer on read 1 |
-| **Upload to Flow** | **read 2** only | read 1 (both mates fine if sequenced PE) |
+| **Analyse** | **read 2** — `paired=second` on the direct line; upload read 2 alone on the local line | read 1 (both mates fine if sequenced PE) |
 
 The RT stops one nucleotide 3′ of the crosslinked base; the ssDNA adapter (`rand3Tr3`)
 carrying the randomer is ligated to the cDNA 3′ end, so the mate that reads *from the
@@ -323,7 +323,7 @@ often the useless `OTHER`, with the real method recorded as free text — GSE266
 ## Before submitting: are the params coherent with each other?
 
 ```python
-from lib.umi_params import check_umi_params
+from lib.read_structure import check_umi_params
 print(check_umi_params(params, barcode=row["five_prime_barcode_sequence"]).reason)
 ```
 

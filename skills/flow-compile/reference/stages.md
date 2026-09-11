@@ -29,7 +29,7 @@ into one warning is how an unapproved barcode reaches an upload.
 | # | stage | decides |
 |---|---|---|
 | 00 | `00_setup` | run directory, credentials, the project (adopt `--project-id` or `--create-project`), `state.json` |
-| 01 | `01_study` | public? already on Flow? runs expand? does it fit one job? |
+| 01 | `01_study` | public? already on Flow? — each only when its evidence is supplied |
 | 02 | `02_index` | the samples, and the runs behind them |
 | 03 | `03_barcodes` | the 5′ barcode of every sample — **GATE 1** |
 | 04 | `04_annotate` | names, target, tag, agent, source, organism, crosslink mate |
@@ -46,17 +46,16 @@ study not in SRA/ENA   ->  local
 otherwise              ->  direct
 ```
 
-So SRA-direct is the path for essentially every study, which is what this skill always claimed
-and was not true before.
+So SRA-direct is the path for essentially every study.
 
 ## Line 1xx — SRA-direct
 
 | # | stage | decides |
 |---|---|---|
-| 101 | `101_preview` | header state, from the deposited reads |
+| 101 | `101_preview` | header state, and whether the UMI survives the fetch |
 | 108 | `108_params` | UMI, mate, coherence — **GATE 3**, on both lines |
 | 109 | `109_sheet` | build and check the accession sheet |
-| 110 | `110_import` | submit and poll |
+| 110 | `110_import` | submit (with `--submit`); print the poll command |
 
 ## Line 2xx — local
 
@@ -64,16 +63,16 @@ Only for a study absent from SRA/ENA.
 
 | # | stage | decides |
 |---|---|---|
-| 201 | `201_fetch` | reads on disk; header cleaning (transitional) |
+| 201 | `201_fetch` | the reads directory and header state |
 | 108 | `108_params` | the same shared gate |
-| 210 | `210_upload` | upload with metadata (annotations survive here) |
+| 210 | `210_upload` | the upload sheet, and the command that uploads it |
 
 ## Delivery — both lines
 
 | # | stage | decides |
 |---|---|---|
-| 11 | `11_verify` | did the samples arrive as the sheet described? repair if not |
-| 12 | `12_analysis` | submit the analysis; enforces the 18-per-execution ceiling |
+| 11 | `11_verify` | did the samples arrive as the sheet described? if not, the edits that fix them |
+| 12 | `12_analysis` | write the analysis runner; enforce the 18-per-execution ceiling |
 | 13 | `13_audit` | did every sample survive the run? |
 
 ## The three hard stops

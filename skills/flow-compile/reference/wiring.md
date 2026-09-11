@@ -22,8 +22,8 @@ flowchart TD
     S108 --> S210["210_upload"]:::stage --> S11
     S11 --> S12["12_analysis"]:::stage --> S13["13_audit"]:::stage
 
-    L00["flow_client · credentials"]:::lib -.- S00
-    L01["study_check · import_guards"]:::lib -.- S01
+    L00["flow_client"]:::lib -.- S00
+    L01["study_check"]:::lib -.- S01
     L02["geo_matrix · flow_annotate"]:::lib -.- S02
     L03["barcode_extract · barcode_evidence<br/>read_structure · geo_matrix"]:::lib -.- S03
     L04["flow_annotate · geo_matrix · barcode_resolver<br/>paper_metadata_enrich · protocol"]:::lib -.- S04
@@ -34,9 +34,9 @@ flowchart TD
     L108["header_state · pipeline_params<br/>read_structure · import_guards"]:::lib -.- S108
     L109["sra_import · import_guards"]:::lib -.- S109
     E110(["flowbio CLI — samples import"]):::ext -.- S110
-    L210["import_guards"]:::lib -.- S210
-    L11["import_check · flow_client"]:::lib -.- S11
-    L12["flow_stages · pipeline_params<br/>reference_cross_check"]:::lib -.- S12
+    L210["import_guards · metadata_validate"]:::lib -.- S210
+    L11["import_check · sra_import<br/>flow_edit_samples whitelist"]:::lib -.- S11
+    L12["flow_stages · pipeline_params<br/>reference_cross_check · results"]:::lib -.- S12
     L13["execution_audit"]:::lib -.- S13
 
     classDef stage fill:#0e7369,stroke:#0e7369,color:#ffffff,font-weight:600;
@@ -53,9 +53,9 @@ reasoning in the code:
 
 | reached by | scripts |
 |---|---|
-| imported (the only one) | `parse_key_resources_antibodies.py` — antibody formatting for `metadata_validate` and `paper_metadata_enrich` |
-| wrapped by generated runners | `flowrunanalysis_flowbio.py` (runner written by `12_analysis`), `uploadsample_flowbio_v6.py` (via `flow_stages.write_upload_script`) |
-| standalone, manual operations | `flow_edit_samples.py`, `flow_public_samples_pull_v3.py`, `flow_public_samples_push_metadata_v2.py`, `pull_project_metadata.py`, `apply_metadata_proposals.py` — `11_verify`'s automated repair goes through `lib/flow_client` instead |
+| imported | `parse_key_resources_antibodies.py` (antibody formatting for `metadata_validate`, `paper_metadata_enrich`); `flow_edit_samples.WHITELIST_EDIT_FIELDS` (by `11_verify`) |
+| run from a printed command | `flowrunanalysis_flowbio.py` (`run_analysis.sh`, written by `12_analysis`), `uploadsample_flowbio_v6.py` (printed by `210_upload`), `flow_edit_samples.py` (applies `11_verify`'s `repair_edits.csv`) |
+| standalone, manual operations | `flow_public_samples_pull_v3.py`, `flow_public_samples_push_metadata_v2.py`, `pull_project_metadata.py`, `apply_metadata_proposals.py` |
 
 `removespace.py` is vendored but superseded locally: header cleaning runs inside the
 clip-seq pipeline on Flow.

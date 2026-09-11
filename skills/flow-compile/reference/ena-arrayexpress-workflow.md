@@ -3,9 +3,10 @@
 How to take a CLIP study deposited in **ENA / ArrayExpress** (accessions
 `E-MTAB-*`, runs `ERR*`, samples `ERS*`, experiments `ERX*`) all the way to a
 Flow.bio CLIP-Seq execution. This is the sibling of the GEO/SRA path in
-`reference/stages.md`; the only real differences are (1) where accessions and barcodes
-come from and (2) that reads are pulled from the **ENA FASTQ FTP** instead of
-`prefetch`.
+`reference/stages.md`, and the only real difference is where accessions and barcodes come
+from. An ENA-hosted study takes the **direct** line like any SRA study: its `srr_map.tsv`
+needs `srx` = `ERX*`, and Flow pulls the reads itself. The download and upload sections below
+apply only to a study taken local with `06_route --not-in-sra`.
 
 Worked example: **E-MTAB-432** — Wang *et al.* 2010, *PLOS Biology*
 ([PMID 21048981](https://pubmed.ncbi.nlm.nih.gov/21048981/)) — 24 TIA1 / TIAL1
@@ -42,23 +43,23 @@ Key SDRF columns:
 
 flow-compile consumes a GEO-style series matrix + `srr_map.tsv`. For ENA, map:
 
-- **`srr_map.tsv`** — one row per run: `gsm` = `ERS*`, `srr` = `ERR*`,
-  `mate` = `1` (single-end here), `fastq` = `ERR*.fastq.gz`.
+- **`srr_map.tsv`** — one row per run: `gsm` = `ERS*`, `srr` = `ERR*`, `srx` = `ERX*`
+  (`Comment[ENA_EXPERIMENT]`). `mate` and `fastq` are optional.
 - **series matrix** — a minimal GEO-style matrix keyed by the `ERS*` accessions
   so `lib/geo_matrix.py` can index them like GSM columns.
 
 > The `ERS*`→`ERR*` mapping plays the role of GSM→SRR. Everything downstream
 > (`flow_annotate`, naming, params) is accession-agnostic.
 
-### Paper metadata (mandatory)
+### Paper metadata
 
-After the annotation table is built, `flow_compile.py` always runs
-`lib/paper_metadata_enrich.py` when a PubMed ID is present:
+`04_annotate` runs `lib/paper_metadata_enrich.py` when a PubMed ID is present (not on an
+`--offline` run):
 
 1. **Scientist** — first author full name from PubMed (not ArrayExpress contact).
 2. **PI** — last author full name from PubMed (not ArrayExpress contact / iCLIP method developer).
 3. **Purification Agent** — vendor + catalog from paper Methods (Europe PMC full text, or `--paper-text`).
-4. **Warnings** — `ANNOTATION_WARNINGS.md` lists any row where tracked fields stay empty or generic.
+4. **Warnings** — `annotation_warnings.json` lists any row where tracked fields stay empty or generic.
 
 **E-MTAB-432 caveat:** the curated series matrix initially carried PMID `20544596`
 (wrong paper). The linked publication is PMID **[21048981](https://pubmed.ncbi.nlm.nih.gov/21048981/)**
@@ -68,7 +69,7 @@ Santa Cruz C-20 / C-18.
 
 ---
 
-## 1. Download FASTQs from ENA FTP
+## 1. Local line only — download FASTQs from ENA FTP
 
 ENA serves gzipped FASTQs directly — no `prefetch`/`fasterq-dump` needed. Use the
 `Comment[FASTQ_URI]` values with a guarded `wget -c` (resumes partial downloads):
@@ -165,29 +166,23 @@ Never set `encode_eclip=true` or hardcode `NNNNN` without this header check.
 
 ## 4. Annotation
 
-`lib/flow_annotate.py` builds `annotation.csv` as usual. ENA specifics:
+`04_annotate` builds `annotation.raw.csv` as usual. ENA specifics:
 
 - `5' Barcode Sequence` = the submitted-filename pattern (`CANNN`, `GTTNNNN`, …).
 - `Sample Name` embeds protein, organism, cell line, **barcode pattern**, library
   id, and run: `TIA1_Hs_HeLa_TGNNN_LUd3_ERR039778`.
 - `Comments` = the full `Comment[SUBMITTED_FILE_NAME]` (provenance).
-- `Organism` still normalised to `Hs`/`Mm`/`Gg` (`lib/organism.py`).
-- iCLAP samples → `Experimental Method = iCLAP`, `Purification Agent = iCLAP (TAP tag)`.
-- pG-bead / no-antibody controls → protein `SMINPUT`, `Purification Agent = no antibody`.
+- `Organism` is normalised to a Flow code (`lib/organism.py`).
+- iCLAP samples → `Experimental Method = iCLAP`, `Purification Agent = Strep/His affinity tag purification`.
+- pG-bead / no-antibody controls → target `noAbCtrl`, empty `Purification Agent`.
 
 ---
 
-## 5. Upload
+## 5. Upload (local line)
 
-Standard vendored upload (single-end, one file per run):
-
-```bash
-python3 lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py \
-  --input annotation.csv --rows 1-24 \
-  --project-id <FLOW_PROJECT_ID> --base-dir fastq_files
-```
-
-`--rows N` re-uploads a single 1-indexed data row (used in §7).
+`210_upload` writes `upload_sheet.csv` and prints the vendored upload command with `--rows`,
+`--project-id` and `--base-dir` filled in — `--dry-run` first. `--rows N` re-uploads a single
+1-indexed data row (used in §7).
 
 ---
 
@@ -228,7 +223,7 @@ If a FASTQ was corrupted (§1) and its sample was already uploaded:
 
 1. Re-download and verify with `gzip -t`.
 2. Remove the bad sample from the Flow project (UI or API).
-3. Re-upload just that row: `uploadsample_flowbio_v6.py --input annotation.csv --rows <N> ...`.
+3. Re-upload just that row: the command `210_upload` printed, with `--rows <N>`.
 4. Re-submit the affected UMI group (§6); the name-regex filter picks up the new
    sample id automatically.
 
@@ -263,7 +258,7 @@ Resources table, use the pull → propose → apply → push chain in
 | Metadata | series matrix + SraRunTable | full SDRF (`sdrf?full=true`) |
 | Sample key | `GSM*` | `ERS*` |
 | Run id | `SRR*` | `ERR*` |
-| Download | Flow pulls from SRA on the direct line | manual `wget -c` per `Comment[FASTQ_URI]` |
+| Download | Flow pulls from SRA (direct line) | Flow pulls from ENA (direct line); `wget -c` per `Comment[FASTQ_URI]` only when local |
 | Barcode source | GEO `data_processing` / paper methods | same order, plus `Comment[SUBMITTED_FILE_NAME]` as an extra source |
 | Integrity | (SRA validated) | **`gzip -t` every file** |
 | Everything else | identical | identical |

@@ -50,9 +50,9 @@ Order of investigation is conceptual — the agent gathers text; `barcode_eviden
 
 ## Agent + human workflow
 
-1. Agent follows **Where to look** above: matrix → CLIP-focused Methods excerpt (`--paper-text`) → GEO sample *Data processing* when useful → `barcode_proposals.json` (`status: pending_confirmation`)
+1. Agent follows **Where to look** above: matrix → CLIP-focused Methods excerpt (`--paper-text`) → GEO sample *Data processing* → supplementary materials → `barcode_proposals.json` (`status: pending_confirmation`)
 2. Human reviews `CONFIRM_BARCODES.md` and sets `status: confirmed`
-3. Re-run with `--accept-proposals barcode_proposals.json` to build annotation
+3. Re-run `03_barcodes` with `--accept-proposals barcode_proposals.json` to release the gate; `04_annotate` then builds the annotation
 
 ## Judgement calls, decided once
 
@@ -79,8 +79,9 @@ cores: GSM2817677 has `_rsem_CGGA.` → `NNNCGGANNN`; GSM2817678 has `_rsem_GGCA
 ignoring the per-sample core hands both replicates the same barcode, demultiplexes each into
 the other, and produces a study-shaped result with no error.
 
-Present both the paper quote and the filename core, and link core → full pattern. No automatic
-CONFLICT flag: the agent compares the sources and writes what it concluded.
+`03_barcodes` proposes the core → pattern link itself (`evidence_from_replicate_cores`) beside
+the paper quote. There is no automatic conflict flag: the agent checks the two sources agree,
+and the researcher confirms.
 
 ### Lengths given, no motif
 

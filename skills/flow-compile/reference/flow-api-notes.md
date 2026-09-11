@@ -73,12 +73,11 @@ On the local line, `210_upload` writes `upload_sheet.csv` and prints the exact u
 
 See also `reference/eclip-analysis-params.md` for paired-end eCLIP crosslink notes.
 
-Two booleans cannot express this and the shortcut here was wrong: it said *contains `:rbc:`
-→ `encode_eclip=true`*, which on an already-extracted header makes `encode_moveumi` take the
-instrument name as the UMI and collapse the library. The parameters come from the **four
-header states** in `reference/eclip-analysis-params.md` §3, derived by
-`lib/header_state.py`. `encode_eclip` is true for exactly one of them — a randomer prepended
-to the title — and only for the eCLIP family.
+The parameters come from the **four header states** in `reference/eclip-analysis-params.md`
+§3, derived by `lib/header_state.py` — two booleans (`:rbc:` present or not) cannot express
+them. `encode_eclip` is true for exactly one: a randomer prepended to the title, where
+`encode_moveumi` takes the first colon field as the UMI. On an already-extracted `:rbc:`
+header it would take the instrument name instead and collapse the library.
 
 `umi_header_format` uses **N-only structure** matching barcode length (e.g. `NNNNNNNNNN` for 10 bp Murat iCLIP, `NNNNNNNNNNNNNNN` for 15 bp iCLIP2). Annotation keeps the literal pattern (`NNNCGGANNN`) for demultiplexing metadata.
 

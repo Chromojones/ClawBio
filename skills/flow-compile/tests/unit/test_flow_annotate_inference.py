@@ -122,3 +122,23 @@ class TestExperimentalMethod:
 
     def test_unknown_protocol_still_defaults_to_iclip(self):
         assert infer_experimental_method("some unrelated protocol") == "iCLIP"
+
+
+class TestNoAntibodyControlsAreNotIgG:
+    """Bead-only and no-antibody controls are `noAbCtrl`, the target the validator knows; `IgG`
+    is an isotype antibody and a different control."""
+
+    def test_beads_only(self):
+        from lib.flow_annotate import infer_protein_target
+
+        assert infer_protein_target("beads only control rep1") == "noAbCtrl"
+
+    def test_no_antibody(self):
+        from lib.flow_annotate import infer_protein_target
+
+        assert infer_protein_target("no antibody control") == "noAbCtrl"
+
+    def test_igg_stays_igg(self):
+        from lib.flow_annotate import infer_protein_target
+
+        assert infer_protein_target("IgG control rep1") == "IgG"

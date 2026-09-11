@@ -40,7 +40,7 @@ ANNOTATION_COLUMNS = [
 ]
 
 
-#: Cell lines that routinely lead a GEO title — never a purification target.
+#: Cell lines that routinely lead a GEO title
 CELL_LINE_TOKENS = frozenset(
     {
         "HELA", "HEK293", "HEK293T", "293T", "HEK", "K562", "HEPG2", "MCF7", "U2OS",
@@ -48,13 +48,15 @@ CELL_LINE_TOKENS = frozenset(
         "MEF", "ESC", "HESC", "MESC", "IPSC", "CCE", "2102EP", "H9",
     }
 )
-#: Antibody host species — `infer_protein_target` used to return these verbatim.
+#: Antibody host species
 SPECIES_TOKENS = frozenset(
     {"RABBIT", "MOUSE", "GOAT", "RAT", "HUMAN", "SHEEP", "DONKEY", "CHICKEN", "LLAMA"}
 )
-#: Size-matched input / control markers. eCLIP inputs are their own target.
+#: Size-matched input / control markers. CLIP inputs are their own target.
 _INPUT_RE = re.compile(r"\b(sm[\s_-]?input|size[\s_-]?matched\s+input|input)\b", re.I)
-_IGG_RE = re.compile(r"\b(igg|mock|beads?[\s_-]only|no[\s_-]antibody)\b", re.I)
+_IGG_RE = re.compile(r"\b(igg|mock)\b", re.I)
+#: Beads with no antibody: `noAbCtrl`, the target the validator knows — not an isotype IgG.
+_NOAB_RE = re.compile(r"\b(beads?[\s_-]only|no[\s_-]antibody|noabctrl)\b", re.I)
 #: A plausible gene symbol: starts with a letter, mostly alphanumeric, not too long.
 _GENE_SYMBOL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9\-]{1,14}$")
 
@@ -76,6 +78,8 @@ def infer_protein_target(title: str, characteristics: list[str] | None = None) -
     # Controls first — an input row must never inherit the IP's protein.
     if _INPUT_RE.search(title):
         return "SMInput"
+    if _NOAB_RE.search(title):
+        return "noAbCtrl"
     if _IGG_RE.search(title):
         return "IgG"
 
@@ -169,7 +173,7 @@ _FLASH_FROZEN_RE = re.compile(r"flash[\s-]*fro(?:zen|ze)", re.I)
 #: Methods are frequently written with a lab-specific lowercase prefix — `fPAR-CLIP`,
 #: `irCLIP`, `seCLIP`. A plain `\b` before the token cannot match those, because the prefix
 #: letter and the first method letter are both word characters, so the method silently fell
-#: through to the `iCLIP` default (GSE266116 did exactly this on every field).
+#: through to the `iCLIP` default
 #: `_PFX` allows up to three lowercase letters, itself anchored on a non-letter, so prose
 #: words cannot bleed in.
 _PFX = r"(?<![A-Za-z])[a-z]{0,3}"
@@ -183,10 +187,6 @@ def _match_method(text: str) -> str:
 def infer_experimental_method(protocol: str, series_title: str = "") -> str:
     """Resolve the CLIP protocol, preferring the series title over protocol prose.
 
-    The title names the assay; extract protocols routinely cite *other* protocols
-    ("as described for eCLIP…", "FLASH is a variant of iCLIP"), so matching the protocol
-    blob first mislabels studies. `flash-frozen` is stripped before any FLASH match.
-
     Unknown protocols still fall back to iCLIP — the most common CLIP flavour — but that
     fallback is a guess and is surfaced in the metadata hook rather than trusted silently.
     """
@@ -196,17 +196,12 @@ def infer_experimental_method(protocol: str, series_title: str = "") -> str:
 def load_srr_map(path) -> pd.DataFrame:
     """The GSM↔run map, with the columns the run cannot derive for itself.
 
-    ``gsm`` and ``srr`` are the map; everything else has an answer that does not need asking.
-    ``mate`` and ``fastq`` were once required of every study, and on the SRA-direct line —
-    which `reference/stages.md` calls the path for essentially every study — neither is ever
-    read: `build_import_sheet` maps the annotation onto an accession plus metadata and never
-    touches the File column. Requiring them made the operator invent filenames that nothing
-    downloads, and GSE262435 died on exactly that.
+    ``gsm`` and ``srr`` are the map; `build_import_sheet` maps the annotation onto an accession plus metadata and never
+    touches the File column. 
 
     So a missing ``mate`` is 1, and a missing ``fastq`` follows ENA's own naming
-    (``SRR1.fastq.gz``, or ``SRR1_1``/``SRR1_2`` when mates are declared). Deriving applies
-    only to an ABSENT column: supply one and you own its contents, blanks included.
-
+    (``SRR1.fastq.gz``, or ``SRR1_1``/``SRR1_2`` when mates are declared). 
+    
     ``srx`` stays optional here because the local line has no accessions at all. It is the
     direct line's requirement, enforced where that line lives — warned in `02_index`,
     refused in `109_sheet`, whose message says which column to populate.

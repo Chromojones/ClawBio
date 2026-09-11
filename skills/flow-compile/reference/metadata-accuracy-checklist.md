@@ -119,7 +119,7 @@ there is nothing to check it against, so `Anti-NOVA` stays unqualified.
 | `Strep/His affinity tag purification` | iCLAP (tag pulldown, not an antibody) |
 
 > **Convention:** inputs carry an **empty** `purification_agent` — never the literal
-> `no antibody`, which the validator rejects. Empty makes IP rows the only ones with a value,
+> `no antibody`, which the validator warns on as legacy data. Empty makes IP rows the only ones with a value,
 > so "has an agent" is a clean proxy for "is an IP".
 
 ### Never
@@ -159,7 +159,7 @@ responsibility — it needs the paper — and is exactly where HEK293 vs HEK293T
 | `ATCC Cell Lines` | Supplier phrase (GSE105082 `source_name_ch1`) — the real line is `HeLa` |
 | `human embryonic kidney` | Generic descriptor (GSE215250) — the real line is `HEK293T` |
 | `cell line`, `tissue`, `N/A`, `unknown` | Placeholders |
-| *(empty)* | Now tracked in `ANNOTATION_WARNINGS.md` |
+| *(empty)* | Flagged in `annotation_warnings.json` |
 
 ### `source__annotation` — the sub-field
 
@@ -197,7 +197,7 @@ own target — **never the IP's protein**:
 | Library | `purification_target` | `purification_agent` |
 |---------|----------------------|----------------------|
 | eCLIP/seCLIP size-matched input | `SMInput` | *(empty)* |
-| Bead-only / no-antibody control | `SMInput` | *(empty)* |
+| Bead-only / no-antibody control | `noAbCtrl` | *(empty)* |
 | IgG control | `IgG` | *(empty)* |
 | **Antibody pulldown on cells lacking the target** | **`AbControl`** | **the antibody used** |
 | **No-crosslink control (UV omitted)** | **the real protein**, annotated `noUV` | **the antibody used** |
@@ -273,8 +273,8 @@ and `AbControl` with no annotation.
 | `nFLAG`, `cHA`, `nMYC`, `cHBH` | Other single tags |
 | *(empty)* | **Endogenous IP — no tag.** The correct value whenever the antibody targets the native protein |
 
-Known tags: `3xFLAG-HBH`, `3xFLAG`, `FLAG`, `GFP`, `V5`, `HA`, `MYC`, `HBH`, `HIS`, `TAP`,
-`SNAP`, `HALO`, `MS2`.
+Known tags: `3xFLAG-HBH`, `FLAG-HA-HIS`, `3xFLAG`, `FLAG`, `GFP`, `V5`, `HA`, `MYC`, `HBH`,
+`HIS`, `TAP`, `SNAP`, `HALO`, `MS2`, `T7`.
 
 Rejected: `GFP` (no terminal prefix), `3xFLAG` (no prefix), `C-3xFLAG` (uppercase +
 hyphen), `flag` (lowercase, no prefix).
@@ -386,8 +386,8 @@ citation:
 A project whose samples carry no PMID has `papers: []`. So a PMID left in `comments` loses
 the paper linkage entirely, and the study becomes unfindable by publication.
 
-**Always set it**, and remember it is verified from the top level — `live_value()` handles
-that, but a hand-rolled check reading `metadata.pubmed` will always see nothing.
+**Always set it**, and remember it is verified from the top level — `live_value()` in the
+vendored `flow_edit_samples.py` handles that, but a hand-rolled check reading `metadata.pubmed` will always see nothing.
 
 ---
 
@@ -415,14 +415,14 @@ Run through this before releasing the metadata gate.
 | ☐ | Every value traces to a quotable GEO field, SDRF column, or paper sentence |
 | ☐ | Antibody came from the sentence naming the CLIP assay, not the first Key Resources row |
 | ☐ | Antibody has species (if stated), target, vendor **and** catalog number |
-| ☐ | Input / IgG rows have target `SMInput`/`IgG` and an **empty** purification agent |
+| ☐ | Input / IgG / no-antibody rows have target `SMInput`/`IgG`/`noAbCtrl` and an **empty** purification agent |
 | ☐ | Source is a specific line, not a supplier phrase or generic descriptor |
 | ☐ | HEK293 vs HEK293T (and similar pairs) confirmed against the paper |
 | ☐ | Tag annotation empty for endogenous IPs; correct `c`/`n` grammar when tagged |
 | ☐ | 5′ barcode is `ACGTN`; `umi_header_format` is all-`N` of the same length |
-| ☐ | Organism is `Hs`/`Mm`/`Gg`, never a scientific name |
+| ☐ | Organism is a Flow code (`Hs`, `Mm`, `Dm`, …), never a scientific name |
 | ☐ | Scientist = first author, PI = last author (from PubMed, not the GEO contact) |
-| ☐ | `ANNOTATION_WARNINGS.md` reviewed; `CONFIRM_METADATA.md` has zero unresolved errors |
+| ☐ | `annotation_warnings.json` reviewed; `metadata_report.md` has zero unresolved errors |
 
 ---
 
@@ -463,13 +463,13 @@ are listed for contrast — they now fail loudly instead of silently.
 
 | Risk | Area | Failure mode |
 |------|------|--------------|
-| **HIGH** | `srr_map.tsv` GSM↔SRR mapping | Agent-authored; nothing checks a run actually belongs to its GSM. A transposed row silently attaches the wrong reads to the wrong sample |
-| **HIGH** | `_fastq_paths_for_gsm` multi-run GSMs | A single-end GSM with ≥2 runs pairs two **unrelated** SRRs as mates and drops runs 3+ |
-| **HIGH** | Which `--paper-text` excerpt to attach | Now additive, but the excerpt still steers barcode extraction; two excerpt choices → two barcode proposals |
+| **HIGH** | `srr_map.tsv` GSM↔SRR mapping | Agent-authored. A run shared by two GSMs is refused, but a wrong-but-unique pairing still attaches the wrong reads to a sample — check it against the SRA run table |
+| MEDIUM | Multi-run GSMs | Only the first run is used; the others are reported, not imported |
+| **HIGH** | Which `--paper-text` excerpt to attach | Additive to the fetched Methods, but the excerpt still steers barcode extraction; two excerpt choices → two barcode proposals |
 | MEDIUM | Replicate inference | `rep 3` / `replicate 3` / `batch 2` collapse to `Rep1`, which also mis-assigns per-replicate barcodes |
 | MEDIUM | `Condition`, `Comments` | Never populated by code. GEO `treatment:` / `genotype:` are parsed then discarded, so ± treatment rows differ only by run id |
 | MEDIUM | `3' Barcode Sequence` | Not passed through `normalize_flow_barcode`, so IUPAC `R`/`Y` can reach Flow |
-| MEDIUM | PubMed fetch failure | Falls back silently to the GEO contact name — non-empty, so no warning fires; run-to-run nondeterminism |
+| MEDIUM | PubMed fetch failure | Falls back to the GEO contact name (also on an `--offline` run) — non-empty, so no warning fires |
 | LOW | Empty target | Becomes the literal token `unknown` in the Flow sample name |
 | LOW | `Type` | Hardcoded `CLIP`; mixed series are mislabelled |
 

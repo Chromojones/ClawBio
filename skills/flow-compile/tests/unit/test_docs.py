@@ -30,6 +30,37 @@ def _cited_anchors():
     return anchors
 
 
+def _reachable_literals() -> set[str]:
+    """Every string literal in a stage, or in a lib function a stage reaches by name."""
+    import ast
+
+    defs = {}
+    for path in SKILL_DIR.glob("lib/*.py"):
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                defs.setdefault(node.name, node)
+
+    def names(node):
+        found = {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+        found |= {n.attr for n in ast.walk(node) if isinstance(n, ast.Attribute)}
+        found |= {a.name for n in ast.walk(node) if isinstance(n, ast.ImportFrom) for a in n.names}
+        return found
+
+    def literals(node):
+        return {n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+
+    stages = [ast.parse(p.read_text()) for p in SKILL_DIR.glob("stages/*.py")]
+    text = set().union(*(literals(s) for s in stages))
+    reach, frontier = set(), {n for s in stages for n in names(s) if n in defs}
+    while frontier:
+        name = frontier.pop()
+        reach.add(name)
+        text |= literals(defs[name])
+        frontier |= {m for m in names(defs[name]) if m in defs and m not in reach}
+    # a literal may carry a filename inside a longer string, e.g. an f-string part
+    return {w for s in text for w in re.findall(r"[A-Za-z_0-9]+\.[a-z]+", s)} | text
+
+
 class TestFailuresIndex:
     def test_it_exists(self):
         assert FAILURES.exists()
@@ -380,17 +411,51 @@ class TestReferenceDocsNameRealThings:
                     bad.append(f"{doc.name}: {flag}")
         assert bad == [], f"docs name flags the code does not define: {bad}"
 
-    def test_every_artefact_named_is_one_the_code_writes(self):
-        """A run-directory artefact must be produced by something, or it is a dead pointer."""
-        code = self._code()
-        external = {"srr_map.tsv", "annotation.csv", "samplesheet.csv", "Testtemplate.xlsx",
-                    "edits.csv"}  # user-authored inputs, not run artefacts
+    def test_every_artefact_named_is_one_a_stage_writes(self):
+        """A filename counts only if a stage, or lib code a stage reaches, names it.
+
+        A writer that exists but that no stage calls produces nothing in a run, so its
+        artefact is as dead as one with no writer at all.
+        """
+        written = _reachable_literals()
+        external = {"srr_map.tsv", "samplesheet.csv", "Testtemplate.xlsx", "edits.csv"}
         bad = []
         for doc in self._docs():
             for name in sorted(set(re.findall(
-                    r"`([a-z_0-9]+\.(?:json|md|csv|tsv|sh|txt))`", doc.read_text()))):
-                if name in external or name.startswith(("demo", "paper_", "geo_")):
+                    r"`([A-Za-z_0-9]+\.(?:json|md|csv|tsv|sh|txt))`", doc.read_text()))):
+                if name in external or name.startswith(("demo", "paper_", "geo_", "params_")):  # agent-authored
                     continue
-                if f'"{name}"' not in code and f"'{name}'" not in code and f"/ {name}" not in code:
+                if name in ("SKILL.md", "DEMO.md", "FAILURES.md", "README.md"):
+                    continue
+                if name not in written:
                     bad.append(f"{doc.name}: {name}")
-        assert bad == [], f"docs name artefacts nothing writes: {bad}"
+        assert bad == [], f"docs name artefacts no stage writes: {bad}"
+
+
+
+class TestDocImportsResolve:
+    """Every `from lib.x import a, b` a doc shows must name a real module and real names."""
+
+    def test_every_documented_import_resolves(self):
+        import ast
+
+        bad = []
+        docs = [*SKILL_DIR.glob("reference/*.md"), SKILL_DIR / "SKILL.md", SKILL_DIR / "DEMO.md"]
+        for doc in docs:
+            for module, imported in re.findall(r"from (lib(?:\.[a-z_]+)+) import ([A-Za-z_, ]+)", doc.read_text()):
+                path = SKILL_DIR / (module.replace(".", "/") + ".py")
+                if not path.exists():
+                    bad.append(f"{doc.name}: {module} (no such module)")
+                    continue
+                tree = ast.parse(path.read_text())
+                defined = {n.name for n in tree.body if isinstance(n, (ast.FunctionDef, ast.ClassDef))}
+                defined |= {t.id for n in tree.body if isinstance(n, ast.Assign) for t in n.targets
+                            if isinstance(t, ast.Name)}
+                defined |= {n.target.id for n in tree.body if isinstance(n, ast.AnnAssign)
+                            and isinstance(n.target, ast.Name)}
+                defined |= {a.asname or a.name for n in tree.body if isinstance(n, ast.ImportFrom)
+                            for a in n.names}
+                for name in (x.strip() for x in imported.split(",")):
+                    if name and name not in defined:
+                        bad.append(f"{doc.name}: {module}.{name}")
+        assert bad == [], f"docs import things that do not exist: {bad}"

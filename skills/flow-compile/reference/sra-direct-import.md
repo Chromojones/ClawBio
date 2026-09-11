@@ -22,7 +22,7 @@ at submission and released at publication, so a named `GSE` proves only that the
 intend to deposit. Check first; it is one request and it ends the question:
 
 ```python
-from lib.accession_availability import geo_url, parse_geo_response
+from lib.study_check import geo_url, parse_geo_response
 print(parse_geo_response(acc, fetch(geo_url(acc))).describe())
 ```
 
@@ -50,7 +50,7 @@ Then ask **the whole platform** whether the study is already there — not just 
 you are about to import into:
 
 ```python
-from lib.study_already_uploaded import build_search_queries, summarise_hits, search_url
+from lib.study_check import build_search_queries, summarise_hits, search_url
 q = build_search_queries(sheet_rows, extra=["<distinctive title word>"])
 print(summarise_hits({t: fetch(search_url(t)) for t in q}).describe())
 ```
@@ -69,8 +69,9 @@ the live platform, all 10 queries matched.
 Then ask the **project** what it already holds — not a status note, not even your own:
 
 ```python
-from lib.import_preflight import find_already_present, names_from_listing
-present = find_already_present(sheet_rows, names_from_listing(listing))   # GET /projects/{id}/samples?count=100
+from lib.flow_client import FlowClient
+from lib.import_check import find_already_present
+present = find_already_present(sheet_rows, {s["name"] for s in FlowClient(token).project_samples(PID)})
 ```
 
 Three outcomes, three different next moves:
@@ -90,7 +91,8 @@ misread a public series whose summary happens to discuss private data.
 
 ## 0a. The non-obvious API facts
 
-These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
+Where each is enforced: 1 and 3 in `lib/sra_import.py`, 4 in `FlowClient.delete_sample`, 6 in
+`find_import_discrepancies`; 2 and 5 are caught and repaired through `11_verify`.
 
 | # | Fact | Symptom if ignored |
 |---|------|--------------------|
@@ -104,9 +106,8 @@ These cost a debugging cycle each and are now enforced in `lib/sra_import.py`.
 Fact 4 belongs to a family worth knowing: several Flow write endpoints return `200` while
 silently ignoring the request. Seen doing so: `DELETE /samples/{id}` and
 `POST /data/{id}/edit {"filename": …}`. **Always re-read the resource after a mutation**
-rather than trusting the status code — `flow_edit_samples.py`'s verification step exists for
-exactly this reason (though it reads a top-level key while metadata is nested under
-`metadata.<key>.value`, so its warnings are noisy).
+rather than trusting the status code — `flow_edit_samples.py` re-reads every edit, and
+`FlowClient.delete_sample` and `create_project` re-read theirs.
 
 Note that `samples upload` (unlike `samples import`) **does** honour `--project`, so a
 locally-uploaded sample needs no separate assignment step.
@@ -128,7 +129,7 @@ FASTQ per run) and **`SRX` for the import**. `srr_map.tsv` therefore carries bot
 | `srr_map.tsv` with **`gsm`, `srr`, `srx`** columns | SRA run selector / ENA filereport. `mate` and `fastq` are optional — derived on ENA's naming when absent, and needed only by the local line |
 | Paper Methods excerpt | `--paper-text` — the **CLIP assay section only** |
 | Flow project id | `00_setup --project-id`, or `--create-project "<name>"` to make one |
-| API token | `FLOW_TOKEN` / `FLOW_API_TOKEN`, or `~/.config/flow/api-token` |
+| API token | `FLOW_API_TOKEN` / `FLOW_TOKEN`, or `~/.config/flow/api-token` |
 
 Resolve `SRX` for a BioProject in one call:
 
@@ -145,7 +146,7 @@ FTP mirror and decodes the first few records.
 
 ```bash
 python3 -c "from lib.sra_header_preview import preview_runs, inspection_from_header_records; \
-r,s = preview_runs(['SRR21863801'], n_reads=4); print(s); print(inspection_from_header_records(r).notes)"
+r,s = preview_runs(['SRR21863801'], n_reads=4); print(s); print(inspection_from_header_records(r, s).notes)"
 ```
 
 **Why ENA and not `fastq-dump`:** ENA renders the defline as `@<run>.<n> <original spot
@@ -207,10 +208,9 @@ FASTQ on disk to sanity-check the annotation against.
 ## 4. Build the import sheet
 
 ```python
-from lib.sra_import import build_import_sheet, write_import_sheet, write_import_scripts
-sheet = build_import_sheet(annotation)              # raises unless every row has an SRX
+from lib.sra_import import build_import_sheet, write_import_sheet   # what 109_sheet runs
+sheet = build_import_sheet(annotation, project_id=PID)   # raises unless every row has an SRX
 path  = write_import_sheet(output_dir, sheet)
-write_import_scripts(output_dir, sheet_path=path, project_id="550540342405942387")
 ```
 
 Column mapping (annotation → sheet). Empty optional values are **dropped**, not written
@@ -231,17 +231,18 @@ blank — an endogenous IP's empty tag annotation must not become an empty field
 | `Source Annotation` | `source__annotation` | |
 | `Condition`, `Sequencer`, `Comments`, `GEO ID` | `condition`, `sequencer`, `comments`, `geo` | |
 
-Never emitted: `project`, `strandedness`, `reads1`, `reads2`.
+Never emitted: `strandedness`, `reads1`, `reads2`. `project` is emitted when `00_setup` recorded
+one — a reserved column since flowbio 0.12.0.
 
 > **`samples import` silently drops the `__annotation` columns.**
 > `purification_target__annotation` and `source__annotation` are accepted in the sheet
 > without any error, but the created samples come back with `annotation=''` on both fields.
 > Every ordinary column imports fine — only the annotation sub-fields are lost.
 >
-> **Always set annotations in a second pass** with `flow_edit_samples.py`
-> (`POST /samples/{id}/edit`), which does apply them, and verify by re-reading the **nested**
-> location `metadata.<field>.annotation` — not a top-level `<field>__annotation` key, which
-> never exists. Reading the wrong place makes every row look correctly empty.
+> **Set annotations in a second pass.** `11_verify` finds them missing and writes
+> `repair_edits.csv`; apply it with `flow_edit_samples.py` (`POST /samples/{id}/edit`), which
+> does set them. Verification reads the **nested** location `metadata.<field>.annotation` —
+> never a top-level `<field>__annotation` key, which does not exist.
 >
 > Seen on GSE297587: 18 rows imported with the tag and cell-line annotation missing; a
 > follow-up edit pass restored `LARP6:dNTR-nMYC` and `U87:Glioblastoma`.
@@ -274,17 +275,16 @@ Timing: ~3 min for a single sample, ~30 min for 8.
 and diff them against the sheet that produced them:
 
 ```python
-from lib.import_verify import find_import_discrepancies, format_report
+from lib.import_check import find_import_discrepancies, format_report   # 11_verify runs this
 # one GET /samples/{id} per sample — NOT the project listing, see fact 6
 found = find_import_discrepancies(sheet_rows, live_samples,
                                   project_id=PID, expect_pubmed="38182429")
 print(format_report(found, total_rows=len(sheet_rows)))
 ```
 
-It checks every non-blank sheet column plus the three attachments the sheet cannot carry —
-`project`, `pubmed`, and whether any reads landed at all. Repair whatever it reports with
-`POST /samples/{id}/edit`, which *does* honour the `__annotation` columns, then re-run it to
-0 before launching the execution. Blank sheet cells are skipped, so a sparse sheet does not
+It checks every non-blank sheet column, the project, and whether any reads landed at all.
+`11_verify` writes the fixes to `repair_edits.csv` for `flow_edit_samples.py`; apply them and
+re-run it to 0 before the analysis. Blank sheet cells are skipped, so a sparse sheet does not
 demand that Flow invent values.
 
 ---
@@ -295,7 +295,7 @@ demand that Flow invent values.
 `second` empties the samplesheet:
 
 ```python
-from lib.paired_selection import check_paired_selection
+from lib.import_guards import check_paired_selection
 r = check_paired_selection(choice, layouts={x["library_layout"] for x in ena_runs})
 ```
 
@@ -333,28 +333,27 @@ to ever prune a mate.** Import both reads and pick the informative one at submis
 `"second"` for ENCODE3 paired-end eCLIP, `"first"` for seCLIP.
 
 > **Only these three values are valid.** An unrecognised value such as `"single"` is silently
-> ignored and the default (`"both"`) applies — which is why an earlier attempt with
-> `paired: "single"` appeared to have no effect and led to a needless re-upload.
+> ignored and the default (`"both"`) applies.
 
-The vendored `flowrunanalysis_flowbio.py` hardcodes `"paired": "both"`; override it when a
-study needs a specific mate.
+`108_params` sets `paired` in `pipeline_params.json`, and the runner `12_analysis` writes
+passes it to the samplesheet.
 
 ---
 
-## 6. Verify
+## 6. Verify, then analyse
 
-```bash
-curl -s "https://app.flow.bio/api/projects/<PID>/samples?count=50" \
-  -H "Authorization: Bearer $FLOW_API_TOKEN"
+`11_verify` is the check. Collect its live samples with every page and one full read per
+sample — the listing's `metadata` is empty (fact 6):
+
+```python
+from lib.flow_client import FlowClient
+client = FlowClient(token)
+live = [client.get_sample(s["id"]) for s in client.project_samples(PID)]
 ```
 
-Confirm per sample: `project` is set, `metadata.five_prime_barcode_sequence.value`,
-`purification_target`, `purification_agent`, `source`. Note the REST detail view nests
-metadata under `metadata.<key>.value` — a top-level lookup returns `None` and is the
-reason `flow_edit_samples.py` prints spurious "verify mismatch" warnings.
-
-Then submit analysis as usual (`reference/eclip-analysis-params.md`), remembering that one
-execution covers **one genome** and **one `umi_header_format`**.
+Metadata nests under `metadata.<key>.value`, annotations under `metadata.<key>.annotation`.
+Then `12_analysis`, remembering that one execution covers **one genome** and **one
+`umi_header_format`**.
 
 ---
 
