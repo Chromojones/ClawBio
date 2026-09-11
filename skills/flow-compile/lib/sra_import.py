@@ -105,6 +105,18 @@ def annotation_is_transportable_in_value() -> bool:
     return False
 
 
+def annotation_to_flow_row(row) -> dict[str, str]:
+    """One annotation row in Flow's keys: what the sheet sends and what `11_verify` compares."""
+    record: dict[str, str] = {}
+    for source_col, target_col in COLUMN_MAP:
+        if target_col in FORBIDDEN_SHEET_COLUMNS:
+            continue
+        value = str(row.get(source_col, "") or "").strip()
+        if value:
+            record[target_col] = value
+    return record
+
+
 def build_import_sheet(
     annotation: pd.DataFrame,
     *,
@@ -139,12 +151,7 @@ def build_import_sheet(
         # empty string, not treated as "unset".
         if project_id:
             record["project"] = str(project_id).strip()
-        for source_col, target_col in COLUMN_MAP:
-            if target_col in FORBIDDEN_SHEET_COLUMNS:
-                continue
-            value = str(row.get(source_col, "") or "").strip()
-            if value:
-                record[target_col] = value
+        record.update(annotation_to_flow_row(row))
         records.append(record)
 
     sheet = pd.DataFrame(records)

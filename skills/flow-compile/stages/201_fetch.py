@@ -59,7 +59,8 @@ def body(args, out: Path) -> dict:
         st.set_study(out, header_state=result.state)
         lines.append(f"header state: {result.state}")
 
-    plan = {"fastq_dir": str(args.fastq_dir) if args.fastq_dir else ""}
+    # Absolute, because 210 prints it as --base-dir for a command run from any directory.
+    plan = {"fastq_dir": str(args.fastq_dir.resolve()) if args.fastq_dir else ""}
     (out / "fetch_plan.json").write_text(json.dumps(plan, indent=2) + "\n")
     lines.append("header cleaning: none — removespace runs in the clip-seq pipeline")
     return {"lines": lines, "note": "local"}

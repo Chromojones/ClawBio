@@ -564,28 +564,8 @@ def validate_target_and_annotation(
 _BARCODE_RE = re.compile(r"^[ACGTN]+$")
 
 
-#: Flow's organism vocabulary, from `GET /api/organisms`. The API takes the CODE; the
-#: `name` and `latin_name` it returns are for display and are rejected on submission.
-ORGANISM_CODES: dict[str, str] = {
-    "Hs": "Homo sapiens",
-    "Mm": "Mus musculus",
-    "Rn": "Rattus norvegicus",
-    "Dr": "Danio rerio",
-    "Dm": "Drosophila melanogaster",
-    "Sc": "Saccharomyces cerevisiae",
-    "Ec": "Escherichia coli",
-    "Gg": "Gallus gallus",
-    "At": "Arabidopsis thaliana",
-    "Vf": "Vibrio fischeri",
-}
-
-#: Latin and common names mapped back to the code, so the error can say what to use instead.
-_ORGANISM_ALIASES: dict[str, str] = {
-    **{latin.lower(): code for code, latin in ORGANISM_CODES.items()},
-    "human": "Hs", "mouse": "Mm", "rat": "Rn", "zebrafish": "Dr",
-    "drosophila": "Dm", "yeast": "Sc", "e. coli": "Ec", "chicken": "Gg",
-    "arabidopsis": "At", "v. fischeri": "Vf",
-}
+from lib.organism import ORGANISM_ALIASES as _ORGANISM_ALIASES  # noqa: E402
+from lib.organism import ORGANISM_CODES  # noqa: E402,F401
 
 
 def validate_organism(value: str) -> list[Check]:

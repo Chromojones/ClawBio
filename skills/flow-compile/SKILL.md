@@ -162,7 +162,8 @@ where each recipe lives:
 | you supply | stages | recipe |
 |---|---|---|
 | `srr_map.tsv` (`gsm`, `srr`; plus `srx` on the direct line) | 02, 04 | ENA filereport — [`reference/sra-direct-import.md`](reference/sra-direct-import.md) |
-| `--sizes` JSON (bytes per accession) | 01, 109 | same document |
+| `--geo-response` (GEO SOFT text) | 01 | same document, step 0 |
+| `--sizes` JSON (bytes per accession) | 109 | same document |
 | `--search-results` JSON (prior-upload check) | 01 | same document, step 0 |
 | paper text, GEO sample pages | 03, 04 | fetch them; [`DEMO.md`](DEMO.md) bundles examples |
 | `--live-samples`, `--processes` JSON | 11, 13 | [`reference/flow-api-notes.md`](reference/flow-api-notes.md) |
@@ -244,8 +245,9 @@ Deliberately empty. Every rule lives in `reference/`, and every incident is inde
 ClawBio is a research and educational tool. It is not a medical device and does not provide
 clinical diagnoses. Consult a healthcare professional before making any medical decisions.
 
-Uploading is outward-facing and hard to reverse. Nothing is submitted without the three gates,
-and `110_import` and `210_upload` are dry-run unless given `--submit`.
+Uploading is outward-facing and hard to reverse. Nothing is submitted without the three gates.
+`110_import` submits only with `--submit`; `210_upload` and `12_analysis` never submit — they
+print the command for the agent to run.
 
 ## Agent Boundary
 

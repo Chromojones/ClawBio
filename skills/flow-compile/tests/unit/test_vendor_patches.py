@@ -88,3 +88,45 @@ class TestTheLinesThemselves:
     def test_paired_is_read_from_the_params(self):
         assert "paired" in ANALYSIS.read_text()
 
+
+
+class TestTheRunnerNeverPromptsAnAgent:
+    """`run_analysis.sh` is run by the agent. A login that falls back to `input()` hangs it."""
+
+    def _module(self):
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("runner", ANALYSIS)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_a_token_in_the_environment_is_used(self, monkeypatch):
+        runner = self._module()
+        for key in ("FLOWBIO_USERNAME", "FLOWBIO_PASSWORD", "FLOW_TOKEN"):
+            monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv("FLOW_API_TOKEN", "tok")
+
+        class NoHTTP:
+            def post(self, *a, **k):
+                raise AssertionError("a token was set, so no login call should be made")
+
+        assert runner.rest_login(NoHTTP()) == "tok"
+
+    def test_no_credentials_without_a_terminal_fails_instead_of_prompting(self, monkeypatch, tmp_path):
+        import io
+
+        import pytest
+
+        runner = self._module()
+        for key in ("FLOWBIO_USERNAME", "FLOWBIO_PASSWORD", "FLOW_API_TOKEN", "FLOW_TOKEN"):
+            monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv("FLOW_TOKEN_FILE", str(tmp_path / "no-token"))
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))
+
+        def prompted(*a, **k):
+            raise AssertionError("prompted for credentials with no terminal attached")
+
+        monkeypatch.setattr("builtins.input", prompted)
+        with pytest.raises(RuntimeError, match="FLOWBIO_USERNAME"):
+            runner.rest_login(object())

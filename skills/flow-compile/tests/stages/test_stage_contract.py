@@ -132,3 +132,24 @@ class TestTheSetOfStages:
 
     def test_the_trunk_starts_at_00(self):
         assert IDS[0].startswith("00"), f"first stage is {IDS[0]}"
+
+
+class TestAPrerequisiteInsideABodyIsExitFive:
+    """A body that finds the run out of order answers 5, not a traceback and 4."""
+
+    def test_a_route_read_before_06_decided_one(self, tmp_path):
+        import subprocess
+        import sys as _sys
+        from pathlib import Path as _Path
+
+        from lib import state as _st
+
+        skill = _Path(__file__).resolve().parent.parent.parent
+        out = tmp_path / "run"
+        out.mkdir()
+        _st.record(out, "06_route", _st.OK)          # 06 recorded ok, but no route stored
+        proc = subprocess.run(
+            [_sys.executable, str(skill / "stages" / "101_preview.py"), "--output", str(out)],
+            capture_output=True, text=True, cwd=str(skill), timeout=60)
+        assert proc.returncode == 5, proc.stdout + proc.stderr
+        assert "Traceback" not in proc.stderr

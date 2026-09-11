@@ -19,6 +19,8 @@ available and it costs a round trip to the API to get it.
 """
 
 import sys
+
+import pytest
 from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parent.parent.parent
@@ -110,3 +112,27 @@ class TestWiredIntoTheGate:
             "5' Barcode Sequence": "NNNNCCGGANNN",
         }])
         assert not any(i.field == "Organism" for i in validate_annotation_table(table))
+
+
+class TestOneOrganismTable:
+    """`lib/organism.py` normalised only Hs/Mm/Gg and blanked every other organism, while the
+    validator accepted Flow's ten codes. One table now serves both."""
+
+    def test_the_validator_and_the_normaliser_share_one_table(self):
+        from lib import metadata_validate, organism
+
+        assert metadata_validate.ORGANISM_CODES is organism.ORGANISM_CODES
+
+    @pytest.mark.parametrize("raw,code", [
+        ("Drosophila melanogaster", "Dm"), ("Dm", "Dm"), ("Danio rerio", "Dr"),
+        ("Rattus norvegicus", "Rn"), ("Homo sapiens", "Hs"), ("mouse", "Mm"),
+    ])
+    def test_every_flow_organism_normalises(self, raw, code):
+        from lib.organism import normalize_organism
+
+        assert normalize_organism(raw) == code
+
+    def test_the_column_check_accepts_every_code(self):
+        from lib.organism import ORGANISM_CODES, validate_organism_column
+
+        assert validate_organism_column(list(ORGANISM_CODES)) == []

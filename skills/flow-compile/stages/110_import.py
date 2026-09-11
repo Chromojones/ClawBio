@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stage 110 — submit the import and poll it to completion.
+"""Stage 110 — submit the import, then print the command that polls it.
 
 The project is set in the sheet, reserved since flowbio 0.12.0, so there is no assignment
 step here any more. Annotations are a different matter: the import job forwards
@@ -31,7 +31,6 @@ def build_parser():
     parser = parser_for(NAME, __doc__.splitlines()[0])
     parser.add_argument("--submit", action="store_true",
                         help="Actually submit. Without it the command is printed only.")
-    parser.add_argument("--poll-interval", type=int, default=60)
     return parser
 
 

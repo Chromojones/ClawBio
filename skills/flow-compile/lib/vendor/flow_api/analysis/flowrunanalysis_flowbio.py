@@ -93,12 +93,34 @@ def _raise_for_status(resp: requests.Response):
         msg = f"HTTP {resp.status_code} error: {resp.text}"
         raise requests.HTTPError(msg) from e
 
+def _env_token() -> str:
+    """A Flow API token from the environment or token file, in `flow_client.resolve_token` order."""
+    token = os.environ.get("FLOW_API_TOKEN", "").strip() or os.environ.get("FLOW_TOKEN", "").strip()
+    if token:
+        return token
+    path = os.environ.get("FLOW_TOKEN_FILE") or os.path.expanduser("~/.config/flow/api-token")
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 def rest_login(session: requests.Session, username: str = "", password: str = "") -> str:
+    """A bearer token: explicit or FLOWBIO_* credentials, else a token from the environment.
+
+    Never prompts without a terminal — the agent runs this script, and a prompt hangs it.
+    """
     if not username:
         username = os.environ.get("FLOWBIO_USERNAME", "")
     if not password:
         password = os.environ.get("FLOWBIO_PASSWORD", "")
     if not username or not password:
+        token = _env_token()
+        if token:
+            return token
+        if not sys.stdin.isatty():
+            raise RuntimeError("no Flow credentials: set FLOWBIO_USERNAME and FLOWBIO_PASSWORD, "
+                               "or FLOW_API_TOKEN / FLOW_TOKEN")
         username = input("Enter your username: ")
         password = getpass.getpass("Enter your password: ")
     r = session.post(f"{API_BASE}/login", json={"username": username, "password": password}, timeout=30)

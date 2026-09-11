@@ -27,10 +27,12 @@ def test_normalize_organism(raw, expected):
     assert normalize_organism(raw) == expected
 
 
-def test_reject_unknown():
-    assert normalize_organism("Danio rerio") == ""
+def test_every_flow_organism_normalises_and_unknown_is_empty():
+    assert normalize_organism("Danio rerio") == "Dr"
+    assert normalize_organism("Drosophila melanogaster") == "Dm"
+    assert normalize_organism("Klingon") == ""
 
 
 def test_validate_rejects_full_name_in_column():
     errors = validate_organism_column(["Homo sapiens"])
-    assert any("Hs, Mm, or Gg" in e for e in errors)
+    assert errors and all("code" in e for e in errors)

@@ -18,7 +18,8 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+SKILL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SKILL_DIR))
 
 from lib import state as st  # noqa: E402
 from lib.import_check import build_repair_plan, find_import_discrepancies  # noqa: E402
@@ -33,54 +34,93 @@ def build_parser():
     parser = parser_for(NAME, __doc__.splitlines()[0])
     parser.add_argument("--live-samples", type=Path, required=True,
                         help="JSON list of GET /samples/{id} payloads.")
-    parser.add_argument("--repair", action="store_true", help="Apply the repair plan.")
     return parser
 
 
 def _inputs(args, out):
-    return [args.live_samples]
+    sheets = [out / "import_sheet.csv", out / "upload_sheet.csv"]
+    return [args.live_samples, *[s for s in sheets if s.exists()]]
+
+
+def _sheet_rows(out: Path, line: str, study: dict) -> list[dict]:
+    """The rows that produced the samples, in Flow's keys."""
+    import pandas as pd
+
+    from lib.sra_import import annotation_to_flow_row
+
+    if line == "direct":
+        st.require(out, "110_import")
+        if not study.get("import_job"):
+            raise CheckFailed("110_import ran as a dry run, so nothing was imported. Re-run it "
+                              "with --submit, then verify.")
+        return pd.read_csv(out / "import_sheet.csv", dtype=str).fillna("").to_dict("records")
+    st.require(out, "210_upload")
+    upload = pd.read_csv(out / "upload_sheet.csv", dtype=str).fillna("")
+    return [annotation_to_flow_row(row) for row in upload.to_dict("records")]
+
+
+def _write_edits(path: Path, repairs: list) -> list[str]:
+    """Write the editable fields as a `flow_edit_samples.py` sample_id sheet; return the rest."""
+    import csv
+
+    from lib.vendor.flow_api.metadata.flow_edit_samples import WHITELIST_EDIT_FIELDS
+
+    columns = [f for f in WHITELIST_EDIT_FIELDS if any(f in e.fields for e in repairs)]
+    manual = sorted({f"{e.name}: {f}" for e in repairs for f in e.fields
+                     if f not in WHITELIST_EDIT_FIELDS})
+    if columns:
+        with path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["sample_id", *columns])
+            writer.writeheader()
+            for e in repairs:
+                row = {f: e.fields[f] for f in columns if f in e.fields}
+                if row:
+                    writer.writerow({"sample_id": e.sample_id, **row})
+    return manual
 
 
 def body(args, out: Path) -> dict:
-    import pandas as pd
-
     study = st.study(out)
-    annotation = pd.read_csv(out / "annotation.raw.csv", dtype=str).fillna("")
-    sheet_rows = annotation.to_dict("records")
+    sheet_rows = _sheet_rows(out, st.route(out)["line"], study)
     live = json.loads(args.live_samples.read_text())
 
     discrepancies = find_import_discrepancies(
         sheet_rows, live, project_id=study.get("project_id", ""))
-    plan = build_repair_plan(sheet_rows, live, project_id=study.get("project_id", ""))
+    live_list = (live.get("samples") or []) if isinstance(live, dict) else live
+    plan = build_repair_plan(sheet_rows, live_list, project_id=study.get("project_id", ""))
+    missing = [e.name for e in plan if e.missing]
+    repairs = [e for e in plan if not e.missing]
 
     (out / "verify_report.json").write_text(json.dumps({
         "discrepancies": [d.describe() if hasattr(d, "describe") else str(d) for d in discrepancies],
-        "repairs": [{"sample_id": e.sample_id, "fields": e.fields} for e in plan],
+        "missing": missing,
+        "repairs": [{"sample_id": e.sample_id, "fields": e.fields} for e in repairs],
     }, indent=2) + "\n")
 
-    # A listing collected without paging is short, and every unfetched sample then reads as
-    # "in the sheet but not imported". An envelope proves the shortfall and is refused in
-    # find_import_discrepancies; a hand-assembled list cannot, so name the possibility here.
-    live_count = len(live.get("samples") or []) if isinstance(live, dict) else len(live)
-    if live_count < len(sheet_rows):
-        lines_prefix = [
-            f"NOTE: {live_count} live sample(s) for {len(sheet_rows)} sheet row(s). If "
-            f"--live-samples was built from a project listing, check it was not one page "
-            f"(default page size 10); see reference/flow-api-notes.md."
-        ]
-    else:
-        lines_prefix = []
+    edits = out / "repair_edits.csv"
+    edits.unlink(missing_ok=True)
+    manual = _write_edits(edits, repairs) if repairs else []
 
-    lines = [*lines_prefix,
-             f"{len(discrepancies)} discrepancy(ies), {len(plan)} sample(s) need repair"]
-    if plan and not args.repair:
-        raise CheckFailed(
-            f"{len(plan)} sample(s) do not match the sheet. Review verify_report.json, then "
-            f"re-run with --repair to apply the edits."
-        )
-    if plan:
-        lines.append("repairs applied" if args.repair else "")
-    return {"lines": [ln for ln in lines if ln], "note": f"{len(plan)} repairs"}
+    if not missing and not repairs:
+        return {"lines": [f"{len(sheet_rows)} sample(s) match the sheet"], "note": "verified"}
+
+    parts = []
+    if missing:
+        note = ""
+        if len(live_list) < len(sheet_rows):
+            note = (" If --live-samples came from a project listing, check it was not one page "
+                    "(default page size 10).")
+        parts.append(f"{len(missing)} sheet row(s) not imported: {', '.join(missing)}. A failed "
+                     f"import is re-run, not repaired.{note}")
+    if edits.exists():
+        tool = SKILL_DIR / "lib" / "vendor" / "flow_api" / "metadata" / "flow_edit_samples.py"
+        parts.append(f"{len(repairs)} sample(s) differ from the sheet; the edits are in {edits}. "
+                     f"Apply them, then re-run 11_verify:\n"
+                     f"  python3 {tool} --edits {edits} --dry-run\n"
+                     f"  python3 {tool} --edits {edits} --yes")
+    if manual:
+        parts.append("not editable by flow_edit_samples.py, fix by hand: " + "; ".join(manual))
+    raise CheckFailed("\n".join(parts))
 
 
 def main(argv=None) -> int:

@@ -161,6 +161,11 @@ def run_stage(
             print(render_findings(exc.findings, title=name, total=len(exc.findings)),
                   file=sys.stderr)
         return CHECK_FAILED
+    except st.PrerequisiteError as exc:
+        # Raised from inside a body too (`st.route()` before 06, a line-specific require):
+        # the run is out of order, not broken, so it answers 5 like the declared check.
+        print(f"{name}: {exc}", file=sys.stderr)
+        return PREREQUISITE
     except KeyboardInterrupt:
         print(f"\n{name}: interrupted", file=sys.stderr)
         return USAGE

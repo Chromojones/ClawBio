@@ -99,15 +99,16 @@ python3 stages/108_params.py --output $OUT --accept-params
 python3 stages/210_upload.py --output $OUT
 ```
 
-Prepares `upload_sheet.csv` for the one sample and stops there: nothing is submitted
-without `--submit`, and nothing should be for the demo. The remaining stages need a live
+Prepares `upload_sheet.csv` and prints the upload command — a `--dry-run` first, then the
+live one. The stage uploads nothing itself; for the demo, run neither. The remaining stages need a live
 Flow project — `11_verify --live-samples`, `12_analysis`, `13_audit --processes` — and
 `flow_compile.py --next` will print each with its required flags when you get there.
 
 ## What a real run does differently
 
 - `00_setup` without `--offline`, with credentials and `--project-id`
-- `01_study` with `--sizes` (ENA filereport) and `--search-results` (Flow `/search`) — see
-  [`reference/sra-direct-import.md`](reference/sra-direct-import.md) for both recipes
+- `01_study` with `--geo-response` (GEO SOFT text) and `--search-results` (Flow `/search`),
+  and `109_sheet` with `--sizes` (ENA filereport) — recipes in
+  [`reference/sra-direct-import.md`](reference/sra-direct-import.md)
 - an `srr_map.tsv` with the `srx` column populated, so 06 routes **direct** and delivery is
   `109_sheet` → `110_import` instead of `210_upload`

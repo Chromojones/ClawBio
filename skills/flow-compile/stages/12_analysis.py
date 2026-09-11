@@ -32,6 +32,7 @@ from lib.pipeline_params import (  # noqa: E402
     chunks_for,
 )
 from lib.reference_cross_check import cross_check_reference  # noqa: E402
+from lib.results import WARNING, Finding  # noqa: E402
 from stages._common import CheckFailed, parser_for, run_stage  # noqa: E402
 
 NAME = "12_analysis"
@@ -50,12 +51,27 @@ def build_parser():
                         help="Sample count; defaults to what 02_index recorded.")
     parser.add_argument("--chunks", type=int, default=0,
                         help="Executions to split across. Derived from --samples if omitted.")
-    parser.add_argument("--submit", action="store_true")
+    parser.add_argument("--sample-name-filter", default="",
+                        help="Regex selecting this study's samples in the project. Empty selects "
+                             "every sample of the protocol there.")
     return parser
 
 
 def _inputs(args, out):
     return [p for p in (out / "pipeline_params.json", args.reference_params) if p and Path(p).exists()]
+
+
+def _study_filter(out: Path) -> str:
+    """A sample-name regex over this study's runs, from the annotation's File column."""
+    import pandas as pd
+
+    from lib.flow_stages import sample_name_filter_from_annotation
+
+    path = out / "annotation.raw.csv"
+    if not path.exists():
+        return ""
+    regex = sample_name_filter_from_annotation(pd.read_csv(path, dtype=str).fillna(""))
+    return "" if regex == ".*" else regex
 
 
 def body(args, out: Path) -> dict:
@@ -86,8 +102,6 @@ def body(args, out: Path) -> dict:
         + (f", {-(-sample_count // chunks)} each" if sample_count else ""),
     ]
     if not sample_count:
-        from lib.results import Finding, WARNING
-
         findings = [Finding(WARNING, "sample count unknown, so the "
                                      f"{MAX_SAMPLES_PER_EXECUTION}-per-execution ceiling was "
                                      "not checked. Pass --samples.")]
@@ -101,12 +115,19 @@ def body(args, out: Path) -> dict:
         analysis_script=Path(script_path),
         project_id=study.get("project_id", ""),
         pipeline_params=params,
-        sample_name_filter=study.get("sample_name_filter", ""),
+        sample_name_filter=args.sample_name_filter,
         experimental_method=st.route(out).get("protocol", ""),
         num_chunks=chunks,
     )
-    lines.append(f"runner: {runner.name} — submits with the parameters 108 approved")
-    lines.append("submitted" if args.submit else "dry run; re-run with --submit")
+    if not args.sample_name_filter:
+        suggestion = _study_filter(out)
+        findings.append(Finding(WARNING, (
+            f"no --sample-name-filter: the runner selects every "
+            f"{st.route(out).get('protocol') or 'matching'} sample in project "
+            f"{study.get('project_id') or '(none)'}."
+            + (f" This study's runs: --sample-name-filter '{suggestion}'" if suggestion else ""))))
+    lines.append(f"runner written: {runner} — submits with the parameters 108 approved")
+    lines.append(f"next: bash {runner}")
     return {"findings": findings, "lines": lines, "note": check.describe()[:60]}
 
 

@@ -143,7 +143,7 @@ def find_import_discrepancies(
             found.append(Discrepancy(
                 sample=name, field="project", expected=str(project_id),
                 actual=project_id_of(sample) or "(none)",
-                detail="the import sheet has no project column — assign after import",
+                detail="the sample is not in the run's project",
             ))
 
         if expect_pubmed and str(sample.get("pubmed") or "") != str(expect_pubmed):
