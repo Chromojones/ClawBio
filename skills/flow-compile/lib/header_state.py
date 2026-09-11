@@ -1,34 +1,10 @@
-"""Which of four states did this FASTQ arrive in, and what params follow?
+"""Which of four states a CLIP FASTQ header is in, and the pipeline parameters that follow.
 
-``fastq_headers.inspect_header_lines()`` answers with two booleans, ``(has_rbc,
-barcode_in_header)``. That cannot express the four states an eCLIP FASTQ actually arrives in,
-and the gap has teeth. Measured against the RBP ENCODE project on Flow:
+Raw, prepended randomer (`eclipdemux`), `:rbc:` mid-header (ENCODE portal) and `:rbc:` at the
+end (iCLIP) need different UMI handling; treating a prepended randomer as raw strips five bases
+of real insert. Pure.
 
-===================  ============================================================
-execution param      actual header
-===================  ============================================================
-``encode_eclip=false``  ``@HWI-D00611:153:…:25252 2:N:0:GAATTCGTTAATCTTA``
-``encode_eclip=true``   ``@TAAAG:HWI-D00611:119:…:90397 2:N:0:TCCGGAGATATAGCCT``
-===================  ============================================================
-
-The second is ``eclipdemux`` output with the randomer **prepended to the title** — confirmed a
-randomer, not a fixed barcode: 5 nt, 949 distinct values across 5,371 reads, base composition
-within 3.1–15.2 of even.
-
-``inspect_header_lines`` returns ``(False, False)`` for it — **the same answer it gives a raw
-header**. A derivation trusting that sets ``move_umi_to_header=true`` and re-extracts five
-bases from a read whose randomer is already in the header: five real bases of insert are
-stripped and deduplication keys on sequence that is not the UMI. Nothing errors.
-
-It also returns ``(True, False)`` for **both** ``:rbc:`` forms, so the mid- versus end-of-header
-distinction that decides ``encode_eclip`` is not derivable from it.
-
-Both docs were wrong in the same direction. ``SKILL.md`` said "eCLIP + ``:rbc:`` →
-``encode_eclip=true``", ignoring position. ``reference/eclip-analysis-params.md`` fixed that but
-added "Never set ``encode_eclip=true`` without ``:rbc:``" — which the live ENCODE data
-contradicts, since the portal's own files carry a prepended randomer and no ``:rbc:`` at all.
-
-Pure. Story: FAILURES.md#eclip-header-states
+Story: FAILURES.md#eclip-header-states
 """
 
 from __future__ import annotations
@@ -82,12 +58,8 @@ class HeaderStateResult:
 
 
 def classify_headers(headers: list[str]) -> HeaderStateResult:
-    """Classify a sample of headers, refusing anything but a unanimous answer.
-
-    Mixed states mean the files were not produced the same way. Taking a majority would apply
-    one file's parameters to another file's reads, which is precisely the failure the state
-    machine exists to prevent. No headers is no evidence — defaulting to ``RAW`` would extract
-    from a file that had already been extracted.
+    """Classify a sample of headers, refusing anything but a unanimous answer: mixed states mean the
+    files were produced differently, and no headers is no evidence.
     """
     seen = [classify_header(h) for h in headers if str(h or "").strip()]
     if not seen:
@@ -112,18 +84,9 @@ def classify_headers(headers: list[str]) -> HeaderStateResult:
 def params_for_state(state: str, *, experimental_method: str) -> dict[str, str]:
     """The CLIP-pipeline parameters implied by a header state.
 
-    ``encode_eclip`` switches on ``encode_moveumi``, which is a specific transform, not a
-    general "this is ENCODE data" flag::
-
-        header = record.id.split(":")
-        rearranged = ":".join(header[1:]) + "_rbc:" + header[0]
-
-    It takes the **first colon-delimited field of the read name** as the UMI and moves it to
-    the end. That is true of exactly one state: ``RANDOMER_PREFIX``, where ``eclipdemux``
-    prepended the randomer. Applied to a header whose UMI is already in ``:rbc:`` form, the
-    first field is the INSTRUMENT NAME — every read comes out ``…_rbc:HWI-D00611``, a UMI
-    constant across the library, and UMICollapse collapses the whole run to nothing without
-    erroring. So ``RBC_MID`` must be false: it is already in the form this transform produces.
+    `encode_eclip` runs `encode_moveumi`, which moves the first colon-delimited field of the read
+    name to the end as the UMI — right only for a prepended randomer. On a `:rbc:` header that
+    field is the instrument name, which would become a UMI constant across the library.
 
     Story: FAILURES.md#encode-moveumi
     """

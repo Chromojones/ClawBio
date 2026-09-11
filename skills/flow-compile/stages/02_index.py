@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Stage 02 — the samples, and the runs behind them.
 
-Reads the GEO series matrix and the SRR map into one index the rest of the run works from.
-Nothing here is inferred: the matrix names the samples, the map names their runs, and a
-disagreement between the two is reported rather than reconciled.
-
-The accession written per row is the EXPERIMENT, never the run. Asking Flow to import a run
-imports its whole parent experiment, so a sheet of run accessions fetches more than it names
-and reports COMPLETED while doing so.
+Joins the series matrix and the srr_map into `sheet_rows.json`, carrying each sample's SRX
+(what 109 imports) and SRR (what 101 previews). Disagreements between the two are reported,
+not reconciled.
 """
 
 from __future__ import annotations

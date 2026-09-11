@@ -1,44 +1,21 @@
 #!/usr/bin/env python3
-"""
-Edit whitelisted fields on already-uploaded Flow.bio samples via REST /edit.
+"""Edit whitelisted fields on uploaded Flow samples via `POST /samples/{id}/edit`, verifying each
+change with a follow-up GET.
 
-This is the post-upload "sample updating" tool used by flow-compile for the
-ENA / ArrayExpress workflow (E-MTAB-432). It generalises the one-off
-``fix_barcodes_and_submit.py`` that renamed samples and set 5' barcode patterns
-after upload.
+Applies `11_verify`'s `repair_edits.csv` (sample_id mode), or an edits CSV matched to samples by
+an accession token in the sample name (`--match-name`). Editable fields are
+`WHITELIST_EDIT_FIELDS`, including the `__annotation` sub-fields.
 
-Unlike ``flow_public_samples_push_metadata_v2.py`` (which diffs two pull CSVs
-and pushes purification/annotation fields via GraphQL + REST), this script:
-
-  * takes a small edit CSV keyed by ``sample_id`` **or** by an accession token
-    matched against the live sample name (e.g. ``ERR039788`` / ``SRR6181530``),
-  * pushes any whitelisted scalar field (including ``five_prime_barcode_sequence``
-    and ``name``, which the metadata-push script does not handle) via
-    ``POST app.flow.bio/api/samples/{id}/edit``,
-  * verifies each change with a follow-up GET.
-
-Whitelisted edit columns:
-  name, five_prime_barcode_sequence, three_prime_barcode_sequence,
-  comments, condition, experimental_method, purification_agent,
-  purification_target, source, sequencer
-
-Credentials: FLOWBIO_USERNAME / FLOWBIO_PASSWORD or --username / --password.
+Credentials: FLOWBIO_USERNAME / FLOWBIO_PASSWORD, or --username / --password.
 
 Examples:
-  # Match rows to samples by accession embedded in the sample name, dry-run:
-  python3 flow_edit_samples.py --project-id 900095972507806297 \\
-    --edits edits.csv --match-name --dry-run
+  python3 flow_edit_samples.py --edits repair_edits.csv --dry-run
+  python3 flow_edit_samples.py --edits repair_edits.csv --yes
+  python3 flow_edit_samples.py --project-id <PID> --edits edits.csv --match-name --dry-run
 
-  # Edit by explicit sample_id column and apply:
-  python3 flow_edit_samples.py --edits edits.csv --yes
-
-edits.csv (match-name mode) example:
-  accession,name,five_prime_barcode_sequence,comments
-  ERR039788,TIA1_Hs_HeLa_GAANNNN_LUd15_ERR039788,GAANNNN,iCLIP_..._GAANNNN_..._4.fq.gz
-
-edits.csv (sample_id mode) example:
-  sample_id,name,five_prime_barcode_sequence
-  450873145213532192,TIA1_Hs_HeLa_GAANNNN_LUd15_ERR039788,GAANNNN
+edits.csv (match-name mode):
+  accession,name,five_prime_barcode_sequence
+  ERR039788,TIA1_Hs_HeLa_GAANNNN_LUd15_ERR039788,GAANNNN
 """
 
 from __future__ import annotations
@@ -89,15 +66,9 @@ DEFAULT_ACCESSION_RE = r"(ERR\d+|SRR\d+|DRR\d+|GSM\d+)"
 
 
 def live_value(live: dict, key: str) -> object:
-    """Read an edited field back out of a GET /samples/{id} payload.
-
-    Flow nests metadata — ``{"metadata": {"source": {"value": ..., "annotation": ...}}}`` —
-    so a flat ``live.get("source__annotation")`` is always None and ``live.get("source")`` is
-    a dict. Verifying against those produced a "verify mismatch" warning on every metadata
-    edit that had in fact applied cleanly.
-
-    Returns ``""`` for an annotation slot that is absent (no annotation *is* empty), and
-    ``None`` for a field that does not exist at all.
+    """Read an edited field back out of a GET /samples/{id} payload, where metadata nests as
+    `{"source": {"value": ..., "annotation": ...}}`. Returns "" for an absent annotation slot and
+    None for a field that does not exist.
     """
     metadata = live.get("metadata") or {}
     base, is_annotation, _ = key.partition("__annotation")

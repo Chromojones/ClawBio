@@ -1,17 +1,7 @@
-"""Four things that must be true before a sheet is submitted as one import job.
+"""What must hold before a sheet is submitted as one import job: size, run expansion,
+per-sample-type field rejection and mate selection. Pure.
 
-Size, run expansion, per-sample-type field rejection and mate selection all answer the same
-question and carried three copies of ``Check`` between them. Merging is mostly tidying, with
-one exception that is not:
-
-``total_bytes`` summed each accession *as written*. Asking Flow for a run imports its whole
-parent experiment — ``SRR3175580`` delivered all four runs of ``SRX1590001``, 10.07 GB rather
-than the requested run — so a sheet of run accessions was measured at a fraction of what it
-would transfer, and the 132.7 GB ceiling GSE63262 taught us could be walked straight past. The
-module that knew about expansion and the module that enforced the ceiling were written a week
-apart and never introduced. They are introduced here.
-
-Pure. Story: FAILURES.md#import-guards
+Story: FAILURES.md#import-guards
 """
 
 from __future__ import annotations
@@ -31,10 +21,8 @@ def is_run_accession(accession: str) -> bool:
 
 
 def effective_accession(accession: str, parent_of_run: dict) -> str:
-    """What the import will actually fetch when asked for ``accession``.
-
-    Unknown accessions are returned unchanged: this is advisory, and inventing a parent that
-    was never looked up would be worse than reporting nothing.
+    """What the import fetches when asked for `accession`: a run expands to its parent experiment.
+    Unknown accessions are returned unchanged.
     """
     accession = str(accession or "").strip()
     return parent_of_run.get(accession, accession)
@@ -110,12 +98,7 @@ DEFAULT_BATCH_BYTES = 35_000_000_000
 
 
 def _sizes_for(accession: str, by_accession: dict) -> list[float] | None:
-    """Every mate of every run of one experiment, flattened.
-
-    ENA reports ``fastq_bytes`` as ``R1;R2`` for paired runs. Counting only the first mate
-    halves the estimate of a paired study, which is exactly the direction that lets an
-    oversized import through.
-    """
+    """Every mate of every run of one experiment; ENA reports paired sizes as `R1;R2`."""
     runs = by_accession.get(accession)
     if runs is None:
         return None
@@ -135,13 +118,8 @@ def total_bytes(
     parent_of_run: dict | None = None,
     runs_by_experiment: dict | None = None,
 ) -> float:
-    """Bytes this sheet will actually transfer. Unknown accessions contribute nothing.
-
-    A row naming a *run* transfers its whole parent experiment — asking for ``SRR3175580``
-    delivered all four runs of ``SRX1590001``, 10.07 GB rather than the requested run — so when
-    the expansion maps are supplied the row is measured as its experiment. Without them the row
-    is measured as written, which undercounts; that is why `check_import_size` treats an
-    unresolvable accession as an error rather than a silent zero.
+    """Bytes this sheet will transfer, measuring a run as its whole experiment when the expansion
+    maps are given. Unknown accessions contribute nothing.
     """
     total = 0.0
     for row in sheet_rows:
@@ -163,10 +141,7 @@ def check_import_size(
     parent_of_run: dict | None = None,
     runs_by_experiment: dict | None = None,
 ) -> list[Check]:
-    """Is this sheet safe to submit as one import job?
-
-    Pass the expansion maps whenever they are known: a sheet of run accessions measured as
-    written can sit far below the ceiling and still transfer far above it.
+    """Is this sheet safe to submit as one import job? Pass the expansion maps when they are known.
     """
     checks: list[Check] = []
 
@@ -213,15 +188,8 @@ def split_into_batches(
     *,
     limit: float = DEFAULT_BATCH_BYTES,
 ) -> list[list[dict]]:
-    """Split a sheet into jobs no larger than ``limit``, keeping each target intact.
-
-    Replicates are grouped by ``purification_target`` and never split: if a later batch fails,
-    a whole protein is missing and is obvious, rather than one replicate of a pair silently
-    landing alone.
-
-    A single group larger than ``limit`` becomes its own batch — dropping it would be worse
-    than exceeding the limit, and the caller has already been warned by
-    :func:`check_import_size`.
+    """Split a sheet into jobs no larger than `limit`, keeping each target's replicates together; a
+    single oversized group becomes its own batch.
     """
     groups: dict[str, list[dict]] = {}
     for row in sheet_rows:
@@ -285,11 +253,7 @@ class PairedCheck:
 
 
 def check_paired_selection(choice: str, *, layouts: set[str]) -> PairedCheck:
-    """Is ``choice`` coherent with the study's read layout?
-
-    ``layouts`` is the set of ENA ``library_layout`` values across the study's runs. An empty
-    set means the layout was never established, which is refused rather than assumed — the
-    whole point is to stop guessing about mates.
+    """Is the `paired` choice coherent with the study's read layouts? An unknown layout is refused.
     """
     choice = str(choice or "").strip().lower()
     if choice not in _VALID:

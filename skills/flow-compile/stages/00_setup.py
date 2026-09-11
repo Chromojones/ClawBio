@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""Stage 00 — establish the run directory and the credentials everything else assumes.
+"""Stage 00 — the run directory, credentials, and the project.
 
-First stage, so it has no prerequisites and is the only one that may run against a bare
-directory. Its whole job is to make the next sixteen stages able to assume a `state.json`, an
-output directory that exists, and either working credentials or an explicit record that the
-run is offline.
-
-Credentials are minted into a token here rather than at each network stage, because the
-alternative is a prompt arriving in the middle of a long import.
+The only stage that runs against a bare directory. Credentials are minted into a token here so
+no later stage prompts mid-run; `--offline` records that none exist. The project is adopted
+(`--project-id`) or created (`--create-project`).
 """
 
 from __future__ import annotations

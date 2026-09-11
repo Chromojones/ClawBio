@@ -1,22 +1,14 @@
 #!/usr/bin/env python3
 """Flow Compile — drive the CLIP upload stages in order.
 
-This used to be 1,026 lines with every stage body inside one function, and that function's
-control flow was the dependency graph. The bodies now live in `stages/`, numbered in running
-order, and what is left here is the part that could not move: which stage comes next, and
-which line this run is on.
-
-The stage model has one real cost — sixteen scripts is easy to lose your place in — so the
-driver answers "where am I" from `state.json` rather than from memory:
+Knows the stage order and which line the run is on, and answers "where am I" from `state.json`:
 
     python3 flow_compile.py --status --output <dir>     what has run, and what is waiting
     python3 flow_compile.py --next   --output <dir>     the command to run next
-    python3 flow_compile.py --run    --output <dir> ... run stages until one stops
+    python3 flow_compile.py --run    --output <dir>     run stages until one stops
 
-A gate is not a failure. `--next` re-offers a gated stage rather than stepping past it,
-because the run is paused on a person, not broken. Stages whose required flags only the
-operator can supply (evidence files, maps) are printed with placeholders rather than run:
-`--run` resumes a configured run; it does not replace running those stages by hand.
+`--next` re-offers a gated stage and prints required flags as placeholders; `--run` stops at
+gates and before any stage whose flags only the operator can supply.
 
 See `reference/stages.md` for what each stage decides.
 """
@@ -55,10 +47,7 @@ _LINES = {"direct": DIRECT_LINE, "local": LOCAL_LINE}
 
 
 def planned_stages(output_dir) -> list[str]:
-    """The stages this run will take, as far as the route is known.
-
-    Before 06_route there is no line, so only the trunk is planned. Guessing one would put a
-    stage in the list that this study may never run.
+    """The stages this run will take, as far as the route is known; the trunk alone before 06.
     """
     try:
         line = st.load(output_dir)["route"].get("line", "")
@@ -83,12 +72,7 @@ def command_for(name: str, output_dir) -> list[str]:
 
 
 def required_flags(name: str) -> list[tuple[str, str]]:
-    """The stage's own required flags beyond --output, read from its parser.
-
-    `--next` used to print commands that exited 2: stages 02, 03, 04, 11 and 13 take
-    required flags whose values only the operator knows, and a printed command that dies on
-    argparse reads as the thing to run. Asking each stage's parser keeps this list from
-    drifting the way a table here would.
+    """The stage's required flags beyond --output, from its parser, so `--next` prints runnable commands.
     """
     import importlib.util
 

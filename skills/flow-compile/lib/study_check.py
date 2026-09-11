@@ -1,14 +1,9 @@
-"""Is this study fetchable, and is it already on Flow?
+"""Is the study public, and is it already on Flow? Pure; `01_study` supplies the evidence.
 
-Two questions asked back to back before anything is built, previously in two modules with two
-``Check`` dataclasses between them.
+The prior-upload check searches Flow for the study's own identifiers, because comparing our
+chosen sample names misses a study uploaded under another naming convention.
 
-The second exists because ``import_check.find_already_present()`` is not enough on its own: it
-compares the sheet's sample *names*, which we choose, so a study uploaded earlier under a
-different naming convention reports "none (clean import)" and is imported a second time.
-Searching Flow for the study's own identifiers catches what name comparison cannot.
-
-Pure. Story: FAILURES.md#study-check
+Story: FAILURES.md#study-check
 """
 
 from __future__ import annotations
@@ -51,11 +46,8 @@ class Availability:
 
 
 def parse_geo_response(accession: str, body: str) -> Availability:
-    """Classify a GEO ``form=text`` response.
-
-    A released series answers in SOFT (``^SERIES`` / ``!Series_…``); anything else is an
-    HTML page explaining why not. An empty body is treated as *not* public — a failed fetch
-    read as success is how a phantom result gets into a report.
+    """Classify a GEO `form=text` response: SOFT means released; anything else, including an empty
+    body, is not public.
     """
     text = (body or "").strip()
     if not text:
@@ -106,12 +98,8 @@ _GENERIC_TARGETS = {"SMINPUT", "INPUT", "IGG", "GFP", "CONTROL", "NO ANTIBODY"}
 
 
 def query_kinds(sheet_rows: list[dict], *, extra: list[str] | None = None) -> dict[str, str]:
-    """Label each query by how much weight its match carries.
-
-    Only an ``accession`` match proves this exact data is already on the platform. A
-    ``target`` match means some study of that protein exists, which may well be a different
-    paper — two labs CLIPping the same protein is normal and must not be blocked. ``extra``
-    terms (cell lines, title words) match almost anything.
+    """Label each query by the weight of a match: `accession` proves the data is present, `target`
+    only that the protein has been studied, `extra` terms match almost anything.
     """
     kinds: dict[str, str] = {}
     for row in sheet_rows:
@@ -195,14 +183,8 @@ class Hits:
 
 
 def build_search_queries(sheet_rows: list[dict], *, extra: list[str] | None = None) -> list[str]:
-    """Terms worth searching, in the order most likely to be decisive.
-
-    Accessions first — they are unique to the study and survive inside deposited filenames.
-    Then real protein targets. Control targets are skipped: ``SMInput`` matches every eCLIP
-    study on the platform and would bury a true positive in noise.
-
-    ``geo`` and PubMed ids are deliberately absent — the endpoint does not index them, so
-    including them would only pad a clean result with queries that can never match.
+    """Terms worth searching, most decisive first: accessions, then real protein targets. Control
+    targets and GEO/PubMed ids are left out; the endpoint does not index the ids.
     """
     queries: list[str] = []
     for row in sheet_rows:
@@ -221,11 +203,8 @@ def build_search_queries(sheet_rows: list[dict], *, extra: list[str] | None = No
 
 
 def summarise_hits(results: dict[str, dict | None], *, kinds: dict[str, str] | None = None) -> Hits:
-    """Fold ``{query: search_response}`` into a verdict.
-
-    A ``None`` response marks a query that errored. That is the opposite of an empty result
-    and is reported separately — swallowing it would let a failed lookup read as "absent",
-    the same conflation that once turned a broken listing into a silent no-op upload.
+    """Fold `{query: response}` into a verdict. A `None` response is an error, reported separately
+    from an empty result.
     """
     hits = Hits(total_queries=len(results))
     for query, response in results.items():

@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 """Stage 03 — the 5' barcode of every sample. HARD STOP.
 
-Barcodes are never inferred and accepted in the same breath. This stage gathers evidence and
-stops; supplying the confirmed file is the decision. That is why a gate has its own exit code:
-nothing here is wrong, it is waiting on a person.
+Gathers evidence from the series matrix, GEO sample pages and the paper text, writes
+`barcode_proposals.json` and `CONFIRM_BARCODES.md`, and stops at exit 3; supplying the confirmed
+file with `--accept-proposals` is the approval. Composition corroborates the layout but cannot
+settle the UMI's last base, so its length comes from the authors' pipeline config.
 
-Evidence comes from the study's own record first — GEO sample pages, the series matrix, and
-the paper text — because those name the barcode, while reads only constrain it. Per-position
-base composition corroborates: a fixed base sits far from even (~75% deviation), a randomer
-near it (~4%).
-
-What composition cannot settle is the UMI's last base. On GSE131210 position 13 measured 7.9%
-off even, between random and genomic, because it is the terminal N of a synthesized oligo. So
-the layout is reported as a RANGE and the length comes from the authors' pipeline config.
+Story: FAILURES.md#read-structure
 """
 
 from __future__ import annotations

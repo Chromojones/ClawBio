@@ -1,34 +1,9 @@
-"""Two independent sources must agree about the reference — and must actually be compared.
+"""Cross-check the reference files a prep execution resolved against a completed run of the same
+organism. Pure; the caller fetches both.
 
-Before a CLIP execution is submitted, 21 reference files are resolved by filename from the
-genome prep execution, then cross-checked against a *completed* run of the same organism. Two
-sources, so a silently wrong reference cannot reach the pipeline.
-
-The obvious implementation has a hole::
-
-    shared = set(prep) & set(reference_run)
-    if any(prep[k] != reference_run[k] for k in shared): refuse
-
-If the two share no keys, ``shared`` is empty, nothing is compared, no disagreement is found,
-and the submitter proceeds after printing ``0 cross-checked``. **Zero disagreements is not
-agreement** — the same shape as a database search that runs no queries and reports the study
-absent.
-
-Two live routes into it:
-
-- **The reference run is a different organism.** GSE63262 is the first *Drosophila* study, so
-  no completed fly CLIP run exists; the constant still pointed at a mouse execution inherited
-  from the previous study's submitter. Mouse and fly share key names, so that case refuses
-  loudly — but only by luck of the naming.
-- **The reference run's ``data_params`` is shaped differently** — empty, or keyed by file id
-  instead of by role. Then the intersection genuinely is empty and the check evaporates.
-
-So three outcomes are distinguished, never two: **agreed**, **disagreed**, and **not
-compared**. The first study of any new organism legitimately has nothing to compare against;
-that is normal, and it has to be declared in words and recorded in the output rather than
-falling out of an empty set intersection.
-
-Pure — the caller fetches both executions.
+Three outcomes: agreed, disagreed, and not compared. Mappings that share no keys compare
+nothing, which must not read as agreement; the first study of an organism states why there is
+nothing to compare.
 """
 
 from __future__ import annotations
@@ -67,10 +42,8 @@ def cross_check_reference(
     *,
     no_reference_run_reason: str = "",
 ) -> CrossCheck:
-    """Compare two independently-resolved reference mappings.
-
-    ``reference_params`` of ``None`` means no completed run was supplied at all — legitimate
-    for the first study of an organism, but only with a stated reason.
+    """Compare two independently resolved reference mappings. `reference_params` of None needs a
+    stated reason.
     """
     if reference_params is None:
         if no_reference_run_reason.strip():

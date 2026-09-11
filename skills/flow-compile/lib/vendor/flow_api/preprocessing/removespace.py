@@ -4,20 +4,11 @@ import sys
 import subprocess
 
 def _clean_header_line(text: str) -> bytes:
-    """Normalize a FASTQ header or plus line: spaces out, slashes LEFT ALONE.
+    """Normalise a FASTQ header or plus line: spaces become underscores, slashes stay.
 
-    Replacing `/` as well silently destroys a header-borne UMI, so this deliberately does
-    not. For a header whose UMI sits in the comment field:
-
-        @SRR123.1 1:N:0:CTACGCTCTAAA/1
-      slashes replaced -> @SRR123.1_1:N:0:CTACGCTCTAAA_1  last `_` field = "1"  CONSTANT
-      as written here  -> @SRR123.1_1:N:0:CTACGCTCTAAA/1     last `_` field = "CTACGCTCTAAA/1"  varies
-
-    UMI-collapse keys on that final field. Constant across every read, it treats the whole
-    library as duplicates of one read and collapses it to near nothing, with no error.
-
-    Spaces still have to go: the SAM QNAME ends at the first whitespace, so anything after
-    one is dropped at alignment.
+    A space ends the SAM QNAME, so text after it is lost at alignment. A slash must stay: in
+    `@SRR123.1 1:N:0:CTACGCTCTAAA/1` replacing it makes the last `_` field a constant `1`, and UMI
+    deduplication would collapse the whole library.
     """
     s = text.strip().replace(' ', '_')
     return s.encode() + b'\n'

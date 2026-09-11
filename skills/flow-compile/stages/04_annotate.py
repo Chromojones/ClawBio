@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Stage 04 — names, target, tag, agent, source, organism.
 
-The sole writer of annotation content. `annotation.raw.csv` is what this stage produces;
-later stages that touch filenames regenerate from it rather than editing in place, which is
-what stops the old "run the command three times so the filenames catch up" loop.
-
-Paper enrichment runs here when a PMID is present. When it is not, the field checks still
-run: a series without `!Series_pubmed_id` previously got no validation at all.
+The sole writer of annotation content (`annotation.raw.csv`). Enriches from the paper when a
+PMID is present (not on an `--offline` run), promotes read 2 for eCLIP, and records the sample
+count 12 checks against the per-execution ceiling.
 """
 
 from __future__ import annotations

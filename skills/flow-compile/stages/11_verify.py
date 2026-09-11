@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Stage 11 — did the samples arrive as the sheet described them? CHECK, then repair.
+"""Stage 11 — did the samples arrive as the sheet described them? CHECK.
 
-The import job discards `__annotation` columns. They are sent exactly as the upload path sends
-them — every non-reserved column goes into one flat metadata dict — and the loss happens
-server-side, so nothing in the job output says a field went missing. This stage compares the
-sheet against what Flow actually holds and repairs the difference through
-`POST /samples/{id}/edit`, which does honour the same flat key.
+Compares the live samples against the sheet that produced them, in Flow's keys. Differences are
+written to `repair_edits.csv` for `flow_edit_samples.py` to apply; missing samples are reported
+as a failed import. Samples pair to rows by name, which the import preserves.
 
-Samples are paired to rows by name, which the import preserves verbatim. Rows with no sample
-and samples with no row are both reported: an unpaired sample is usually debris from an earlier
-attempt, and deleting the wrong one is expensive.
+Story: FAILURES.md#import-check
 """
 
 from __future__ import annotations

@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
-"""Stage 201 — local line: get the reads on disk. Nothing here renames them.
+"""Stage 201 — local line: the reads directory and header state.
 
-The local line exists for one reason now: a study absent from SRA/ENA. Header-comment UMIs
-used to force it too, because the SAM QNAME whitespace boundary drops everything after the
-first space and takes the UMI with it. `removespace` runs inside the clip-seq pipeline now, so
-that is handled downstream.
-
-**This stage deliberately does no header cleaning.** Cleaning renamed every read to
-`*.cleaned.fastq.gz`, which made the annotation sheet's `File` column stale the instant it ran,
-and rebuilding the sheet against the new names is what forced the user to run the whole
-pipeline three times. With nothing renaming anything, the filenames chosen at annotation time
-are the filenames uploaded, and the metadata is built in one pass.
-
-Classifying the header still happens here. That reads the header; it does not rewrite the file.
+Records the reads directory (absolute, for 210's upload command) and classifies the supplied
+headers. It renames nothing: header cleaning runs in the clip-seq pipeline, so the filenames
+chosen at annotation are the filenames uploaded.
 """
 
 from __future__ import annotations

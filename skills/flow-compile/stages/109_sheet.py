@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
 """Stage 109 — build and check the accession sheet. CHECK.
 
-The sheet is the entire contract with `flowbio samples import`, and three of its rules were
-learned by having them fail.
+Writes `import_sheet.csv` for `flowbio samples import`: experiment accessions only (a run
+imports its whole parent experiment), no `strandedness` (refused for CLIP), and the total size
+within one import job when `--sizes` is given.
 
-Every accession must be an EXPERIMENT. A run is accepted and silently expanded to its parent,
-so a sheet of runs imports more than it names and still reports COMPLETED.
-
-`strandedness` must not appear for CLIP. `batch-template --sample-type CLIP` lists it as
-required and the endpoint rejects it, which cost ten uploads before it was stripped here.
-
-The whole job must fit. A study of 132.7 GB failed with `exit status 4` while ENA was provably
-healthy; the bytes counted are the effective ones, so a sheet of runs is measured as the
-experiments it will actually pull.
+Story: FAILURES.md#import-guards
 """
 
 from __future__ import annotations

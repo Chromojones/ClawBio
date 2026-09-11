@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Stage 210 — local line: upload the reads with their metadata.
+"""Stage 210 — local line: the upload sheet, and the command that uploads it.
 
-Unlike the import job, the upload path honours `__annotation` columns, so annotations arrive
-with the samples and need no repair afterwards. `strandedness` is still stripped: the CLIP
-template lists it as required and the endpoint refuses it.
-
-Deleting a read mate to correct a mistake silently breaks the sample. Upload only the mate
-you want.
+Writes `upload_sheet.csv` and prints the vendored upload command, `--dry-run` first. The upload
+path keeps `__annotation` columns, so no repair pass follows; `strandedness` is stripped because
+the endpoint refuses it for CLIP.
 """
 
 from __future__ import annotations

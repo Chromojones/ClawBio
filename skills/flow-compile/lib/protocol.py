@@ -1,18 +1,9 @@
-"""What CLIP protocol is this, and what follows from it?
+"""The CLIP protocol a study used, and what follows from it. Pure.
 
-One place that knows protocol names. ``is_eclip_method`` previously existed twice with two
-sources of truth — ``pipeline_params`` read a module constant, ``flow_annotate`` inlined the
-same set as a literal — and this answer decides which mate carries the crosslink.
+Detection order matters: `PAR-iCLIP` is tested before `PAR-CLIP` and `iCLIP`, which would each
+match part of it. FLASH, uvCLAP and PAR-CLIP are detected so they can be refused by name.
 
-Detection order is load-bearing. ``PAR-iCLIP`` must be tested before both ``PAR-CLIP`` and
-``iCLIP``: ``par[\\s-]?clip`` cannot match "PAR-iCLIP" because the next token is ``iclip``, not
-``clip``, and the bare ``iclip`` pattern then matches the tail of that same word. GSE207656
-read as ``iCLIP`` for months for exactly that reason.
-
-FLASH and uvCLAP are still *detected* although the skill no longer processes them: naming a
-study correctly and refusing it beats silently mislabelling it ``iCLIP``.
-
-Pure. Story: FAILURES.md#protocol-detection
+Story: FAILURES.md#protocol-detection
 """
 
 from __future__ import annotations
@@ -70,12 +61,8 @@ def match_method(text: str) -> str:
 
 
 def detect_method(protocol: str, series_title: str = "") -> str:
-    """Resolve the protocol, preferring the series title over protocol prose.
-
-    The title names the assay; extract protocols routinely cite *other* protocols ("as
-    described for eCLIP…"), so matching the protocol blob first mislabels studies. Unknown
-    protocols fall back to ``iCLIP``, the most common flavour — a guess, and surfaced as one
-    by the metadata hook rather than trusted silently.
+    """The protocol, preferring the series title over protocol prose, which often cites other
+    protocols. An unknown protocol falls back to iCLIP and is surfaced by the metadata gate.
     """
     return match_method(series_title) or match_method(protocol) or "iCLIP"
 

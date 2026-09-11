@@ -1,19 +1,6 @@
-"""The import round trip: what is already there, what arrived, what to fix.
+"""The import round trip: what the project holds, what arrived, and what to fix. Pure.
 
-Preflight, verify and repair are three phases of one question, and they carried two copies of
-the same constant under two names — ``import_verify._NON_METADATA_COLUMNS`` and
-``import_repair._NON_METADATA``, both ``{accession, sample_type, name, organism}``.
-
-Both were right for flowbio 0.10.0 and both went stale when ``project`` became a reserved
-import-sheet column in 0.12.0: a reserved column then reads as a metadata column, so
-``live_metadata()`` looks for ``metadata["project"]``, finds nothing (the API returns it at the
-top level), and every sample is reported as ``project dropped by the import`` while the repair
-plan queues an edit re-setting a project that is already correct.
-
-The set now has one definition, taken from ``sra_import.RESERVED_SHEET_COLUMNS``, which is
-itself asserted equal to flowbio's own ``RESERVED_COLUMNS``.
-
-Pure. Story: FAILURES.md#import-check
+Story: FAILURES.md#import-check
 """
 
 from __future__ import annotations
@@ -59,11 +46,8 @@ def _metadata_block(sample: dict, field: str) -> dict:
 
 
 def live_metadata(sample: dict, column: str) -> str:
-    """Read a sheet column off a live sample, resolving ``__annotation`` to the nested key.
-
-    ``source__annotation`` is not a field of its own: it is the ``annotation`` key of the
-    ``source`` block. Reading flat keys is what made an earlier verifier pass on samples
-    whose metadata had never been written.
+    """A sheet column read off a live sample; an `__annotation` column resolves to the nested
+    `annotation` key of its parent field.
     """
     if column.endswith(ANNOTATION_SUFFIX):
         return str(_metadata_block(sample, column[: -len(ANNOTATION_SUFFIX)]).get("annotation") or "")
@@ -85,19 +69,10 @@ def find_import_discrepancies(
     expect_pubmed: str = "",
     expect_reads: bool = True,
 ) -> list[Discrepancy]:
-    """Compare each sheet row against the sample it produced.
+    """Compare each sheet row against the sample it produced, paired by name.
 
-    Samples are paired to rows by ``name``, which the import preserves verbatim. Rows with
-    no sample and samples with no row are both reported: an unpaired sample is usually
-    debris from an earlier attempt, and deleting the wrong one is expensive.
-
-    A sample carrying no ``metadata`` block at all raises ``ValueError`` — that is the
-    trimmed listing shape, and reporting it as a wall of missing fields would bury the one
-    real finding.
-
-    ``live_samples`` may be a plain list or a listing envelope. An envelope is checked
-    against its own ``count`` first: a single page of a paginated project would otherwise
-    report every unfetched sample as missing from the import.
+    Rows with no sample and samples with no row are both reported. A sample with empty `metadata`
+    (the trimmed listing shape) raises, and an envelope shorter than its `count` is refused.
     """
     if isinstance(live_samples, dict):
         _refuse_if_truncated(live_samples, live_samples.get("samples") or [], "verification")
@@ -270,10 +245,8 @@ def _mismatches(row: dict, sample: dict, project_id: str) -> dict:
 def build_repair_plan(
     sheet_rows: list[dict], live_samples: list[dict], *, project_id: str = ""
 ) -> list[RepairEdit]:
-    """Edits needed to make the live samples match the sheet.
-
-    Built from observed state, not from a record of what was written, so a resumed run skips
-    what is already correct and plans only the remainder.
+    """Edits that make the live samples match the sheet, built from observed state so a resumed run
+    plans only what is still wrong.
     """
     by_name = {s.get("name"): s for s in live_samples}
     plan: list[RepairEdit] = []
@@ -296,11 +269,7 @@ def summarise_repair(
     project_id: str = "",
     edits_applied: int = 0,
 ) -> RepairResult:
-    """Is the repair finished?
-
-    ``edits_applied`` is accepted and deliberately unused. Counting writes is what made a
-    34-sample repair that stopped at 11 look successful; only re-reading every sample settles
-    it.
+    """Is the repair finished? Settled by re-reading every sample; `edits_applied` is ignored.
     """
     del edits_applied
     plan = build_repair_plan(sheet_rows, live_samples, project_id=project_id)
@@ -319,12 +288,8 @@ def summarise_repair(
 
 
 def names_from_listing(payload: dict | None) -> set[str]:
-    """Sample names from a project listing response.
-
-    Raises when the payload is not a listing. "I saw nothing" and "I could not look" are
-    opposite conclusions here, and conflating them is how a failed lookup became a silent
-    no-op upload that reported success. A listing response has a ``samples`` key; a project
-    response has ``id`` and ``name``, so passing the wrong one is a real and easy mistake.
+    """Sample names from a project listing. Raises on a payload that is not a listing, or that holds
+    fewer samples than it promises: a failed or partial lookup must not read as an empty project.
     """
     if not isinstance(payload, dict) or "samples" not in payload:
         raise ValueError(
@@ -338,11 +303,7 @@ def names_from_listing(payload: dict | None) -> set[str]:
 
 
 def _refuse_if_truncated(payload: dict, items: list, what: str) -> None:
-    """A listing holding fewer samples than its envelope promises proves nothing.
-
-    ``count`` is the project total, not the page size, so this is decidable rather than
-    guessed. The pre-flight direction is the dangerous one: a truncated page yields no name
-    collisions, which reads as "clean import" and duplicates the study.
+    """Raise when a listing holds fewer samples than its `count`: one page is not the project.
     """
     total = payload.get("count")
     if isinstance(total, int) and len(items) < total:
@@ -354,11 +315,8 @@ def _refuse_if_truncated(payload: dict, items: list, what: str) -> None:
 
 
 def find_already_present(sheet_rows: list[dict], existing_names: set[str]) -> list[str]:
-    """Sheet names that the project already holds, in sheet order.
-
-    A non-empty result means the import would duplicate. Whether that is wrong depends on
-    intent — resuming a partial import is legitimate — so this reports rather than refuses,
-    and the caller decides.
+    """Sheet names the project already holds, in sheet order. Reports rather than refuses, since
+    resuming a partial import is legitimate.
     """
     return [
         name

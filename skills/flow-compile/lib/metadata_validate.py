@@ -1,24 +1,8 @@
-"""Metadata accuracy guardrails for the Flow annotation table.
+"""Metadata accuracy checks for the annotation table, run by `05_metadata`.
 
-The three fields below are the ones that drift between models, because the GEO series
-matrix either omits them or states them loosely, leaving the agent to choose:
-
-  * ``Purification Agent``  — the antibody. GEO usually has nothing; the paper's Key
-    Resources table often lists several antibodies for the same protein (Western vs
-    IP), so only the assay-specific Methods sentence identifies the right one.
-  * ``Cell or Tissue``      — GEO ``source_name_ch1`` is frequently a supplier phrase
-    ("ATCC Cell Lines") or a generic descriptor ("human embryonic kidney") rather than
-    the actual line (HeLa, HEK293T).
-  * ``Purification Target Annotation`` — the tag (GFP/FLAG/V5...). Must be empty for an
-    endogenous IP and must never be invented for a size-matched input.
-
-This module is **pure and offline**: it validates what has already been assembled and
-hands the researcher a confirmation hook. It never rewrites a value silently — the one
-transformation it does perform, :func:`normalize_purification_agent`, only collapses
-formatting variants of the *same* antibody onto one canonical spelling.
-
-Severity contract: ``ERROR`` blocks the pipeline until the researcher approves;
-``WARNING`` is surfaced for review but does not block.
+Pure and offline. The one rewrite it performs, `normalize_purification_agent`, only collapses
+formatting variants of the same antibody. `ERROR` stops the metadata gate; `WARNING` is shown
+for review.
 """
 
 from __future__ import annotations
@@ -143,12 +127,9 @@ def split_vendor_catalog(inner: str) -> tuple[str, str]:
 def normalize_purification_agent(value: str) -> str:
     """Collapse formatting variants onto the canonical Flow spelling.
 
-    ``Rabbit anti-PARP13 (Thermo Fisher, cat# PA5-31650)``
-    → ``Rabbit Anti-PARP13 (Thermo Fisher PA5-31650)``
-
-    Returns ``""`` when the value is not a parseable antibody — that includes the
-    vendor-less forms this skill itself used to synthesize (``CPSF5 antibody``,
-    ``V5-antibody``), which are exactly the values we must stop accepting.
+    `Rabbit anti-PARP13 (Thermo Fisher, cat# PA5-31650)` → `Rabbit Anti-PARP13 (Thermo Fisher
+    PA5-31650)`. Returns "" when the value is not a parseable antibody, including vendor-less prose
+    such as `CPSF5 antibody`.
     """
     collapsed = re.sub(r"\s+", " ", str(value or "")).strip()
     if not collapsed:
@@ -467,10 +448,8 @@ def _name_tokens(name: str) -> set[str]:
 
 
 def _annotation_tag(annotation: str) -> str:
-    """The tag half of an annotation, upper-cased, with the mutation and n/c prefix stripped.
-
-    `100Q-nFLAG-HA-HIS` -> `FLAG-HA-HIS`. Uses the annotation grammar rather than a bare
-    prefix strip, so a mutation is never mistaken for part of the tag.
+    """The tag of an annotation, upper-cased, mutation and n/c prefix stripped: `100Q-nFLAG-HA-HIS`
+    → `FLAG-HA-HIS`. "" when the annotation names no tag.
     """
     annotation = str(annotation or "").strip()
     match = _TAG_RE.match(annotation) if annotation else None
@@ -482,15 +461,8 @@ def _annotation_tag(annotation: str) -> str:
 
 
 def _tag_components(tag: str) -> set[str]:
-    """Every epitope an antibody could legitimately be raised against for this tag.
-
-    A composite cassette is a real tag whose parts are individually targetable: an anti-HA
-    pulldown of a FLAG-HA-HIS construct is correct by construction, exactly as anti-Myc
-    against `nMYC` is. Copy-number prefixes are equivalent to the bare epitope, so anti-FLAG
-    against `3xFLAG` is clean too.
-
-    Matching the whole string only, as this once did, produced 41 false warnings on
-    GSE131210 and buried the one true one (anti-HA against a FLAG-only SF3B1 construct).
+    """Every epitope an antibody may legitimately target for this tag: each part of a composite
+    cassette, and the bare epitope for a copy-number prefix (`3xFLAG` → `FLAG`).
     """
     parts = {tag}
     for part in tag.split("-"):
@@ -569,16 +541,7 @@ from lib.organism import ORGANISM_CODES  # noqa: E402,F401
 
 
 def validate_organism(value: str) -> list[Check]:
-    """Organism must be Flow's two-letter code, not a Latin or common name.
-
-    GSE159997's upload sheet carried ``Mus musculus`` and every row was rejected with
-    ``{'organism': ['Does not exist.']}`` — after the FASTQs had been staged and the
-    uploader had started walking rows. Both the import and the upload path take the code;
-    there is no asymmetry between them, the Latin name is simply wrong everywhere.
-
-    Case-sensitive, because the API is: accepting ``mm`` here would only move the failure
-    downstream.
-    """
+    """Organism must be a Flow two-letter code; case-sensitive, as the API is."""
     field = "Organism"
     raw = str(value or "").strip()
     if not raw:
@@ -666,19 +629,11 @@ def replicate_token(sample_name: str) -> str:
 
 
 def find_replicate_collisions(annotation: pd.DataFrame) -> list[MetadataIssue]:
-    """Two rows sharing target + condition + replicate number lost a distinction.
+    """Rows sharing target, condition and replicate number lost a distinguishing variable — usually
+    a size-matched input recorded as the IP.
 
-    Nothing can be replicate 1 of the same target under the same condition twice. When it
-    happens, some variable that separates the two samples was dropped — overwhelmingly, an
-    eCLIP size-matched input recorded as though it were the IP.
-
-    This exists because the control check in `validate_target_and_annotation` keys off the
-    sample **name** containing `input`/`SMInput`. On GSE290281's first batch the naming step
-    had failed in exactly the same way, so that check saw nothing and 8 mislabelled inputs
-    passed clean. A guardrail must not depend solely on the field that is also wrong.
-
-    Condition participates in the key so legitimate designs survive: GSE76475 has RBFOX1
-    replicate 1 in both the HMW and soluble fractions, which is not a collision.
+    Independent of the sample name, which the control check reads and which can be wrong the same
+    way. Condition is part of the key so fractionated designs are not flagged.
     """
     groups: dict[tuple[str, str, str, str, str, str], list[str]] = {}
     for _, row in annotation.iterrows():

@@ -41,17 +41,8 @@ def derive_clip_pipeline_params(
     experimental_method: str = "",
     skip_umi_dedupe: str = "false",
 ) -> dict[str, str]:
-    """
-    Flow CLIP execution params from header inspection + confirmed barcodes.
-
-    eCLIP / seCLIP:
-    - UMI already in header (:rbc:) → move_umi_to_header=false, umi_separator=rbc:,
-      encode_eclip=true (pre-extracted ENCODE-style dumps).
-    - UMI still in read sequence (raw SRA) → move_umi_to_header=true, umi_separator=_,
-      umi_header_format from 5′ barcode (typically 10N), encode_eclip=false.
-      Flow Trim Galore + UMI tools extract to header with `_`, then umi_collapse.
-
-    Other CLIP methods: same header rules; encode_eclip stays false.
+    """Params from a two-boolean header inspection. No stage uses it: `header_state.params_for_state`
+    is the derivation, and handles the four header states this cannot tell apart.
     """
     eclip = is_eclip_method(experimental_method)
 
@@ -103,12 +94,8 @@ MAX_SAMPLES_PER_EXECUTION = 18
 
 
 def chunks_for(sample_count: int) -> int:
-    """How many executions ``sample_count`` samples need.
-
-    Expressed this way round because the rule is known in samples per execution while the
-    analysis script takes ``-n``, a number of BATCHES. Passing 18 straight through as ``-n``
-    is the mistake: for 200 samples it makes 18 executions of 11, and for 12 samples it makes
-    18 executions of one.
+    """How many executions `sample_count` samples need at 18 per execution. The runner's `-n` is a
+    number of batches, not samples per batch.
     """
     count = max(0, int(sample_count))
     if count <= MAX_SAMPLES_PER_EXECUTION:
@@ -117,13 +104,7 @@ def chunks_for(sample_count: int) -> int:
 
 
 def check_execution_batches(sample_count: int, num_chunks: int) -> list:
-    """Does this split keep every execution within the ceiling?
-
-    This is the check that replaced the fourth hard stop. Once the parameters are approved at
-    108 there is nothing further for a person to decide at submission time — the parameters
-    *are* the decision. What actually made submission risky was the batch size, and a ceiling
-    is something a machine can enforce without asking anyone.
-    """
+    """Does this split keep every execution within 18 samples? A rule `12_analysis` enforces."""
     from lib.results import ERROR, Finding, WARNING
 
     count = max(0, int(sample_count))

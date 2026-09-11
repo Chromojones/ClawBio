@@ -1,26 +1,9 @@
-"""Build the accession sheet for `flowbio samples import` (SRA/ENA → Flow, no download).
+"""The accession sheet for `flowbio samples import`, written by `109_sheet`.
 
-Three constraints are hard-won from the live API (GSE215250, flowbio 0.10.0-0.12.0) and are
-enforced here rather than left to the caller:
-
-1. **The accession must be an experiment (SRX/ERX/DRX), not a run.** A run accession is
-   *accepted* and then **silently expanded to its parent experiment** — importing
-   ``SRR3175580`` yielded one sample holding all four runs of ``SRX1590001`` (10 GB), and
-   the job reported ``COMPLETED``. A study whose replicates are separate runs of one
-   experiment therefore cannot be imported per replicate by this route at all.
-   (An earlier revision of this file claimed ``HTTP 500``; re-tested 2026-08-12 on
-   GSE78030, that is no longer the behaviour.)
-2. **``project`` IS a column, from flowbio 0.12.0.** 0.10.0 reserved only
-   ``(accession, name, organism, sample_type)``, so every imported study landed unattached and
-   needed a second pass. 0.12.0 reserves ``project`` and ``pubmed`` too and maps them onto the
-   import spec. Anything outside the reserved set is still treated as metadata, so on
-   0.10.0 a stray ``project`` key was silently ignored and the samples landed unattached.
-3. **``strandedness`` is rejected for CLIP** (``422 … not a valid attribute for this
-   sample type``) even though ``samples batch-template --sample-type CLIP`` lists it as
-   required. It is an RNA-Seq field.
-
-Required for a CLIP import: ``accession``, ``sample_type``, ``name``,
-``five_prime_barcode_sequence``, ``purification_target``.
+Accessions must be experiments (SRX/ERX/DRX): a run is silently expanded to its parent
+experiment. `project` and `pubmed` are reserved columns (flowbio ≥ 0.12.0). `strandedness` is
+refused for CLIP although `batch-template` lists it. Required: `accession`, `sample_type`,
+`name`, `five_prime_barcode_sequence`, `purification_target`.
 """
 
 from __future__ import annotations
@@ -93,15 +76,8 @@ def _accession_for_row(row: pd.Series) -> str:
 
 
 def annotation_is_transportable_in_value() -> bool:
-    """Can an annotation ride inside its attribute's value, separated by a colon?
-
-    No. Flow's UI *renders* an annotated attribute as ``value:annotation``, which reads like an
-    input convention and is not one. Verified against the live API on sample
-    499341935928905194: setting ``source`` to ``"U87:TESTANNOT"`` stored the colon literally
-    (``value='U87:TESTANNOT'``) and left ``annotation='Glioblastoma'`` untouched. The server
-    keeps ``annotation`` as its own field.
-
-    Encoding one that way would write a literal colon into the purification target.
+    """Can an annotation ride in its attribute's value as `value:annotation`? No: Flow stores the
+    colon literally and keeps `annotation` as its own field.
     """
     return False
 
@@ -126,12 +102,9 @@ def build_import_sheet(
     sample_type: str = "CLIP",
     project_id: str = "",
 ) -> pd.DataFrame:
-    """Map an annotation table onto a flowbio accession sheet.
+    """Map an annotation table onto a flowbio accession sheet; empty optional columns are dropped.
 
-    Empty optional metadata columns are dropped entirely rather than emitted blank, so an
-    endogenous IP's empty tag annotation does not become a meaningless empty field.
-
-    :raises ValueError: if any row lacks a usable SRX/ERX/DRX experiment accession.
+    :raises ValueError: if any row lacks an SRX/ERX/DRX experiment accession.
     """
     if annotation is None or annotation.empty:
         return pd.DataFrame(columns=list(REQUIRED_CLIP_COLUMNS))
@@ -172,10 +145,8 @@ def build_import_sheet(
 
 
 def validate_import_sheet(sheet: pd.DataFrame) -> pd.DataFrame:
-    """Refuse a sheet the import endpoint would reject, before the network call.
-
-    One bad row fails the *whole* batch, and the API names the offender only by position
-    (``7.metadata.comments``), so checking locally is much cheaper than decoding that.
+    """Refuse a sheet the import endpoint would reject. One bad row fails the whole batch, and the
+    API names it only by position.
     """
     missing = [c for c in REQUIRED_CLIP_COLUMNS if c not in sheet.columns]
     if missing:

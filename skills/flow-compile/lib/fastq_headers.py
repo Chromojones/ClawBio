@@ -27,7 +27,7 @@ class HeaderInspection:
     notes: str = ""
     #: True when the UMI tag sits in the header's COMMENT (after the first space) rather
     #: than the read name. Aligners drop the comment, so the UMI never reaches the BAM and
-    #: dedup fails — the study cannot use SRA-direct import.
+    #: dedup fails
     umi_in_comment: bool = False
 
     @property
@@ -70,12 +70,7 @@ def sample_read_headers(fastq_path: Path, *, n_reads: int = 5, include_sequence:
 
 
 def srr_from_annotation_file(filename: str) -> str:
-    """The SRR embedded in an annotation `File` value, or "".
-
-    Lived in both UMI-extract modules and again as `flow_stages._srr_from_file`; the
-    UMI modules are gone, so it belongs beside `find_fastq_for_srr`, which answers the
-    inverse question.
-    """
+    """The SRR embedded in an annotation `File` value, or ""."""
     match = re.search(r"(SRR\d+)", str(filename))
     return match.group(1).upper() if match else ""
 

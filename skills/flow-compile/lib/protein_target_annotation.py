@@ -24,14 +24,9 @@ _KNOWN_TAGS = ("3xFLAG-HBH", "3xFLAG", "FLAG", "GFP", "V5", "HA", "MYC", "HBH", 
 
 
 def terminus_from_construct_name(text: str, protein_target: str) -> str:
-    """Infer `n`/`c` + tag from the order of tag and gene in a construct name.
-
-    `myc-LARP6` puts the tag first → **N-terminal**; `LARP6-myc` puts it last →
-    **C-terminal**. This is the first fallback when the paper does not state the terminus,
-    and it beats the blanket C-terminal default because it uses evidence from the study.
-
-    Returns ``""`` when the construct name does not contain both the tag and the gene, so
-    the caller can fall through to the platform default.
+    """`n`/`c` + tag from the order of tag and gene in a construct name: `myc-LARP6` → N-terminal,
+    `LARP6-myc` → C-terminal. "" when the name lacks either, so the caller falls back to the
+    C-terminal default.
     """
     target = str(protein_target or "").strip()
     blob = str(text or "")
@@ -63,11 +58,8 @@ def infer_purification_target_annotation(
     protein_target: str,
     extract_protocol: str = "",
 ) -> str:
-    """
-    Flow annotation sub-field on purification_target.
-
-    Format: terminal prefix (c/n) + tag, hyphen for composite tags — e.g. c3xFLAG-HBH.
-    Empty when endogenous antibody IP (FLASHendo) with no fusion tag.
+    """The tag annotation for purification_target: terminal prefix (`c`/`n`) plus tag, e.g.
+    `c3xFLAG-HBH`; empty for an endogenous IP.
     """
     expr = _expression_vector(characteristics)
     clip_ab = _clip_antibody(characteristics).lower()

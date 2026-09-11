@@ -1,26 +1,14 @@
 #!/usr/bin/env python3
-"""
-Diff updated public-samples CSV against a baseline pull, then push metadata to Flow.bio.
+"""Diff an updated public-samples CSV against a baseline pull, then push the changes to Flow.
 
-v2 adds REST /edit for attribute annotations on nested metadata objects:
-  - purification_target + purification_target__annotation
-  - source + source__annotation (annotation is the sub-field on source)
+Scalar fields go through GraphQL `updateSample`; `__annotation` sub-fields through REST
+`POST /samples/{id}/edit`.
 
-Transport:
-  - GraphQL updateSample: scalar metadata fields (not *_ _annotation)
-  - REST POST app.flow.bio/api/samples/{id}/edit: *_ _annotation keys (flat; matches GET)
-
-Credentials: FLOWBIO_USERNAME / FLOWBIO_PASSWORD or --username / --password.
+Credentials: FLOWBIO_USERNAME / FLOWBIO_PASSWORD, or --username / --password.
 
 Examples:
-  python3 flow_public_samples_push_metadata_v2.py --dry-run \\
-    --baseline flow_public_samples_pull_v7.csv \\
-    --updated flow_public_samples_bulk_push_w7_colleague_updates.csv
-
-  python3 flow_public_samples_push_metadata_v2.py --yes --allow-clear \\
-    --baseline flow_public_samples_pull_v7.csv \\
-    --updated flow_public_samples_bulk_push_w7_colleague_updates.csv \\
-    --username USER --password PASS
+  python3 flow_public_samples_push_metadata_v2.py --dry-run --baseline pull.csv --updated updated.csv
+  python3 flow_public_samples_push_metadata_v2.py --yes --allow-clear --baseline pull.csv --updated updated.csv
 """
 
 from __future__ import annotations

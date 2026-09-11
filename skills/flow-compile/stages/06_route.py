@@ -1,20 +1,8 @@
 #!/usr/bin/env python3
 """Stage 06 — SRA-direct or local, and which protocol. The branch.
 
-The routing rule is one condition, and it took two separate findings to get there.
-
-Historically the local line existed for four reasons: FLASH and uvCLAP read handling, a UMI
-sitting in the header comment, and a study simply absent from SRA. The first two are gone with
-those protocols removed. The third goes once `removespace` runs inside the clip-seq pipeline
-and stops turning a header comment into a constant final field. What is left is:
-
-    study not in SRA/ENA  -> local
-    otherwise             -> direct
-
-So SRA-direct is the path for essentially every study, which is what SKILL.md always claimed
-and was never true before.
-
-The protocol is recorded here too, because both lines need it and neither should re-derive it.
+A study absent from SRA/ENA goes local; every other study goes direct. The protocol is recorded
+here for both lines, and a refused or mixed protocol stops the run.
 """
 
 from __future__ import annotations

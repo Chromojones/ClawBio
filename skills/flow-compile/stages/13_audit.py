@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
 """Stage 13 — did every sample survive the run? CHECK.
 
-The closing check. An execution reported as finished is not the same as an execution that
-carried every sample through it, and the difference is invisible from the run's own status: a
-sample that failed one process, or quietly completed fewer stages than its peers, leaves the
-execution looking successful and the study short a replicate.
-
-`--running` reports only hard failures. Mid-run, a sample still working through the pipeline
-has legitimately not caught up, and calling that "dropped" would make the check useless exactly
-when it is most wanted.
+Compares each sample's completed processes against the run's deepest sample, so a sample that
+failed or silently stopped is reported. `--running` reports hard failures only.
 """
 
 from __future__ import annotations

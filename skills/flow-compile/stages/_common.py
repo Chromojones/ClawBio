@@ -1,11 +1,6 @@
-"""The contract every stage keeps, so that seventeen scripts behave like one command.
+"""The contract every stage keeps: arguments, prerequisites, outputs and exit codes.
 
-Splitting the orchestrator into stages only pays off if a reader can predict, without opening
-any of them, how a stage takes its arguments, where it writes, what its exit code means, and
-what happens when it is run twice. All of that lives here; a stage supplies a name, its
-prerequisites, its outputs, and a body.
-
-Exit codes are the interface:
+A stage supplies a name, its prerequisites, its outputs and a body; everything else is here.
 
 ===  ==========================================================================
 0    ok
@@ -14,9 +9,6 @@ Exit codes are the interface:
 4    check failed — the data is wrong
 5    prerequisite stage not ok — run that stage first
 ===  ==========================================================================
-
-3 versus 4 is the distinction the old orchestrator could not express. A barcode awaiting
-approval and a barcode that contradicts the reads both printed a warning and continued.
 
 Story: FAILURES.md#stage-contract
 """
@@ -101,12 +93,10 @@ def run_stage(
     outputs: Sequence[str] = (),
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Run one stage's body inside the contract. Returns the process exit code.
+    """Run one stage's body inside the contract; return the exit code.
 
-    The body is called only when the work is actually needed: prerequisites are checked first,
-    then the inputs digest, so re-running a completed stage costs nothing and re-running an
-    invalidated one recomputes. That is what removes the "run the command three times" loop —
-    a stage no longer has to be re-executed for a later one to see its output.
+    Prerequisites are checked first, then the inputs digest, so a completed stage whose inputs are
+    unchanged is not re-run and a changed input recomputes.
     """
     raw = list(sys.argv[1:] if argv is None else argv)
 

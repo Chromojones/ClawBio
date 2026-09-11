@@ -1,12 +1,4 @@
-"""Every HTTP call the skill makes, and one answer to "which project is this sample in?".
-
-Network access was written where it was first needed: ``_http_get`` twice (one copy had Range
-support, the other had HTTPError wrapping, neither had both), ``API_BASE`` twice outside
-``lib/vendor/``, and ``RestFlowApi`` inside a module about project assignment.
-
-``project_id_of`` existed three times because the API returns the field two ways — nested from
-``GET /samples/{id}``, bare from listings. The third copy handled only the nested shape and
-raised ``AttributeError`` on the other, in the repair stage, whose input is a listing.
+"""Every HTTP call the skill makes to Flow, and the helpers that read its responses.
 
 Story: FAILURES.md#flow-client
 """
@@ -27,10 +19,8 @@ USER_AGENT = "flow-compile/1.0"
 
 
 def project_id_of(sample: dict[str, Any] | None) -> str:
-    """The owning project id, whichever shape the API used.
-
-    ``GET /samples/{id}`` nests it (``{"project": {"id": "P1"}}``); listings return it bare
-    (``{"project": "P1"}``). Ids exceed 2^53 and are compared as strings everywhere.
+    """The owning project id, whether the API nested it (`GET /samples/{id}`) or not (listings).
+    Compared as strings: ids exceed 2^53.
     """
     project = (sample or {}).get("project")
     if isinstance(project, dict):
@@ -39,7 +29,7 @@ def project_id_of(sample: dict[str, Any] | None) -> str:
 
 
 def http_get(url: str, *, byte_range: int | None = None, timeout: int = 60) -> bytes:
-    """GET, with the Range support and the error wrapping that were in separate copies."""
+    """GET with an optional byte range; an HTTP error names the URL."""
     headers = {"User-Agent": USER_AGENT}
     if byte_range:
         headers["Range"] = f"bytes=0-{byte_range}"
@@ -52,23 +42,16 @@ def http_get(url: str, *, byte_range: int | None = None, timeout: int = 60) -> b
 
 
 def download_url(data_id: str, filename: str, *, base: str = "") -> str:
-    """The route that serves a data file's bytes.
-
-    Found by trial, so it is pinned by test: it sits under ``/api/`` unlike the app-level URLs,
-    and it takes a **Data** id despite the ``downloads`` prefix. The filename is quoted with no
-    safe characters, so a path separator inside it cannot walk out of the route.
+    """The route that serves a data file's bytes: under `/api/`, keyed by Data id, with the filename
+    quoted so a separator cannot escape the route.
     """
     root = (base or API_BASE).rstrip("/")
     return f"{root}/downloads/{data_id}/{urllib.parse.quote(str(filename), safe='')}"
 
 
 def resolve_token(explicit: str = "") -> str:
-    """``--token`` → ``FLOW_API_TOKEN`` → ``FLOW_TOKEN`` → ``~/.config/flow/api-token``.
-
-    ``FLOW_API_TOKEN`` is what the flowbio CLI reads; ``FLOW_TOKEN`` is the name the sibling
-    flow-bio skill and the root CLAUDE.md document, so an agent arriving from either has
-    likely set that one. Ignoring it sent a credentialed run to fail at the first network
-    stage.
+    """A Flow token: explicit, then `FLOW_API_TOKEN` (flowbio CLI), then `FLOW_TOKEN` (flow-bio
+    skill), then `~/.config/flow/api-token`.
     """
     if explicit:
         return explicit.strip()
@@ -87,11 +70,8 @@ def resolve_token(explicit: str = "") -> str:
 
 
 def mint_api_token(username: str, password: str, *, base: str = "") -> str:
-    """Exchange username/password for a token via ``POST /login``.
-
-    The vendored upload and analysis scripts authenticate with username+password, but the
-    flowbio CLI wants a token. Minting one up front means the SRA-direct path never prompts
-    again mid-run. Returns ``""`` on failure; callers fall back to username/password auth.
+    """Exchange username/password for a token via `POST /login`, so later stages need no prompt.
+    Returns "" on failure.
     """
     root = (base or API_BASE).rstrip("/")
     try:
@@ -127,16 +107,10 @@ class FlowClient:
             return json.loads(response.read())
 
     def paginate(self, path: str, *, items_key: str, per_page: int = 100) -> list[dict]:
-        """Every item behind a paginated listing, or nothing at all.
+        """Every item behind a paginated listing, or an error — never a subset.
 
-        The envelope is ``{"count": <project total>, "page": n, "<items_key>": [...]}``, and
-        ``count`` being the TOTAL rather than the page size is what makes a short read look
-        complete. The default page size is 10, so a bare listing of a 24-sample project
-        returns 10 samples beside an envelope saying 24.
-
-        A partial listing is never returned. Handed one, the dedup pre-flight reports "none,
-        clean import" and the study is uploaded twice; verification reports every unfetched
-        sample as missing. Refusing costs a re-run; returning a subset costs a duplicate.
+        The envelope's `count` is the total, not the page size, so a short read looks complete; a
+        partial listing would make the dedup pre-flight report a clean import.
 
         Story: FAILURES.md#listing-pagination
         """
@@ -168,13 +142,10 @@ class FlowClient:
         return self.request(f"/samples/{sample_id}")
 
     def delete_sample(self, sample_id: str) -> None:
-        """``POST /samples/{id}/delete``, then prove it: the sample must re-read as 404.
+        """`POST /samples/{id}/delete`, accepted only when the sample then re-reads as 404.
 
-        Never the ``DELETE`` verb. ``DELETE /samples/{id}`` returned 200 with the full sample
-        body three times running while the sample stayed put, and on other samples it did
-        appear to work — inconsistent, which is worse than a clean no-op because it can pass
-        a spot check. The ``/delete`` route's ``{"success": true}`` is not the evidence
-        either; only a 404 on re-fetch is. Any other outcome raises.
+        Never the `DELETE` verb, which returns 200 whether or not it deleted anything. Any other
+        outcome raises.
 
         Story: FAILURES.md#sample-delete
         """
@@ -194,12 +165,8 @@ class FlowClient:
         )
 
     def create_project(self, name: str, description: str = "") -> dict[str, Any]:
-        """``POST /projects/new`` with ``{name, description}``; returns the created project.
-
-        The route comes from the app bundle's own create-project call — neither flowbio nor
-        the flow-ai notes document a project write endpoint. Flow has a family of write
-        endpoints that return 200 while doing nothing, so the creation is not trusted until
-        the project is re-read and its name matches what was asked for.
+        """`POST /projects/new` with `{name, description}`; returns the project once it re-reads with the
+        requested name, since some Flow writes return 200 without taking effect.
         """
         created = self.request("/projects/new", {"name": name, "description": description})
         project_id = str(created.get("id") or "")

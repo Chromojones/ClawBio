@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """Stage 110 — submit the import, then print the command that polls it.
 
-The project is set in the sheet, reserved since flowbio 0.12.0, so there is no assignment
-step here any more. Annotations are a different matter: the import job forwards
-`__annotation` columns as ordinary metadata keys and discards them server-side, so they are
-repaired in 11_verify rather than pretended to have arrived.
-
-Submitting is the first irreversible action in the run, so it refuses without both gates
-confirmed rather than trusting the caller to have run them.
+Runs `flowbio samples import` only with `--submit`, and only after 108 is confirmed. The sheet's
+`project` column attaches the samples; the annotations it carries are dropped server-side and
+repaired through 11.
 """
 
 from __future__ import annotations

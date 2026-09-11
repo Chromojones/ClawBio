@@ -1,15 +1,9 @@
-"""Where the UMI is, how long, and whether the parameters can reach it.
+"""Where the UMI is, how long it is, and whether the parameters can reach it. Pure.
 
-Three modules answered one question. ``inline_layout`` finds the barcode/UMI boundary from base
-composition, ``umi_params`` checks the pipeline parameters against the declared barcode, and
-``umi_header_safety`` checks that a header-borne UMI survives the separator it will be split on.
+Composition finds the barcode/UMI boundary but not the UMI's last base, so
+`infer_inline_layout` returns a range; the length comes from the authors' pipeline config.
 
-The boundary matters and composition alone cannot fix it: on GSE131210 position 13 measured
-7.9% off even, between random (~4%) and genomic (12-21%), because it is the terminal N of a
-synthesized oligo. ``infer_inline_layout`` therefore returns a RANGE and deliberately exposes no
-``umi_len``; the length comes from the authors' own pipeline config.
-
-Pure. Story: FAILURES.md#read-structure
+Story: FAILURES.md#read-structure
 """
 
 from __future__ import annotations
@@ -122,12 +116,8 @@ def _truthy(value) -> bool:
 
 
 def check_umi_params(params: dict, *, barcode: str = "") -> UmiParamCheck:
-    """Validate the UMI params against each other, and optionally against the barcode.
-
-    ``barcode`` is the sheet's ``five_prime_barcode_sequence`` (e.g. ``NNNCAATNN``). When
-    given, its length must equal the ``umi_header_format`` length — the format is the mask
-    the pipeline uses to carve the barcode off the read, so a mismatch silently takes the
-    wrong number of bases.
+    """Check the UMI params agree with each other and, when given, with the barcode: the
+    `umi_header_format` mask must be all-N of the barcode's length.
     """
     move = _truthy(params.get("move_umi_to_header"))
     skip = _truthy(params.get("skip_umi_dedupe"))
@@ -189,11 +179,8 @@ def fold_comment_into_name(header: str) -> str:
 
 
 def check_umi_safety(headers: list[str], *, separator: str) -> UmiSafety:
-    """Would ``umi_separator`` extract a real UMI from these read names?
-
-    Takes the LAST separator-delimited field, which is the pessimistic reading — if that
-    field is a genuine UMI the extraction is safe under either convention, and if it is
-    constant the run is silently wrong under at least one.
+    """Would `umi_separator` extract a real UMI from these read names? Reads the last
+    separator-delimited field; a constant one is a label, not a UMI.
     """
     names = [h.lstrip("@").split()[0] for h in headers if h.strip()]
     if not names:

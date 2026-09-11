@@ -1,21 +1,8 @@
-"""``<output>/state.json`` — what each stage read, wrote, and decided.
+"""`<output>/state.json`: what each stage read, wrote and decided.
 
-The old orchestrator made the user run one command three times, and the reason was concrete:
-header cleaning rewrote every read to ``*.cleaned.fastq.gz``, so the annotation sheet's ``File``
-column was stale the moment cleaning ran. The sheet had to be rebuilt against the renamed files,
-and re-executing the whole command *was* the mechanism for doing it.
-
-``removespace`` now runs inside the clip-seq pipeline, so nothing renames anything locally and
-the annotation is built once. What remains is the general problem the loop pointed at: a stage's
-output feeding another stage's input, with nothing written down about which is current.
-
-Here the dependency is explicit. A stage declares its inputs; ``begin()`` hashes their contents
-plus the stage's own CLI args and says whether the work still stands. Re-running a finished stage
-costs nothing; changing an upstream artefact changes the digest and the stage recomputes.
-
-The file carries decisions, never data — anything recoverable from a real artefact is read from
-that artefact — so the recovery for a damaged ``state.json`` is always to delete it, and that is
-what the error says.
+A stage declares its inputs; `begin()` hashes them with the stage's arguments, so a finished
+stage is not re-run and a changed input recomputes. The file holds decisions, never data, so a
+damaged one is fixed by deleting it.
 
 Story: FAILURES.md#state-contract
 """
@@ -94,11 +81,7 @@ def save(output_dir, doc: dict) -> None:
 
 
 def digest(inputs: Iterable = (), args: Sequence[str] = ()) -> str:
-    """Content hash of the declared inputs plus the stage's own arguments.
-
-    Args are part of it because the same inputs run with ``--paired second`` are a different
-    computation from the same inputs run with ``--paired both``.
-    """
+    """Content hash of the declared inputs plus the stage's arguments."""
     sha = hashlib.sha256()
     for item in sorted(str(i) for i in inputs):
         path = Path(item)
@@ -138,11 +121,8 @@ def record(output_dir, stage: str, outcome: str, *, outputs: Sequence[str] = (),
 
 def begin(output_dir, stage: str, *, inputs: Iterable = (), args: Sequence[str] = (),
           force: bool = False) -> bool:
-    """Should this stage do its work? ``False`` means the previous run still stands.
-
-    A digest match alone is not enough: every output the stage recorded must still exist. A
-    completed stage whose artefacts were deleted has not, in any sense the next stage cares
-    about, completed.
+    """Should this stage do its work? `False` means the previous run still stands: same digest, and
+    every recorded output still exists.
     """
     if force:
         return True

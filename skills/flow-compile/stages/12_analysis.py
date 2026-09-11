@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
-"""Stage 12 — submit the analysis. A check, not a gate.
+"""Stage 12 — write the analysis runner. A check, not a gate.
 
-This was the fourth hard stop and no longer is. Once the parameters are approved at 108 there
-is nothing left for a person to decide here: the parameters *are* the decision, and asking for
-them to be confirmed a second time at submission asks the same question twice. A gate that
-re-asks a settled question is how gates lose their meaning.
+Writes `run_analysis.sh` with the parameters 108 approved and prints the command to run it.
+Enforces at most 18 samples per execution, and a reference cross-check that says NOT COMPARED
+rather than passing by default.
 
-What genuinely made submission risky was never the parameters but the batch size, and that is
-a rule rather than a judgement: no more than 18 samples per execution. So it is enforced,
-along with two things that must already hold — 108 confirmed, and the reference agreeing with
-what the parameters imply.
-
-The reference cross-check has three outcomes rather than two: agreed, disagreed, or NOT
-COMPARED. The third exists because a cross-check that silently passes when it had nothing to
-compare is worse than none, since it reads as confirmation.
+Story: FAILURES.md#execution-batching
 """
 
 from __future__ import annotations

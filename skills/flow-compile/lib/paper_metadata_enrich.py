@@ -132,11 +132,8 @@ def fetch_pmc_methods_text(pmcid: str) -> str:
 
 
 def load_paper_metadata(pmid: str, *, paper_text: str = "", offline: bool = False) -> PaperMetadata:
-    """Authors and Methods for a PMID, from PubMed/Europe PMC plus any supplied excerpt.
-
-    ``offline`` skips every fetch and uses only what was handed in. `00_setup --offline`
-    records that no network is available, and a run that says so must not then call out —
-    it stalls behind a 45s timeout at best, and reaches a different answer at worst.
+    """Authors and Methods for a PMID from PubMed / Europe PMC, plus any supplied excerpt. `offline`
+    skips every fetch and uses only the excerpt.
     """
     title, authors = ("", []) if offline else fetch_pubmed_record(pmid)
     excerpt = paper_text.strip()
@@ -170,12 +167,10 @@ def _agent_string(species: str, target: str, vendor: str, catalog: str) -> str:
 
 
 def extract_antibodies_from_text(text: str) -> dict[str, str]:
-    """Map purification target -> Flow purification_agent string.
+    """Purification target → Flow purification_agent, from Methods text.
 
-    Antibodies named in a sentence that also names the CLIP assay take precedence over
-    antibodies named anywhere else in the Methods — papers routinely list a different
-    antibody for Western blotting than for the IP, and only the assay sentence is
-    authoritative for `Purification Agent`.
+    Antibodies in a sentence naming the CLIP assay take precedence, because papers often list a
+    different antibody for Western blotting.
     """
     assay_hits: dict[str, str] = {}
     other_hits: dict[str, str] = {}

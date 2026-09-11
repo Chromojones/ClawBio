@@ -153,11 +153,8 @@ def _cell_from_characteristics(characteristics: list[str]) -> str:
 
 
 def resolve_source(*, source_name: str, characteristics: list[str] | None) -> str:
-    """Cell or tissue for the annotation sheet.
-
-    An explicit `cell line:` / `cell type:` characteristic wins over
-    `!Sample_source_name_ch1`, which is often a supplier phrase ("ATCC Cell Lines") or a
-    generic descriptor ("human embryonic kidney") rather than the actual line.
+    """Cell or tissue for the annotation: a `cell line:` / `cell type:` characteristic, else
+    `!Sample_source_name_ch1`, which is often a supplier phrase or a generic descriptor.
     """
     return _cell_from_characteristics(characteristics or []) or (source_name or "").strip()
 
@@ -185,26 +182,15 @@ def _match_method(text: str) -> str:
 
 
 def infer_experimental_method(protocol: str, series_title: str = "") -> str:
-    """Resolve the CLIP protocol, preferring the series title over protocol prose.
-
-    Unknown protocols still fall back to iCLIP — the most common CLIP flavour — but that
-    fallback is a guess and is surfaced in the metadata hook rather than trusted silently.
+    """The CLIP protocol, preferring the series title over protocol prose. An unknown protocol falls
+    back to iCLIP and is surfaced by the metadata gate.
     """
     return protocol_mod.detect_method(protocol, series_title)
 
 
 def load_srr_map(path) -> pd.DataFrame:
-    """The GSM↔run map, with the columns the run cannot derive for itself.
-
-    ``gsm`` and ``srr`` are the map; `build_import_sheet` maps the annotation onto an accession plus metadata and never
-    touches the File column. 
-
-    So a missing ``mate`` is 1, and a missing ``fastq`` follows ENA's own naming
-    (``SRR1.fastq.gz``, or ``SRR1_1``/``SRR1_2`` when mates are declared). 
-    
-    ``srx`` stays optional here because the local line has no accessions at all. It is the
-    direct line's requirement, enforced where that line lives — warned in `02_index`,
-    refused in `109_sheet`, whose message says which column to populate.
+    """The GSM↔run map. `gsm` and `srr` are required; a missing `mate` is 1 and a missing `fastq`
+    follows ENA's naming. `srx` is the direct line's requirement, warned in 02 and refused in 109.
 
     Story: FAILURES.md#srr-map-schema
     """
@@ -237,13 +223,10 @@ def load_srr_map(path) -> pd.DataFrame:
 
 
 def _derived_fastq_names(frame: pd.DataFrame) -> list[str]:
-    """ENA's own filenames, used only when the map declares no ``fastq`` column.
+    """ENA's own filenames, used only when the map has no `fastq` column.
 
-    ENA serves a paired run as ``SRR1_1.fastq.gz`` / ``SRR1_2.fastq.gz`` and a single-end run
-    as ``SRR1.fastq.gz``. Whether mate 1 takes the suffix is therefore a property of the RUN,
-    not of the row: a lone mate-1 row is single-end, the same row beside a mate 2 is half a
-    pair. Deriving row by row gave a pair the names ``SRR1.fastq.gz`` and ``SRR1_2.fastq.gz``,
-    which is neither convention and matches nothing on disk.
+    A paired run is `SRR1_1` / `SRR1_2` and a single-end run `SRR1`; whether mate 1 takes the
+    suffix depends on the run, not the row.
     """
     paired_runs = {
         str(srr).strip()
@@ -263,12 +246,8 @@ def is_eclip_method(method: str) -> bool:
 
 
 def validate_srr_map(srr_map: pd.DataFrame) -> list[str]:
-    """Structural checks on the agent-authored GSM↔SRR mapping.
-
-    Nothing downstream can distinguish a transposed row from a correct one, so the cheap
-    structural signatures are checked here: a run shared between two GSMs, duplicate rows,
-    mate values outside {1, 2}, and empty FASTQ names. Multi-run GSMs are reported too
-    because only the first run reaches the annotation.
+    """Structural checks on the agent-authored GSM↔SRR map: a run shared by two GSMs, duplicate
+    rows, mates outside {1, 2}, empty FASTQ names, and multi-run GSMs (only the first run is used).
     """
     issues: list[str] = []
     if srr_map is None or srr_map.empty:
@@ -316,11 +295,8 @@ def validate_srr_map(srr_map: pd.DataFrame) -> list[str]:
 
 
 def _fastq_paths_for_gsm(srr_rows: pd.DataFrame) -> tuple[str, str]:
-    """Return (reads1, reads2) paths for a GSM from srr_map rows.
-
-    A mate exists only when the **same run accession** has a mate-2 row. Two rows with
-    different runs are separate runs of a single-end GSM — treating the second as read 2
-    silently declared two unrelated accessions to be a pair.
+    """(reads1, reads2) for a GSM. A mate exists only when the same run has a mate-2 row; two runs
+    of a single-end GSM are not a pair.
     """
     rows = srr_rows.sort_values("mate")
     first = rows.iloc[0]
@@ -339,20 +315,10 @@ def _fastq_paths_for_gsm(srr_rows: pd.DataFrame) -> tuple[str, str]:
 
 
 def apply_eclip_crosslink_mate_filenames(annotation: pd.DataFrame) -> pd.DataFrame:
-    """eCLIP: upload the mate that carries the crosslink.
+    """eCLIP: make read 2, the crosslink mate, the file sent on a local upload.
 
-    Paired-end eCLIP puts the randomer on read 2's 5′ end and the crosslink immediately
-    after it, so **read 2 is the crosslink read** — the Yeo pipeline extracts it with
-    ``samtools view -f 128`` and ``eclipdemux`` trims the randomer from "the front of 2nd
-    read in pair". Read 1 only carries the 7 nt inline demultiplexing barcode, which is
-    not needed once multi-barcode libraries are merged.
-
-    seCLIP is genuinely single-end: read 1 is the only read and already carries the
-    crosslink, so there is nothing to promote.
-
-    Non-eCLIP rows are left alone — iCLIP has its crosslink on read 1.
-
-    See ``reference/eclip-analysis-params.md``.
+    Read 1 carries only the inline demultiplexing barcode. seCLIP and non-eCLIP rows are left
+    alone. See `reference/eclip-analysis-params.md`.
     """
     updated = annotation.copy()
     if "File 2" not in updated.columns or "Experimental Method" not in updated.columns:

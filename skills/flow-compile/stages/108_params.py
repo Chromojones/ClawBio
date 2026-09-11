@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Stage 108 — the analysis parameters. HARD STOP. On both lines.
 
-Everything that decides what the pipeline does to the reads is settled in one place: where the
-UMI is, how long it is, which mate carries the crosslink, and whether the header survives the
-separator it will be split on. These have to agree with each other, and the failures when they
-do not are silent ones. A UMI re-extracted from a header that already holds it strips real
-insert. A crosslink taken from the wrong mate gives peaks in the wrong places. Neither errors.
-
-That is why this is a gate rather than a check: the parameters are derived and shown, and a
-person confirms them against the study's own pipeline config before anything runs.
+Derives UMI handling, the analysed mate and `umi_header_format` from the header state and the
+confirmed barcode, checks they agree, and stops at exit 3. A person confirms them against the
+authors' pipeline config and releases with `--accept-params`; the failures they prevent are
+silent ones.
 """
 
 from __future__ import annotations

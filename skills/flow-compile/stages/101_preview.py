@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
-"""Stage 101 — SRA-direct: look at the actual reads before deciding anything about them.
+"""Stage 101 — SRA-direct: the header state of the deposited reads.
 
-Pulls a few FASTQ records straight from ENA over a byte range, so the header state and read
-layout come from the deposited data rather than from the paper's description of it. Papers
-describe the protocol as designed; the archive holds what was uploaded, and on the studies
-here they have differed often enough that the reads win.
+Fetches a few records per run from ENA, classifies the header into one of four states, and
+refuses the direct line when the UMI would sit in the header comment — aligners drop the
+comment, so deduplication would fail after mapping.
 
-Classifies the header into one of four states. Two booleans could not tell a raw header from
-one whose randomer was already prepended by `eclipdemux`, and treating the second as the first
-re-extracts five bases of real insert while deduplicating on sequence that is not the UMI.
-Nothing errors when that happens, which is why it is checked here.
+Story: FAILURES.md#eclip-header-states
 """
 
 from __future__ import annotations

@@ -1,29 +1,9 @@
 """Audit a Flow execution for samples that were silently dropped.
 
-**An execution's overall status is not evidence that a study was analysed.**
-
-GSE78030 execution ``261164407803419211`` launched seven ~10 GB ``CAT_FASTQ`` merges at
-once. Two were SIGKILLed (exit 137) and the Nextflow log recorded::
-
-    NOTE: Process CAT_FASTQ (YTHDF1...) terminated with an error exit status (137)
-          -- Error is ignored
-
-``errorStrategy = ignore`` means the pipeline continues. YTHDF1 and YTHDC1 produced no
-downstream stages at all, so the run was heading for a green finish having analysed **5 of 7
-samples** — and nothing in the execution summary would have said so.
-
-Two shapes matter, and the second is the dangerous one:
-
-1. a stage is ``FAILED`` — visible if you go looking;
-2. a sample simply **stops**, with no failed row anywhere.
-
-**Each sample is compared against the run's own deepest sample**, not against a named
-terminal stage. A first version hardcoded ``MULTIQC`` and flagged every finished run, because
-MULTIQC is a run-level aggregate with no sample attached, so no sample ever "reaches" it.
-Peer comparison needs no pipeline knowledge and cannot repeat that mistake — and a guardrail
-that fires on correct data is worse than none, because it gets switched off.
-
-This module is pure; the caller supplies ``process_executions`` from the API.
+An execution's status is not evidence every sample was analysed: with `errorStrategy = ignore`
+a sample can fail a process, or simply stop, and the run still finishes. Each sample is
+compared against the run's deepest sample, so no pipeline stage names are needed. Pure; the
+caller supplies `process_executions` from `GET /executions/{id}`.
 """
 
 from __future__ import annotations
@@ -33,8 +13,6 @@ from dataclasses import dataclass
 
 _FAILED_STATUSES = {"FAILED", "ERROR", "ABORTED"}
 
-#: Exit codes worth naming, because they point at the environment rather than the data and
-#: so change what you do about them.
 _SIGNAL_EXITS = {
     "137": "SIGKILL (128+9) — out of memory or a scheduler kill, not bad data",
     "143": "SIGTERM (128+15) — cancelled or timed out",
@@ -67,13 +45,10 @@ def find_dropped_samples(
     finished: bool = True,
     log: str = "",
 ) -> list[DroppedSample]:
-    """Samples that failed a stage, or completed fewer stages than the deepest sample.
+    """Samples that failed a process, or completed fewer processes than the deepest sample.
 
-    ``finished=False`` reports only hard failures — a sample still working through the
-    pipeline has legitimately not caught up yet, and calling that "dropped" would make the
-    check useless mid-run. A failed stage is actionable immediately either way.
-
-    Processes with no sample attached (MULTIQC, reference preparation) are ignored entirely.
+    `finished=False` reports hard failures only, since mid-run a sample may not have caught up.
+    Processes with no sample attached (MULTIQC, reference preparation) are ignored.
     """
     completed: dict[str, set[str]] = {}
     failed: dict[str, set[str]] = {}

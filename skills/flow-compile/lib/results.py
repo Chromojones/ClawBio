@@ -1,15 +1,5 @@
-"""One finding type and one verdict type, replacing seventeen.
-
-Every guardrail here returns a result, and each got its own class as it was written: four
-byte-identical ``Check`` dataclasses, five copies of ``ERROR``/``WARNING``, three
-``format_report()`` functions, seventeen result classes. They are two shapes:
-
-* :class:`Finding` — something wrong with one row or sample, returned as a list.
-* :class:`Verdict` — one question answered, returned singly, carrying its evidence.
-
-``Finding`` must stay drop-in for ``metadata_validate.Check``, a ``NamedTuple`` documented as
-"Indexable as (severity, message) by design" and relied on positionally
-(``issues[0][0] == ERROR``) in 20+ assertions. Hence ``__getitem__``, not just ``__iter__``.
+"""The two result shapes every check returns: `Finding` (one problem, in a list) and `Verdict`
+(one question answered, with its evidence). `Finding` indexes as `(severity, message)`.
 
 Story: FAILURES.md#result-type-sprawl
 """
@@ -28,11 +18,8 @@ _POSITIONAL = ("severity", "message", "field")
 
 @dataclass
 class Finding:
-    """Something wrong with one row, sample or accession.
-
-    Absorbs every ``Check``, ``MetadataIssue``, ``AnnotationWarning``, ``Discrepancy`` and
-    ``DroppedSample``. The extra fields are optional so the common two-argument construction
-    reads exactly as it did before.
+    """Something wrong with one row, sample or accession. Built as `Finding(severity, message)`; the
+    other fields are optional.
     """
 
     severity: str
@@ -66,11 +53,8 @@ class Finding:
 
 @dataclass
 class Verdict:
-    """One question answered, with the evidence that settled it.
-
-    ``evidence`` carries what the specific check measured — ``compared`` for a reference
-    cross-check, ``separator_count`` for UMI safety, ``release_date`` for availability — so a
-    caller can distinguish *how* a verdict was reached, not merely whether it passed.
+    """One question answered, with the evidence that settled it (e.g. `compared` for a reference
+    cross-check).
     """
 
     ok: bool
@@ -101,11 +85,7 @@ def findings_to_json(findings: list[Finding]) -> list[dict]:
 
 
 def render_findings(findings: list[Finding], *, title: str, total: int, note: str = "") -> str:
-    """A report that leads with how much was checked, not just what failed.
-
-    Every ``format_report()`` copy opened with "N of M", because a bare failure list cannot
-    distinguish "1 bad sample of 24" from "1 bad sample of 1".
-    """
+    """A report that leads with how much was checked ("N of M"), not only what failed."""
     lines = [f"# {title}", ""]
     if not findings:
         lines.append(f"{total} checked, no findings.")

@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """Stage 05 — is every field defensible? HARD STOP.
 
-Validates the whole annotation in one pass rather than field by field, so a reviewer sees one
-list and can judge the study as a whole. Piecewise validation produced the failure where 41
-spurious antibody warnings buried the two real ones.
-
-Errors gate; warnings print and continue. `--accept-metadata` is the decision, and like the
-barcode gate it is a human artefact rather than a flag that merely silences output.
+Validates the whole annotation in one pass and writes `metadata_report.md`. Errors stop at
+exit 3 until the researcher releases the gate with `--accept-metadata`; warnings print and
+continue.
 """
 
 from __future__ import annotations
