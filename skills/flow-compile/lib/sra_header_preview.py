@@ -35,12 +35,10 @@ import gzip
 import subprocess
 import urllib.request
 import zlib
-from pathlib import Path
 
 from lib.fastq_headers import (
     RBC_TAG,
     HeaderInspection,
-    build_headers_txt,
     inspect_header_lines,
 )
 
@@ -216,10 +214,6 @@ def inspection_from_header_records(
     )
 
 
-def preview_to_headers_text(records_by_run: dict[str, list[str]]) -> str:
-    return build_headers_txt([(run, recs) for run, recs in records_by_run.items()])
-
-
 def preview_runs(
     run_accessions: list[str],
     *,
@@ -235,30 +229,3 @@ def preview_runs(
             records[run] = recs
         sources[run] = source
     return records, sources
-
-
-def write_headers_preview(
-    output_dir: Path,
-    records_by_run: dict[str, list[str]],
-    sources: dict[str, str] | None = None,
-) -> Path:
-    """Write headers.txt plus a provenance note naming the fetch source per run."""
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / "headers.txt"
-    path.write_text(preview_to_headers_text(records_by_run), encoding="utf-8")
-
-    if sources:
-        lines = ["# Header preview provenance", ""]
-        for run, source in sources.items():
-            if source == "ena":
-                note = "ENA byte-range — original submitted headers preserved"
-            elif source == "fastq-dump":
-                note = ("fastq-dump --origfmt fallback — original spot name only, no "
-                        "comment field; the comment verdict is inferred, not observed")
-            else:
-                note = "unavailable — no header evidence"
-            lines.append(f"- `{run}`: {source} ({note})")
-        lines.append("")
-        (output_dir / "headers_provenance.md").write_text("\n".join(lines), encoding="utf-8")
-    return path

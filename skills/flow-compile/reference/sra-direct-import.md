@@ -179,9 +179,8 @@ identical to `--origfmt`. Neither helps the direct line, because there **Flow do
 fetching** and gets ENA's comment form regardless.
 
 The fallback is still not trusted, for the inverse reason: `--origfmt` removes the comment
-field entirely, so `umi_is_stranded_in_comment` has no space to find and its refusal would
-silently vanish. It now infers the verdict from provenance instead, and
-`headers_provenance.md` records which source each run used.
+field entirely, so `umi_is_stranded_in_comment` has no space to find. `101_preview` passes
+each run's fetch source through, and the verdict is inferred from it.
 
 The inspection feeds the same `fastq_headers.inspect_header_lines()` used by the local
 path, so remote and local previews cannot diverge. Params follow the usual table in
@@ -253,17 +252,19 @@ Never emitted: `project`, `strandedness`, `reads1`, `reads2`.
 
 ---
 
-## 5. Import, poll, assign
+## 5. Import and poll
 
-`sra_import.sh` does all three; the import is **asynchronous** and returns a job id.
+`110_import --submit` runs the import. It is **asynchronous**: 110 records the job id and
+prints the poll command.
 
 ```bash
 flowbio --json samples import --sheet import_sheet.csv        # -> {"id": ..., "status": "RUNNING"}
 flowbio --json samples import-status --job-id <JOB>           # poll until COMPLETED
 ```
 
-`import-status` returns `sample_ids` positionally matching `accessions` once `COMPLETED`.
-Those ids are the input to the assignment step — **without it the samples exist but belong
+`import-status` returns `sample_ids` positionally matching `accessions` once `COMPLETED`;
+fetch each with `GET /samples/{id}` for `11_verify --live-samples`. The sheet's `project`
+column attaches the samples, so there is no assignment step.
 
 Timing: ~3 min for a single sample, ~30 min for 8.
 
@@ -367,4 +368,4 @@ execution covers **one genome** and **one `umi_header_format`**.
 | Header cleaning | n/a — never uploaded locally | n/a — `removespace` runs in the clip-seq pipeline |
 | Accession | **SRX** | SRR |
 | Project | `project` column in the sheet (0.12.0+) | `--project-id` on upload |
-| Entry point | `sra_import.sh` (`109_sheet` → `110_import`) | `upload_live.sh` (`210_upload`) |
+| Entry point | `109_sheet` → `110_import --submit` | `210_upload`, then the command it prints |

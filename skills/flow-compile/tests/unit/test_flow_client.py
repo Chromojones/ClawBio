@@ -82,11 +82,6 @@ class TestOneApiBase:
     def test_env_override_is_honoured(self):
         assert fc.API_BASE.endswith("/api") or fc.API_BASE.startswith("http")
 
-    def test_credentials_and_client_agree(self):
-        from lib import credentials
-
-        assert credentials.API_BASE == fc.API_BASE
-
     def test_there_is_only_one_definition_outside_vendor(self):
         """`lib/vendor/` is upstream-mirrored and exempt; nothing else may define its own."""
         import re

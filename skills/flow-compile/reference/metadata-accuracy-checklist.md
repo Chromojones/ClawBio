@@ -468,8 +468,6 @@ are listed for contrast — they now fail loudly instead of silently.
 | **HIGH** | Which `--paper-text` excerpt to attach | Now additive, but the excerpt still steers barcode extraction; two excerpt choices → two barcode proposals |
 | MEDIUM | Replicate inference | `rep 3` / `replicate 3` / `batch 2` collapse to `Rep1`, which also mis-assigns per-replicate barcodes |
 | MEDIUM | `Condition`, `Comments` | Never populated by code. GEO `treatment:` / `genotype:` are parsed then discarded, so ± treatment rows differ only by run id |
-| MEDIUM | Barcode heuristic fallback | With no `--paper-text` / `--geo-cache-dir` / `--fetch-geo`, the confirmation gate is bypassed entirely and generic studies route to `resolve_flash` |
-| MEDIUM | FLASH replicate barcodes | `NNRRNTTTTTTNN` / `NNYYNTTTTTTNN` are hardcoded from the literature but presented as ordinary proposals with `confidence: medium` |
 | MEDIUM | `3' Barcode Sequence` | Not passed through `normalize_flow_barcode`, so IUPAC `R`/`Y` can reach Flow |
 | MEDIUM | PubMed fetch failure | Falls back silently to the GEO contact name — non-empty, so no warning fires; run-to-run nondeterminism |
 | LOW | Empty target | Becomes the literal token `unknown` in the Flow sample name |

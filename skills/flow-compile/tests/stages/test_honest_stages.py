@@ -156,3 +156,13 @@ class Test201RecordsAnAbsoluteReadsDirectory:
         recorded = json.loads((out / "fetch_plan.json").read_text())["fastq_dir"]
         assert Path(recorded).is_absolute(), recorded
         assert Path(recorded) == (SKILL_DIR / "demo").resolve()
+
+
+class Test210NormalisesTheAnnotation:
+    def test_the_upload_sheet_carries_the_canonical_no_uv(self, local_ready):
+        (local_ready / "annotation.raw.csv").write_text(
+            "File,Sample Name,Type,Purification Target Annotation\n"
+            "SRR1.fastq.gz,TARDBP_Hs_HeLa_noUV_Rep1_SRR1,CLIP,nouv\n")
+        proc = _stage("210_upload", local_ready)
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert ",noUV" in (local_ready / "upload_sheet.csv").read_text()

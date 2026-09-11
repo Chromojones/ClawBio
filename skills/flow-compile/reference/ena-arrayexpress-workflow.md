@@ -148,9 +148,10 @@ submission time, e.g. `TIA1_Hs_HeLa_GAANNNN_LUd15_ERR039788`.
 
 ---
 
-## 3. FASTQ header inspection (unchanged, still mandatory)
+## 3. FASTQ header inspection (still mandatory)
 
-Run `lib/fastq_headers.py` → `headers.txt` on the downloaded reads.
+Sample the first headers of the downloaded reads into a JSON list and pass it to
+`201_fetch --headers` (the `zcat | awk` recipe in `DEMO.md`).
 
 - E-MTAB-432 headers are plain Illumina GAII (`@ERR039778.1 HWI-EAS350_...`) with
   **no `:rbc:`** — the UMI is still in the read **sequence** (read 5′ prefix

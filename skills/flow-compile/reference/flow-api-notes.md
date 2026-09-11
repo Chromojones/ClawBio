@@ -66,18 +66,10 @@ python3 stages/00_setup.py --output <dir> --accession GSE… --create-project "G
 The created id is recorded as the run's `project_id`, exactly as `--project-id` would adopt
 an existing one.
 
-After flow-compile produces `annotation.csv`, `headers.txt`, and `pipeline_params.json`:
+On the local line, `210_upload` writes `upload_sheet.csv` and prints the exact upload command
+— `--dry-run` first — with `--rows`, `--project-id` and an absolute `--base-dir` filled in.
 
-```bash
-python skills/flow-compile/lib/vendor/flow_api/upload/uploadsample_flowbio_v6.py \
-  --input annotation.csv \
-  --rows 1-2 \
-  --project-id 997999200849251656 \
-  --base-dir /path/to/fastq_files \
-  --dry-run
-```
-
-## Pipeline params from headers.txt
+## Pipeline params from the header preview
 
 See also `reference/eclip-analysis-params.md` for paired-end eCLIP crosslink notes.
 
@@ -95,13 +87,16 @@ to the title — and only for the eCLIP family.
 `removespace` runs inside the clip-seq pipeline on Flow, so nothing renames reads locally and
 `201_fetch` does no header cleaning. The vendored copy is reference only.
 
-## Scripts generated in the output dir
+## Commands the stages hand you
 
-| Script | Tool | Written by |
-|--------|------|-----------|
-| `upload.sh` / `upload_live.sh` | `uploadsample_flowbio_v6.py` | `flow_stages.write_upload_script` (local line) |
-| `run_analysis.sh` | `flowrunanalysis_flowbio.py` | `12_analysis`; passes `--params-json pipeline_params.json` |
-| `sra_import.sh` | `flowbio samples import` | `sra_import.write_import_scripts` (direct line) |
+Outward-facing steps are run by the agent, from the command the stage prints.
+
+| Stage | Writes | Prints for you to run |
+|---|---|---|
+| `110_import` | `import_job.json` (with `--submit`) | the `flowbio samples import-status` poll |
+| `210_upload` | `upload_sheet.csv` | the vendored upload command, `--dry-run` first |
+| `11_verify` | `verify_report.json`, `repair_edits.csv` | `flow_edit_samples.py --edits … --dry-run`, then `--yes` |
+| `12_analysis` | `run_analysis.sh` | `bash run_analysis.sh` |
 
 Credentials: `FLOWBIO_USERNAME` / `FLOWBIO_PASSWORD`, or a token — `FLOW_API_TOKEN`, `FLOW_TOKEN`,
 or `~/.config/flow/api-token`, checked in that order by `flow_client.resolve_token`.

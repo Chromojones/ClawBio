@@ -42,6 +42,8 @@ def _inputs(args, out):
 def body(args, out: Path) -> dict:
     import pandas as pd
 
+    from lib.metadata_validate import normalize_annotation
+
     study = st.study(out)
     if not study.get("params_confirmed"):
         raise CheckFailed("analysis parameters were never confirmed; 108_params must pass first.")
@@ -53,6 +55,10 @@ def body(args, out: Path) -> dict:
     for row in rows:
         findings += check_upload_fields(row, sample_type=args.sample_type)
     rows = [strip_rejected(r, sample_type=args.sample_type) for r in rows]
+    for row in rows:
+        if "Purification Target Annotation" in row:
+            row["Purification Target Annotation"] = normalize_annotation(
+                row["Purification Target Annotation"])
 
     sheet = out / "upload_sheet.csv"
     pd.DataFrame(rows).to_csv(sheet, index=False)

@@ -22,7 +22,6 @@ from lib.sra_import import (  # noqa: E402
     build_import_sheet,
     is_experiment_accession,
     validate_import_sheet,
-    write_import_scripts,
     write_import_sheet,
 )
 
@@ -133,15 +132,6 @@ class TestWriteArtifacts:
         assert "SRX17851507" in text
         assert "strandedness" not in text
 
-    def test_scripts_reference_sheet_and_project(self, tmp_path):
-        sheet = write_import_sheet(tmp_path, build_import_sheet(_annotation()))
-        script = write_import_scripts(tmp_path, sheet_path=sheet, project_id="550540342405942387")
-        body = script.read_text(encoding="utf-8")
-        assert "samples import --sheet" in body
-        assert "import-status" in body
-        assert "550540342405942387" in body
-        assert script.name == "sra_import.sh"
-
 
 class TestCommentsLengthLimit:
     """Flow caps `comments` at 1000 characters; the import rejects the whole batch over it.
@@ -214,3 +204,15 @@ class TestRunAccessionIsSilentlyExpanded:
         assert "SRR3175580" in message
         assert "500" not in message, "the HTTP 500 claim is stale and misleads"
         assert "experiment" in message.lower()
+
+
+class TestAnnotationSpellingIsNormalisedOnTheWayOut:
+    """The validator accepts `noUV` in any case; Flow must receive the one spelling."""
+
+    def test_the_import_sheet_carries_the_canonical_no_uv(self):
+        from lib.sra_import import annotation_to_flow_row
+
+        row = annotation_to_flow_row({"Sample Name": "TARDBP_Hs_HeLa_noUV_rep1",
+                                      "Protein (Purification Target)": "TARDBP",
+                                      "Purification Target Annotation": "nouv"})
+        assert row["purification_target__annotation"] == "noUV"

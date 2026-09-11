@@ -21,7 +21,6 @@ sys.path.insert(0, str(SKILL_DIR))
 from lib.sra_header_preview import (  # noqa: E402
     inspection_from_header_records,
     parse_ena_fastq_urls,
-    preview_to_headers_text,
 )
 
 # Real shape of the ENA filereport response: a run_accession column precedes fastq_ftp,
@@ -90,11 +89,6 @@ class TestInspectionFromRecords:
     def test_sample_headers_are_retained_for_headers_txt(self):
         inspection = inspection_from_header_records({"SRR21863801": ECLIP_RECORDS})
         assert any(line.startswith("@SRR21863801") for line in inspection.sample_headers)
-
-    def test_headers_text_round_trips(self):
-        text = preview_to_headers_text({"SRR21863801": ECLIP_RECORDS})
-        assert "@SRR21863801.1" in text
-        assert text.endswith("\n")
 
     def test_empty_preview_is_safe(self):
         inspection = inspection_from_header_records({})
