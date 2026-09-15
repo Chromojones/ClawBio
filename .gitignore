@@ -34,3 +34,6 @@ brief.md
 docs/superpowers/
 **/superpowers/plans/
 **/superpowers/specs/
+
+# flow-compile run output (per-study state; never committed)
+skills/flow-compile/runs/
