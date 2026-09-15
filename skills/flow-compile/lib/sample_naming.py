@@ -27,10 +27,10 @@ def infer_replicate_label(title: str) -> str:
         return "Rep2"
     if re.search(r"\brep\s*a\b", title_lower) or re.search(r"replicate\s*a", title_lower):
         return "Rep1"
-    if re.search(r"rep\s*2", title_lower) or re.search(r"replicate\s*2", title_lower):
-        return "Rep2"
-    if re.search(r"rep\s*1", title_lower) or re.search(r"replicate\s*1", title_lower):
-        return "Rep1"
+    # Any numbered replicate; the lookbehind keeps `prep 2` out.
+    match = re.search(r"(?<![a-z])rep(?:licate)?\.?\s*(\d+)", title_lower)
+    if match:
+        return f"Rep{match.group(1)}"
     match = re.search(r"[-_](\d+)\s*$", title.strip())
     if match:
         return f"Rep{match.group(1)}"

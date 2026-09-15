@@ -44,6 +44,16 @@ class TestProteinTargetRejectsNonTargets:
         assert infer_protein_target("PARP13, HEK293T, replicate 1 eCLIP") == "PARP13"
         assert infer_protein_target("iCLIP-DHX9-1") == "DHX9"
 
+    def test_target_with_trailing_replicate_suffix_in_the_same_field_resolves(self):
+        """A replicate suffix joined to the target by a dash (`SYNCRIP - rep1`, GSE149561) is
+        stripped, so the study's gene symbol wins over the antibody's alias.
+        """
+        assert infer_protein_target("primary cortical neurons, SYNCRIP - rep1") == "SYNCRIP"
+        assert infer_protein_target(
+            "primary cortical neurons, SYNCRIP - rep1",
+            ["iclip antibody: anti-hnRNPQ antibody (clone 18E4, Sigma)"],
+        ) == "SYNCRIP"
+
 
 class TestProteinTargetControls:
     """eCLIP inputs are their own target — never the IP's protein."""

@@ -14,6 +14,7 @@ import pandas as pd
 
 from lib.metadata_validate import (
     ALLOWED_AGENT_LITERALS,
+    CONTROL_TARGETS,
     SPECIES,
     split_vendor_catalog,
 )
@@ -39,8 +40,7 @@ ASSAY_SENTENCE_RE = re.compile(
     r"immunoprecipitat\w*)\b",
     re.I,
 )
-TARGET_ALIASES = {"TIAR": "TIAL1"}
-SKIP_TARGETS = {"SMINPUT", "INPUT", "IGG", "GFP"}
+TARGET_ALIASES = {"TIAR": "TIAL1", "HNRNPQ": "SYNCRIP"}
 
 
 @dataclass
@@ -82,7 +82,7 @@ def fetch_pubmed_record(pmid: str) -> tuple[str, list[str]]:
     )
     try:
         root = ET.fromstring(_http_get(url))
-    except (RuntimeError, ET.ParseError, urllib.error.URLError):
+    except (RuntimeError, ET.ParseError, OSError):
         return "", []
     title = (root.findtext(".//ArticleTitle") or "").strip()
     authors: list[str] = []
@@ -101,7 +101,7 @@ def _pmcid_for_pmid(pmid: str) -> str:
     )
     try:
         payload = json.loads(_http_get(url).decode())
-    except (RuntimeError, json.JSONDecodeError, urllib.error.URLError):
+    except (RuntimeError, json.JSONDecodeError, OSError):
         return ""
     results = payload.get("resultList", {}).get("result", [])
     if not results:
@@ -118,7 +118,7 @@ def fetch_pmc_methods_text(pmcid: str) -> str:
     url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/{pmcid}/fullTextXML"
     try:
         root = ET.fromstring(_http_get(url))
-    except (urllib.error.HTTPError, ET.ParseError):
+    except (RuntimeError, ET.ParseError, OSError):
         return ""
     parts: list[str] = []
     for sec in root.findall(".//sec"):
@@ -213,8 +213,9 @@ def _resolve_purification_agent(
     protein = str(row.get("Protein (Purification Target)", "")).strip().upper()
     current = str(row.get("Purification Agent", "")).strip()
 
-    if protein in SKIP_TARGETS or protein == "SMINPUT":
-        return "no antibody", None
+    if protein in CONTROL_TARGETS:
+        # The gate refuses any agent on a control target; empty is the convention.
+        return "", None
     if method.upper() == "ICLAP":
         return _iclap_agent(), None
 
@@ -245,8 +246,11 @@ def collect_annotation_field_warnings(df: pd.DataFrame) -> list[AnnotationWarnin
     )
     for idx, row in df.iterrows():
         sample = str(row.get("Sample Name", "")).strip()
+        protein = str(row.get("Protein (Purification Target)", "")).strip().upper()
         for field in tracked:
             val = str(row.get(field, "")).strip()
+            if not val and field == "Purification Agent" and protein in CONTROL_TARGETS:
+                continue   # empty is the correct agent for a control
             if not val:
                 warnings.append(
                     AnnotationWarning(

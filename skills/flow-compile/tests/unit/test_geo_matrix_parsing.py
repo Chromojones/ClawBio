@@ -48,3 +48,18 @@ class TestBarcodeScanning:
         data = parse_geo_matrix(GSE105082_MATRIX)
         assert data["samples"]["GSM2817677"]["replicate_barcode_cores"] == ["CGGA"]
         assert data["samples"]["GSM2817678"]["replicate_barcode_cores"] == ["GGCA"]
+
+    def test_a_literal_barcode_in_characteristics_ch1_is_a_hint(self, tmp_path):
+        """A barcode stated in `characteristics_ch1` (`barcode: NNNGGTTNN`, GSE149561) is a
+        hint.
+        """
+        matrix = tmp_path / "series_matrix.txt"
+        matrix.write_text(
+            "!Series_geo_accession\t\"GSE149561\"\n"
+            '!Sample_geo_accession\t"GSM4504851"\t"GSM4504852"\n'
+            '!Sample_title\t"SYNCRIP - rep1"\t"IgG - rep1"\n'
+            '!Sample_characteristics_ch1\t"barcode: NNNGGTTNN"\t"barcode: NNNTTGTNN"\n'
+        )
+        data = parse_geo_matrix(matrix)
+        assert data["samples"]["GSM4504851"]["barcode_hints"] == ["NNNGGTTNN"]
+        assert data["samples"]["GSM4504852"]["barcode_hints"] == ["NNNTTGTNN"]

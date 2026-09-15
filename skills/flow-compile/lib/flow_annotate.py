@@ -59,6 +59,9 @@ _IGG_RE = re.compile(r"\b(igg|mock)\b", re.I)
 _NOAB_RE = re.compile(r"\b(beads?[\s_-]only|no[\s_-]antibody|noabctrl)\b", re.I)
 #: A plausible gene symbol: starts with a letter, mostly alphanumeric, not too long.
 _GENE_SYMBOL_RE = re.compile(r"^[A-Za-z][A-Za-z0-9\-]{1,14}$")
+#: A replicate suffix glued onto a comma field by a dash rather than its own comma field,
+#: e.g. "SYNCRIP - rep1" (GSE149561) vs. "RBFOX2, rep 1" (its own field, already handled).
+_TRAILING_REPLICATE_RE = re.compile(r"\s*-\s*rep(?:licate)?\.?\s*\d+\s*$", re.I)
 
 
 def _is_plausible_target(token: str) -> bool:
@@ -86,7 +89,7 @@ def infer_protein_target(title: str, characteristics: list[str] | None = None) -
     # GEO titles like "CPSF5, HEK293T, replicate 1 eCLIP"
     if "," in title:
         for field in title.split(","):
-            lead = field.strip()
+            lead = _TRAILING_REPLICATE_RE.sub("", field.strip())
             if _is_plausible_target(lead):
                 return lead.upper()
     upper_title = title.upper()

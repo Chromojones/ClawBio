@@ -60,7 +60,7 @@ def _collect_sample_barcode_hints(sample: dict[str, Any]) -> list[str]:
     """Aggregate barcode-like tokens from all string fields on one GSM sample."""
     parts: list[str] = []
     for key, value in sample.items():
-        if key in ("gsm", "characteristics", "barcode_hints"):
+        if key in ("gsm", "barcode_hints"):
             continue
         if isinstance(value, str) and value.strip():
             parts.append(value)

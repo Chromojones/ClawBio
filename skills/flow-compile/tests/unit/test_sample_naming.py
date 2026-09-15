@@ -23,6 +23,18 @@ class TestReplicateInference:
     def test_explicit_rep(self):
         assert infer_replicate_label("FLASH-STAU2_rep2") == "Rep2"
 
+    def test_rep3_and_above(self):
+        """Any numbered replicate, not only 1 and 2: GSE149561 runs to rep3, which would
+        otherwise share its rep1 sample's name.
+        """
+        assert infer_replicate_label("primary cortical neurons, SYNCRIP - rep3") == "Rep3"
+        assert infer_replicate_label("iCLIP-DHX9-3") == "Rep3"
+        assert infer_replicate_label("FLASH-STAU2_rep10") == "Rep10"
+
+    def test_rep_inside_a_word_is_not_a_replicate(self):
+        """`prep 2` is not replicate 2."""
+        assert infer_replicate_label("SYNCRIP input prep 2, rep3") == "Rep3"
+
 
 class TestSampleNaming:
     def test_no_spaces_in_flow_sample_name(self):
