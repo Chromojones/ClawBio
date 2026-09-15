@@ -76,6 +76,29 @@ def _records_from_text(text: str, n_reads: int) -> list[str]:
     return lines[: min(usable, n_reads * 4)]
 
 
+def headers_of(records: list[str]) -> list[str]:
+    """The header line of each record; a quality line can start with `@` too."""
+    return records[0::4]
+
+
+def sequences_of(records: list[str]) -> list[str]:
+    return records[1::4]
+
+
+def sra_load_format(run_accession: str) -> str:
+    """`FASTQ` or `BAM`, from `vdb-dump --info`; "" when sra-tools is absent or the run unknown."""
+    try:
+        proc = subprocess.run(["vdb-dump", "--info", run_accession], capture_output=True,
+                              text=True, timeout=90, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    for line in (proc.stdout or "").splitlines():
+        key, _, value = line.partition(":")
+        if key.strip() == "FMT":
+            return value.strip().upper()
+    return ""
+
+
 def fetch_ena_fastq_urls(accession: str) -> list[str]:
     try:
         payload = _http_get(ENA_FILEREPORT.format(accession=accession)).decode()

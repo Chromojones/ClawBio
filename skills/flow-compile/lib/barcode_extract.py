@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from lib.barcode_evidence import (
+    BarcodeEvidence,
     BarcodeProposal,
     evidence_from_matrix_hints,
     evidence_from_replicate_cores,
@@ -102,6 +103,31 @@ def render_confirmation_md(proposals: list[BarcodeProposal], output_dir: Path) -
     return "\n".join(lines) + "\n"
 
 
+def evidence_from_read_structure(run: str, structure) -> BarcodeEvidence:
+    """What the deposited reads themselves say. An in-line block is proposed as all-N of its
+    shorter length, at low confidence: a documented barcode outranks it, and the exact length
+    needs the authors' config. Processed reads propose nothing.
+    """
+    from lib.read_structure import UNTRIMMED
+
+    block = structure.block
+    if structure.verdict == UNTRIMMED and block.block_len_min:
+        span = (f"{block.block_len_min}" if block.block_len_min == block.block_len_max
+                else f"{block.block_len_min}-{block.block_len_max}")
+        return BarcodeEvidence(
+            source=f"reads:{run}", quote=structure.describe()[:300], kind="composition",
+            five_prime_proposal="N" * block.block_len_min, umi_bp=block.block_len_min,
+            confidence="low",
+            notes=f"in-line block of {span} nt from base composition; proposing "
+                  f"{block.block_len_min} N — confirm the exact length from the authors' "
+                  f"pipeline config before accepting, and move the whole block.",
+        )
+    return BarcodeEvidence(
+        source=f"reads:{run}", quote=structure.describe()[:300], kind="composition",
+        confidence="low", notes=f"reads are {structure.verdict}: no block proposed from composition.",
+    )
+
+
 def extract_barcodes_for_gsms(
     gsms: list[str],
     *,
@@ -110,11 +136,17 @@ def extract_barcodes_for_gsms(
     fetch_geo: bool = False,
     sample_titles: dict[str, str] | None = None,
     matrix_samples: dict[str, dict] | None = None,
+    read_structures: dict[str, tuple[str, object]] | None = None,
 ) -> list[BarcodeProposal]:
-    """Gather evidence from matrix hints, paper files, and GEO; return pending proposals."""
+    """Gather evidence from matrix hints, paper files, GEO and the reads; return pending
+    proposals. `read_structures` maps a GSM to `(run, ReadStructure)`.
+    """
+    from lib.read_structure import PROCESSED
+
     paper_texts = paper_texts or []
     sample_titles = sample_titles or {}
     matrix_samples = matrix_samples or {}
+    read_structures = read_structures or {}
     proposals: list[BarcodeProposal] = []
 
     shared_paper_evidence = []
@@ -139,16 +171,24 @@ def extract_barcodes_for_gsms(
         elif cache and cache.exists():
             plain = cache.read_text(encoding="utf-8", errors="replace")
             evidence.extend(extract_evidence_from_text(plain, f"cache:{cache.name}"))
+        run, structure = read_structures.get(gsm, ("", None))
+        if structure is not None:
+            evidence.append(evidence_from_read_structure(run, structure))
 
-        proposals.append(
-            assign_flash_replicate_barcode(
-                assign_per_sample_literal_barcode(
-                    merge_proposal_from_evidence(gsm, evidence),
-                    sample_titles.get(gsm, ""),
-                ),
+        proposal = assign_flash_replicate_barcode(
+            assign_per_sample_literal_barcode(
+                merge_proposal_from_evidence(gsm, evidence),
                 sample_titles.get(gsm, ""),
-            )
+            ),
+            sample_titles.get(gsm, ""),
         )
+        if structure is not None and structure.verdict == PROCESSED:
+            proposal.agent_notes = (
+                f"READS ARE PROCESSED ({run}: {'; '.join(structure.reasons)}) — the in-line "
+                f"block was removed before submission. Any barcode confirmed here is recorded as "
+                f"metadata only; 108 will not extract it. " + proposal.agent_notes
+            )
+        proposals.append(proposal)
 
     return proposals
 

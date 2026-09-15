@@ -184,3 +184,43 @@ class TestTheFallbackCannotClearTheCommentVerdict:
         insp = inspection_from_header_records(
             {"SRR33628723": [self.ENA_WITH_UMI, "NAGCA", "+", "#AAFF"]})
         assert insp.umi_in_comment is True
+
+
+class TestRecordsAreSplitByRole:
+    """A record list is four lines per read; only every fourth is a header."""
+
+    def test_headers_and_sequences(self):
+        from lib.sra_header_preview import headers_of, sequences_of
+
+        recs = ["@SRR1.1 1/1", "ACGT", "+", "@@@@", "@SRR1.2 2/1", "TTTT", "+", "FFFF"]
+        assert headers_of(recs) == ["@SRR1.1 1/1", "@SRR1.2 2/1"]
+        assert sequences_of(recs) == ["ACGT", "TTTT"]
+
+
+class TestSraLoadFormat:
+    """`vdb-dump --info` says whether a run was loaded from FASTQ or from an aligned BAM."""
+
+    def _fake(self, monkeypatch, stdout=None, exc=None):
+        import subprocess
+
+        import lib.sra_header_preview as shp
+
+        def run(*a, **k):
+            if exc:
+                raise exc
+            return subprocess.CompletedProcess(a, 0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(shp.subprocess, "run", run)
+        return shp
+
+    def test_a_bam_load_is_reported(self, monkeypatch):
+        shp = self._fake(monkeypatch, "acc    : SRR5646571\nFMT    : BAM\nLDR    : bam-load.2.8.2\n")
+        assert shp.sra_load_format("SRR5646571") == "BAM"
+
+    def test_a_fastq_load_is_reported(self, monkeypatch):
+        shp = self._fake(monkeypatch, "FMT    : FASTQ\nLDR    : latf-load.2.9.7\n")
+        assert shp.sra_load_format("SRR24067475") == "FASTQ"
+
+    def test_a_missing_tool_is_unknown_not_an_error(self, monkeypatch):
+        shp = self._fake(monkeypatch, exc=FileNotFoundError("vdb-dump"))
+        assert shp.sra_load_format("SRR1") == ""

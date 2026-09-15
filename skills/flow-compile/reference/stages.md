@@ -31,7 +31,7 @@ into one warning is how an unapproved barcode reaches an upload.
 | 00 | `00_setup` | run directory, credentials, the project (adopt `--project-id` or `--create-project`), `state.json` |
 | 01 | `01_study` | public? already on Flow? — each only when its evidence is supplied |
 | 02 | `02_index` | the samples, and the runs behind them |
-| 03 | `03_barcodes` | the 5′ barcode of every sample — **GATE 1** |
+| 03 | `03_barcodes` | the 5′ barcode of every sample; with `--fetch-reads`, the in-line block the reads show, or that they were processed before submission — **GATE 1** |
 | 04 | `04_annotate` | names, target, tag, agent, source, organism, crosslink mate |
 | 05 | `05_metadata` | is every field defensible? — **GATE 2** |
 | 06 | `06_route` | SRA-direct or local; which protocol — **branch** |
@@ -52,8 +52,8 @@ So SRA-direct is the path for essentially every study.
 
 | # | stage | decides |
 |---|---|---|
-| 101 | `101_preview` | header state, and whether the UMI survives the fetch |
-| 108 | `108_params` | UMI, mate, coherence — **GATE 3**, on both lines |
+| 101 | `101_preview` | header state, whether the UMI survives the fetch, and the read structure: untrimmed (one length, adapter in the reads) or processed before submission (`read_structure.json`) |
+| 108 | `108_params` | UMI, mate, coherence — **GATE 3**, on both lines. Processed reads with no UMI in the header get no extraction and `skip_umi_dedupe=true`; the barcode stays as metadata |
 | 109 | `109_sheet` | build and check the accession sheet |
 | 110 | `110_import` | submit (with `--submit`); print the poll command |
 

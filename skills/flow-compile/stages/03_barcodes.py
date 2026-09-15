@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Stage 03 — the 5' barcode of every sample. HARD STOP.
 
-Gathers evidence from the series matrix, GEO sample pages and the paper text, writes
-`barcode_proposals.json` and `CONFIRM_BARCODES.md`, and stops at exit 3; supplying the confirmed
-file with `--accept-proposals` is the approval. Composition corroborates the layout but cannot
-settle the UMI's last base, so its length comes from the authors' pipeline config.
+Gathers evidence from the series matrix, GEO sample pages, the paper text and, with
+`--fetch-reads`, the deposited reads themselves; writes `barcode_proposals.json` and
+`CONFIRM_BARCODES.md`, and stops at exit 3. Supplying the confirmed file with
+`--accept-proposals` is the approval. Composition finds an in-line block but cannot settle its
+last base, so the length comes from the authors' pipeline config; reads processed before
+submission are marked so the barcode is recorded as metadata only.
 
 Story: FAILURES.md#read-structure
 """
@@ -34,6 +36,9 @@ def build_parser():
     parser.add_argument("--fetch-geo", action="store_true", help="Live-fetch GEO sample pages.")
     parser.add_argument("--compositions", type=Path,
                         help="JSON of {sample: [per-position deviation]}, to corroborate.")
+    parser.add_argument("--fetch-reads", action="store_true",
+                        help="Sample reads from ENA for the first runs, for the read structure.")
+    parser.add_argument("--fetch-limit", type=int, default=3, help="Runs to sample reads from.")
     parser.add_argument("--accept-proposals", type=Path,
                         help="Confirmed barcode_proposals.json. Supplying it IS the approval.")
     return parser
@@ -70,6 +75,19 @@ def body(args, out: Path) -> dict:
         matrix_samples = parse_geo_matrix(args.geo_matrix)["samples"]
         gsms = gsms or list(matrix_samples)
 
+    structures: dict = {}
+    if args.fetch_reads:
+        import lib.sra_header_preview as preview
+        from lib.read_structure import classify_read_structure
+
+        gsm_of = {r["srr"]: r["gsm"] for r in rows if r.get("srr") and r.get("gsm")}
+        records, _ = preview.preview_runs(list(gsm_of)[: args.fetch_limit], n_reads=2000)
+        structures = {run: classify_read_structure(preview.sequences_of(recs),
+                                                   load_format=preview.sra_load_format(run))
+                      for run, recs in records.items()}
+        (out / "read_structure.json").write_text(json.dumps(
+            {run: s.to_dict() for run, s in structures.items()}, indent=2) + "\n")
+
     proposals = extract_barcodes_for_gsms(
         gsms,
         paper_texts=[(p.name, p) for p in args.paper_text],
@@ -77,10 +95,15 @@ def body(args, out: Path) -> dict:
         fetch_geo=args.fetch_geo,
         sample_titles={g: matrix_samples.get(g, {}).get("title", "") for g in gsms},
         matrix_samples=matrix_samples,
+        read_structures={gsm_of[run]: (run, s) for run, s in structures.items()},
     )
     path = write_proposal_bundle(out, proposals)
 
     corroboration = ""
+    processed = [run for run, s in structures.items() if s.verdict == "processed"]
+    if processed:
+        corroboration = (f" Reads are PROCESSED for {', '.join(processed)} (read_structure.json): "
+                         f"a confirmed barcode is metadata only; 108 will not extract it.")
     if args.compositions and args.compositions.exists():
         from lib.read_structure import infer_inline_layout
 

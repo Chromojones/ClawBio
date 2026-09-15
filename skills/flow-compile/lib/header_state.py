@@ -27,11 +27,16 @@ RBC_END = "rbc_end"
 
 #: A prepended randomer: `@<ACGTN run>:` before anything instrument-shaped.
 _PREFIX_RE = re.compile(r"^@([ACGTN]{3,15}):(?=.)")
+#: ENA's rendering, `@<run>.<n> <original name>`: the state is in the original name.
+_ENA_RE = re.compile(r"^@[SED]RR\d+\.\d+\s+(\S.*)$")
 
 
 def classify_header(header: str) -> str:
     """Which state does this single header line show?"""
     header = (header or "").strip()
+    ena = _ENA_RE.match(header)
+    if ena:
+        header = "@" + ena.group(1)
     # Reuse `fastq_headers.RBC_TAG`: the tag is not always colon-delimited on the left.
     # GSE297587 appends it straight onto the index field (`…:N:0:1rbc:TAGGATAAA`), so a
     # literal ":rbc:" misses it. The lookbehind still refuses `rbc` inside a word.

@@ -56,7 +56,14 @@ Composition finds the barcode/UMI boundary but cannot settle the UMI's last base
 position 13 measured 7.9% off even — between random (~4%) and genomic (12–21%) — because it is
 the terminal N of a synthesized oligo. So the layout is a RANGE, with no `umi_len` attribute to
 tempt anyone, and the length comes from the authors' pipeline config.
-→ `tests/unit/test_inline_layout_boundary.py`, `tests/unit/test_umi_params_coherent.py`
+
+The reads can also arrive with the block already gone. SRR5646571 (GSE99688) was submitted as
+an aligned BAM of reads trimmed of their `NNNATCGNN` barcode, with SRA keeping no read names:
+lengths 15–59, no adapter, no UMI anywhere. The header classified as `raw`, so a barcode
+confirmed from the paper would have stripped nine real bases from every read. SRR24067475
+(GSE228970) is the opposite: every read 50 nt with the adapter reading through and an 11–12 nt
+block whose positions 9–11 hold only A/T, which the deviation-only layout could not see.
+→ `tests/unit/test_inline_layout_boundary.py`, `tests/unit/test_umi_params_coherent.py`, `tests/unit/test_read_structure.py`, `tests/stages/test_03_reads.py`
 
 ## Import and upload
 

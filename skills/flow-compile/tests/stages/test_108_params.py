@@ -26,11 +26,11 @@ def _stage(out, *extra):
     )
 
 
-def _routed(out, *, header_state="raw", protocol="iCLIP", barcodes=None):
+def _routed(out, *, header_state="raw", protocol="iCLIP", barcodes=None, read_structure=""):
     """Stand up what 108 depends on: a decided route, a header state, confirmed barcodes."""
     st.record(out, "06_route", st.OK)
     st.set_route(out, line="direct", protocol=protocol, reason="test")
-    st.set_study(out, header_state=header_state)
+    st.set_study(out, header_state=header_state, read_structure=read_structure)
     (out / "barcodes.json").write_text(json.dumps(barcodes or {}, indent=2) + "\n")
 
 
@@ -65,3 +65,37 @@ class TestTheBarcodeFeedsTheParams:
         proc = _stage(tmp_path, "--accept-params")
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert st.study(tmp_path).get("params_confirmed") is True
+
+
+class TestProcessedReads:
+    """Reads trimmed of their block before submission (SRR5646571) get no extraction and no
+    deduplication, whatever barcode the metadata records."""
+
+    def test_processed_raw_reads_skip_extraction_and_dedup(self, tmp_path):
+        _routed(tmp_path, read_structure="processed",
+                barcodes={"GSM1": {"five_prime": "NNNATCGNN"}})
+        proc = _stage(tmp_path)
+        assert proc.returncode == 3, proc.stdout + proc.stderr
+        params = json.loads((tmp_path / "pipeline_params.json").read_text())
+        assert params["move_umi_to_header"] == "false"
+        assert params["skip_umi_dedupe"] == "true"
+        assert "umi_header_format" not in params
+        assert "processed" in proc.stdout.lower()
+
+    def test_a_umi_still_in_the_header_is_deduplicated(self, tmp_path):
+        """Processed reads with `rbc:` in the name still carry their UMI."""
+        _routed(tmp_path, header_state="rbc_end", read_structure="processed",
+                barcodes={"GSM1": {"five_prime": "NNNATCGNN"}})
+        proc = _stage(tmp_path)
+        assert proc.returncode == 3, proc.stdout + proc.stderr
+        params = json.loads((tmp_path / "pipeline_params.json").read_text())
+        assert params["umi_separator"] == "rbc:"
+        assert params.get("skip_umi_dedupe", "false") == "false"
+
+    def test_untrimmed_reads_extract_as_before(self, tmp_path):
+        _routed(tmp_path, read_structure="untrimmed",
+                barcodes={"GSM1": {"five_prime": "N" * 11}})
+        proc = _stage(tmp_path)
+        assert proc.returncode == 3, proc.stdout + proc.stderr
+        params = json.loads((tmp_path / "pipeline_params.json").read_text())
+        assert params["umi_header_format"] == "N" * 11

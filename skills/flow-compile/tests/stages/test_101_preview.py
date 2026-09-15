@@ -58,19 +58,50 @@ def routed(tmp_path):
     return out
 
 
-def _stub(monkeypatch, records, source="ena"):
+def _stub(monkeypatch, records, source="ena", load_format="FASTQ"):
     """Replace the network fetch; record which accessions the stage asked for."""
     asked = []
 
     def fake_preview_runs(run_accessions, **kwargs):
         asked.extend(run_accessions)
-        return ({run: records for run in run_accessions},
+        return ({run: (records[run] if isinstance(records, dict) else records)
+                 for run in run_accessions},
                 {run: source for run in run_accessions})
 
     import lib.sra_header_preview as shp
 
     monkeypatch.setattr(shp, "preview_runs", fake_preview_runs)
+    monkeypatch.setattr(shp, "sra_load_format", lambda run: load_format)
     return asked
+
+
+def _records(seqs, prefix="SRR1"):
+    """Four-line FASTQ records in ENA's rendering."""
+    out = []
+    for i, s in enumerate(seqs, 1):
+        out += [f"@{prefix}.{i} {i}/1", s, "+", "F" * len(s)]
+    return out
+
+
+def _untrimmed(n=300, seed=1):
+    import random
+
+    rng = random.Random(seed)
+    reads = []
+    for _ in range(n):
+        head = "".join(rng.choices("ACGT", weights=[2, 2, 2, 4], k=8)) \
+            + "".join(rng.choice("AT") for _ in range(2)) + "T"
+        # genomic-like: 12-20% off even, never uniform
+        insert = "".join(rng.choices("ACGT", weights=[3, 1, 1, 3], k=rng.randint(10, 30)))
+        reads.append((head + insert + "AGATCGGAAGAGCACACGTCTGAACTCCAGTCACATCACG")[:50])
+    return reads
+
+
+def _processed(n=300, seed=2):
+    import random
+
+    rng = random.Random(seed)
+    return ["".join(rng.choices("ACGT", k=rng.randint(15, 59))) for _ in range(n)]
 
 
 class TestTheLivePathRuns:
@@ -134,3 +165,46 @@ class TestTheIndexCarriesTheRun:
         rows = json.loads((out / "sheet_rows.json").read_text())
         assert rows[0]["accession"] == "SRX3300000"
         assert rows[0]["srr"] == "SRR6181530"
+
+
+class TestTheReadStructureIsRecorded:
+    """101 records whether the reads are untrimmed or processed, for 108 to act on."""
+
+    def test_untrimmed_reads_are_recorded_with_their_block(self, routed, monkeypatch):
+        _stub(monkeypatch, _records(_untrimmed()))
+        assert _stage_module().main(["--output", str(routed)]) == 0
+        assert st.study(routed)["read_structure"] == "untrimmed"
+        recorded = json.loads((routed / "read_structure.json").read_text())["SRR33628723"]
+        assert recorded["verdict"] == "untrimmed"
+        assert recorded["block_len_min"] == 11
+
+    def test_processed_reads_are_recorded(self, routed, monkeypatch, capsys):
+        """SRR5646571: varied lengths, no adapter, loaded from a BAM."""
+        _stub(monkeypatch, _records(_processed()), load_format="BAM")
+        assert _stage_module().main(["--output", str(routed)]) == 0
+        assert st.study(routed)["read_structure"] == "processed"
+        assert "processed" in capsys.readouterr().out.lower()
+
+    def test_runs_that_disagree_are_refused(self, routed, monkeypatch, capsys):
+        (routed / "sheet_rows.json").write_text(json.dumps([
+            {"accession": "SRX1", "srr": "SRR1", "gsm": "GSM1", "sample_type": "CLIP"},
+            {"accession": "SRX2", "srr": "SRR2", "gsm": "GSM2", "sample_type": "CLIP"},
+        ]) + "\n")
+        _stub(monkeypatch, {"SRR1": _records(_untrimmed(), "SRR1"),
+                            "SRR2": _records(_processed(), "SRR2")})
+        assert _stage_module().main(["--output", str(routed)]) == 4
+        assert "untrimmed" in capsys.readouterr().err.lower()
+
+
+class TestOnlyHeaderLinesAreClassified:
+    """Sequence and quality lines are not headers; classifying them as `raw` made every
+    non-raw study read as mixed. ENA's accession prefix must not hide the state either."""
+
+    def test_a_prepended_randomer_study_is_not_refused_as_mixed(self, routed, monkeypatch):
+        recs = []
+        for i in range(6):
+            recs += [f"@SRR33628723.{i+1} TAAAG:HWI-D00611:119:C6VM5ANXX:1:1101:{i}:90397 2:N:0:TCCGG",
+                     "ACGTACGTACGTACGT", "+", "FFFFFFFFFFFFFFFF"]
+        _stub(monkeypatch, recs)
+        assert _stage_module().main(["--output", str(routed)]) == 0
+        assert st.study(routed)["header_state"] == "randomer_prefix"

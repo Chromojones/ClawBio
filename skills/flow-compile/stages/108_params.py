@@ -16,9 +16,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from lib import state as st  # noqa: E402
-from lib.header_state import params_for_state  # noqa: E402
+from lib.header_state import RAW, params_for_state  # noqa: E402
 from lib.import_guards import check_paired_selection  # noqa: E402
-from lib.read_structure import check_umi_params  # noqa: E402
+from lib.read_structure import PROCESSED, UNCLEAR, check_umi_params  # noqa: E402
 from stages._common import CheckFailed, Gate, parser_for, run_stage  # noqa: E402
 
 NAME = "108_params"
@@ -57,6 +57,18 @@ def body(args, out: Path) -> dict:
         )
 
     params = dict(params_for_state(state, experimental_method=protocol))
+
+    # Reads processed before submission (block trimmed, UMI not in the header) have nothing to
+    # extract and nothing to deduplicate on; the confirmed barcode is metadata only.
+    structure, notes = study.get("read_structure", ""), []
+    if structure == PROCESSED and state == RAW:
+        params = {"move_umi_to_header": "false", "skip_umi_dedupe": "true", "encode_eclip": "false"}
+        notes.append("reads are PROCESSED (read_structure.json): the in-line block was removed "
+                     "before submission and no UMI is in the header, so nothing is extracted and "
+                     "deduplication is skipped; the barcode is recorded as metadata only.")
+    elif structure == UNCLEAR:
+        notes.append("read structure is UNCLEAR (read_structure.json): confirm with the authors "
+                     "whether the reads were trimmed before choosing these parameters.")
 
     # eCLIP puts the crosslink on read 2; every other protocol on read 1. Never a hardcode.
     default_mate = "second" if protocol.lower() in ("eclip",) else "first"
@@ -101,14 +113,15 @@ def body(args, out: Path) -> dict:
     if not args.accept_params:
         raise Gate(
             f"analysis parameters for {protocol or 'this study'} require approval. "
-            f"Confirm the UMI length against the authors' own pipeline config; composition "
-            f"cannot settle its final base.",
+            + " ".join(notes)
+            + " Confirm the UMI length against the authors' own pipeline config; composition "
+            "cannot settle its final base.",
             release="--accept-params",
             artefact=str(out / "pipeline_params.json"),
         )
 
     st.set_study(out, params_confirmed=True)
-    return {"lines": [f"{k} = {v}" for k, v in sorted(params.items())],
+    return {"lines": [f"{k} = {v}" for k, v in sorted(params.items())] + notes,
             "note": f"{protocol}/{state}"}
 
 

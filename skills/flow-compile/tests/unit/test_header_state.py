@@ -124,3 +124,19 @@ class TestSampledHeaders:
 
     def test_a_consistent_sample_is_ok(self):
         assert classify_headers([ICLIP_RBC_END] * 3).ok is True
+
+
+class TestTheEnaPrefixDoesNotHideTheState:
+    """ENA renders `@<run>.<n> <original name>`; the state is in the original name."""
+
+    def test_a_prepended_randomer_behind_the_accession_is_seen(self):
+        from lib.header_state import RANDOMER_PREFIX, classify_header
+
+        assert classify_header(
+            "@SRR1.1 TAAAG:HWI-D00611:119:C6VM5ANXX:1:1101:1234:90397 2:N:0:TCCGG"
+        ) == RANDOMER_PREFIX
+
+    def test_a_plain_instrument_name_behind_the_accession_is_raw(self):
+        from lib.header_state import RAW, classify_header
+
+        assert classify_header("@SRR21863801.1 K00180:212:H7VCTBBXX:5:1101:20598:1033/1") == RAW
