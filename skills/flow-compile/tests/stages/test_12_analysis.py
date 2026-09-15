@@ -58,3 +58,21 @@ class TestTheCeilingHoldsByDefault:
         proc = _stage(tmp_path, "--no-reference-reason", "test", "--samples", "6")
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert "6 sample(s)" in proc.stdout
+
+
+class TestNoReferenceReasonWithoutAReferenceFile:
+    """GSE149561: the first Rattus norvegicus CLIP study on the account, so there is no
+    completed same-organism run to pass as `--reference-params` at all — only a reason.
+    `body()` built `reference = {}` when `--reference-params` was omitted, not `None`, so
+    `cross_check_reference` took the "a reference WAS supplied but shares no keys" branch
+    instead of the "no reference_params, but a reason was declared" branch — the reason was
+    silently ignored and the message read as "NOT COMPARED" (more alarming, and not what
+    happened) regardless of what `--no-reference-reason` said.
+    """
+
+    def test_the_declared_reason_reaches_the_cross_check(self, tmp_path):
+        _confirmed(tmp_path, sample_count=6)
+        proc = _stage(tmp_path, "--no-reference-reason", "first rat CLIP study; nothing to compare")
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert "NOT COMPARED" not in proc.stdout
+        assert "first rat CLIP study; nothing to compare" in proc.stdout

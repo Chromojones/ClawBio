@@ -76,7 +76,7 @@ def body(args, out: Path) -> dict:
     if not study.get("params_confirmed"):
         raise CheckFailed("108_params was never confirmed; the parameters are unapproved.")
 
-    reference = json.loads(args.reference_params.read_text()) if args.reference_params else {}
+    reference = json.loads(args.reference_params.read_text()) if args.reference_params else None
     check = cross_check_reference(params, reference,
                                   no_reference_run_reason=args.no_reference_reason)
 

@@ -29,19 +29,26 @@ def build_parser():
     parser = parser_for(NAME, __doc__.splitlines()[0])
     parser.add_argument("--sizes", type=Path, help="JSON of {accession: {fastq_bytes: N}}.")
     parser.add_argument("--sample-type", default="CLIP")
+    parser.add_argument("--srr-map", type=Path,
+                        help="srr_map.tsv with an `srx` column, to supply the experiment "
+                             "accession the annotation itself does not carry.")
     return parser
 
 
 def _inputs(args, out):
-    return [p for p in (out / "annotation.raw.csv", args.sizes) if p and Path(p).exists()]
+    return [p for p in (out / "annotation.raw.csv", args.sizes, args.srr_map)
+            if p and Path(p).exists()]
 
 
 def body(args, out: Path) -> dict:
     import pandas as pd
 
-    from lib.sra_import import build_import_sheet, write_import_sheet
+    from lib.flow_annotate import load_srr_map
+    from lib.sra_import import build_import_sheet, merge_srx_from_srr_map, write_import_sheet
 
     annotation = pd.read_csv(out / "annotation.raw.csv", dtype=str).fillna("")
+    if args.srr_map:
+        annotation = merge_srx_from_srr_map(annotation, load_srr_map(args.srr_map))
     study = st.study(out)
 
     sheet = build_import_sheet(annotation, sample_type=args.sample_type,

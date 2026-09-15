@@ -75,6 +75,25 @@ def _accession_for_row(row: pd.Series) -> str:
     return ""
 
 
+def merge_srx_from_srr_map(annotation: pd.DataFrame, srr_map: pd.DataFrame) -> pd.DataFrame:
+    """`build_import_sheet` requires an `SRX` column (see module docstring); `04_annotate`
+    never writes one since `ANNOTATION_COLUMNS` is the Flow-facing biological schema, not a
+    place for a download detail specific to the SRA-direct route. `srr_map.tsv` — the same
+    file `109_sheet` is handed again — already carries `srx` per GSM
+    (`reference/sra-direct-import.md`'s own column-mapping table: "(from srr_map.srx) ->
+    accession"), keyed by the annotation's `GEO ID` column. Returns a copy; `annotation` is
+    never mutated in place.
+    """
+    if "srx" not in srr_map.columns:
+        return annotation
+    gsm_to_srx = (
+        srr_map.drop_duplicates("gsm").set_index("gsm")["srx"].astype(str).to_dict()
+    )
+    merged = annotation.copy()
+    merged["SRX"] = merged["GEO ID"].map(gsm_to_srx).fillna("")
+    return merged
+
+
 def annotation_to_flow_row(row) -> dict[str, str]:
     """One annotation row in Flow's keys: what the sheet sends and what `11_verify` compares."""
     record: dict[str, str] = {}

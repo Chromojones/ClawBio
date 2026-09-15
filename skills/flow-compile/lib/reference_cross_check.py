@@ -17,6 +17,7 @@ class CrossCheck:
     compared: int
     disagreements: list[str] = field(default_factory=list)
     reason: str = ""
+    prep_file_count: int = 0
 
     def describe(self) -> str:
         if self.disagreements:
@@ -27,9 +28,10 @@ class CrossCheck:
             return f"reference agreed on {self.compared} file(s) across two sources."
         if self.ok:
             return (f"reference taken from a SINGLE source — no completed run was compared "
-                    f"against. Declared reason: {self.reason}. The 21 filenames were resolved "
-                    f"from the prep execution alone, so assembly and annotation release are "
-                    f"unverified by a second source; check them by eye before submitting.")
+                    f"against. Declared reason: {self.reason}. The {self.prep_file_count} "
+                    f"filenames were resolved from the prep execution alone, so assembly and "
+                    f"annotation release are unverified by a second source; check them by eye "
+                    f"before submitting.")
         return ("reference NOT COMPARED — 0 file(s) overlapped between the prep execution and "
                 "the supplied reference run, so no disagreement could be found. That is not "
                 "agreement. Either supply a completed run of the SAME organism, or declare "
@@ -47,7 +49,8 @@ def cross_check_reference(
     """
     if reference_params is None:
         if no_reference_run_reason.strip():
-            return CrossCheck(ok=True, compared=0, reason=no_reference_run_reason.strip())
+            return CrossCheck(ok=True, compared=0, reason=no_reference_run_reason.strip(),
+                              prep_file_count=len(prep_params))
         return CrossCheck(ok=False, compared=0)
 
     shared = sorted(set(prep_params) & set(reference_params))

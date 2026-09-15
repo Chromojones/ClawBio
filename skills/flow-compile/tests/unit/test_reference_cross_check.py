@@ -66,6 +66,16 @@ class TestTheFirstStudyOfAnOrganism:
         assert result.compared == 0
         assert "first Drosophila" in result.describe()
 
+    def test_the_described_filename_count_matches_what_was_actually_resolved(self):
+        """`describe()` used to say "The 21 filenames" unconditionally — a leftover from
+        whatever run the message was first written against, unrelated to `PREP`'s actual size
+        (3 keys here). GSE149561 resolves 5 pipeline params, not 21; a message with the wrong
+        count is worse than no count.
+        """
+        result = cross_check_reference(PREP, None, no_reference_run_reason="first fly study")
+        assert f"The {len(PREP)} filenames" in result.describe()
+        assert "21 filenames" not in result.describe()
+
     def test_a_declared_reason_still_reports_it_was_unverified(self):
         result = cross_check_reference(PREP, None, no_reference_run_reason="first fly study")
         assert "single source" in result.describe().lower() or "unverified" in result.describe().lower()
