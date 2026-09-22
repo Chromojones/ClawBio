@@ -357,6 +357,44 @@ Then `12_analysis`, remembering that one execution covers **one genome** and **o
 
 ---
 
+## Non-CLIP sample types
+
+The numbered stages are CLIP-only. `109_sheet` does take `--sample-type`, but everything
+before it (barcodes, the annotation, the metadata checklist) is built around a CLIP
+annotation, `REQUIRED_CLIP_COLUMNS` demands a 5′ barcode and a purification target, and
+`FORBIDDEN_SHEET_COLUMNS` strips `strandedness` from every sheet. The import itself is not
+CLIP-only. `flowbio samples import` takes any Flow sample
+type, and most of this document is about the import rather than about CLIP. For a public
+RNA-Seq, ChIP-Seq or other non-CLIP study, run no stages and do this by hand.
+
+**Carries over unchanged:**
+
+| Section | Why it still applies |
+|---|---|
+| §0 — is the data public, is it already on Flow | embargoes and duplicate imports are properties of the deposit, not the assay |
+| §0a facts 1, 2, 4, 5, 6 and the silent-`200` family | properties of `samples import` and the Flow API, not of CLIP |
+| §1 — the ENA filereport for `SRX` accessions | the import still needs experiments, not runs |
+| §5 — import and poll | same command, same asynchronous job |
+| §5b — read every sample back and diff it against the sheet | a `COMPLETED` job is no more evidence for RNA-Seq than for CLIP |
+
+**Does not apply:** §2 (header preview and UMI parameters), §4's barcode and
+purification-target columns, §5a (mate selection for the CLIP pipeline), and every gate.
+
+**The sheet.** Get the valid sample type names from `flowbio api get /samples/types --json`
+and the columns from `flowbio samples batch-template --sample-type <type>`. As with CLIP
+(fact 3), when the template and the import endpoint disagree, trust the endpoint.
+`strandedness` is rejected for CLIP only because it is an RNA-Seq field. Keep `accession`
+(the `SRX`), `name` and `project`.
+
+**The researcher still signs off.** There is no stage to stop at a gate here, so the agent
+stops on its own: show the sheet, and run `samples import` only once the researcher has
+approved it (see *Agent Boundary* in `SKILL.md`).
+
+**Then analyse with `flow-bio`.** `12_analysis` and `13_audit` build CLIP-Seq parameters and
+do not apply.
+
+---
+
 ## SRA-direct vs local-download
 
 | Step | SRA-direct (preferred) | Local download |
