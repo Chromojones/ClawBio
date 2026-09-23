@@ -3,7 +3,9 @@ name: flow-compile
 description: >-
   Take a published CLIP study from its accession to an analysed project on Flow — audit the
   GEO/SRA deposit, resolve 5' barcodes from the study's own metadata, build and validate the
-  annotation, import or upload to Flow, then submit and audit the analysis.
+  annotation, import or upload to Flow, then submit and audit the analysis. Its SRA-import
+  guidance also covers getting a public non-CLIP study (RNA-Seq, ChIP-Seq…) onto Flow with
+  Flow's sample import.
 license: MIT
 metadata:
   version: 0.2.0
@@ -90,6 +92,8 @@ metadata:
       - build flow annotation sheet
       - import clip study to flow
       - clip barcode resolution
+      - import sra study to flow
+      - flow sample import
 ---
 
 # Flow Compile
@@ -108,10 +112,14 @@ Fire when the user wants to:
 - resolve 5′ barcodes for a CLIP study from its metadata
 - import SRA/ENA accessions into a Flow project, or verify an import that already ran
 - submit or audit a CLIP-Seq analysis on Flow
+- import a public non-CLIP study (RNA-Seq, ChIP-Seq…) from SRA/ENA into Flow — the numbered
+  stages do not apply; follow
+  [Non-CLIP sample types](reference/sra-direct-import.md#non-clip-sample-types) only
 
 Do **not** fire when the user wants to:
 
-- run a non-CLIP assay (RNA-Seq, ChIP-Seq) — those have their own wrappers
+- run the stages on a non-CLIP assay (RNA-Seq, ChIP-Seq) — they are CLIP-only; import such a
+  study as above, then analyse it with `flow-bio`
 - analyse data already on Flow with no upload step — use `flow-bio`
 - process FLASH, uvCLAP or PAR-CLIP — detected and refused by name, see
   [`lib/protocol.py`](lib/protocol.py)
