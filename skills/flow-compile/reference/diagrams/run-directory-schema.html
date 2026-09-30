@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>flow-compile run directory · Database schema</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --color-paper: #f5f5f5; --color-ink: #2d3142; --color-muted: #4f5d75; --color-accent: #eb6c36;
+             --font-sans: 'Geist', system-ui, sans-serif; --font-serif: 'Instrument Serif', serif; --font-mono: 'Geist Mono', ui-monospace, monospace; }
+    body { font-family: var(--font-sans); background: var(--color-paper); color: var(--color-ink); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1240px; width: 100%; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--font-serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--color-ink); margin-bottom: 1.5rem; }
+    svg { width: 100%; min-width: 960px; display: block; }
+    .caption { font-family: var(--font-sans); font-size: 0.85rem; color: var(--color-muted); max-width: 70ch; margin-top: 1rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Database schema · flow-compile</p>
+    <h1>A flow-compile run directory as a schema</h1>
+    <svg viewBox="0 0 1092 632" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="run-schema-title run-schema-desc">
+      <title id="run-schema-title">A flow-compile run directory as a schema</title>
+      <desc id="run-schema-desc">Database schema diagram of the artefacts a flow-compile run writes: barcodes and sheet rows keyed by GSM, the annotation table and import sheet that carry those keys forward, and the live Flow.bio sample record the import sheet is paired with by name; the confirmed barcode's path into the annotation is marked as the join a wrong value passes through silently.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <rect x="764" y="84" width="288" height="232" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.20)" stroke-width="0.8" stroke-dasharray="4,4"/>
+      <text x="776" y="100" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">FLOW.BIO · LIVE</text>
+      <!-- E1 barcodes.gsm -> sheet_rows.gsm, via the left margin -->
+      <path d="M 40,104 H 32 Q 24,104 24,112 V 292 Q 24,300 32,300 H 38" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- E2 annotation.GEO ID -> sheet_rows.gsm -->
+      <path d="M 416,152 H 332 Q 324,152 324,160 V 292 Q 324,300 316,300 H 298" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- E3 annotation.5' Barcode Sequence -> barcodes.five_prime (focal: a wrong value demultiplexes silently) -->
+      <line x1="416" y1="128" x2="298" y2="128" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <!-- E4 import_sheet.accession -> sheet_rows.accession -->
+      <path d="M 416,372 H 352 Q 344,372 344,364 V 332 Q 344,324 336,324 H 298" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- E5 import_sheet.name -> samples.name (11_verify pairs rows to samples by name) -->
+      <path d="M 672,396 H 692 Q 700,396 700,388 V 192 Q 700,184 708,184 H 778" fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <!-- FK labels, masked, 6-10px off their connector -->
+      <rect x="34" y="230" width="66" height="12" rx="2" fill="#f5f5f5"/><text x="67" y="239" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">03 · PER GSM</text>
+      <rect x="334" y="220" width="66" height="12" rx="2" fill="#f5f5f5"/><text x="367" y="229" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">04 · PER GSM</text>
+      <rect x="322" y="108" width="70" height="12" rx="2" fill="#f5f5f5"/><text x="357" y="117" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SILENT MIX-UP</text>
+      <rect x="354" y="342" width="46" height="12" rx="2" fill="#f5f5f5"/><text x="377" y="351" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">SRX ONLY</text>
+      <rect x="710" y="284" width="42" height="12" rx="2" fill="#f5f5f5"/><text x="731" y="293" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">BY NAME</text>
+      <!-- Table: barcodes.json -->
+      <rect x="40" y="64" width="256" height="148" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="40" y="64" width="256" height="28" rx="6" fill="rgba(45,49,66,0.04)" stroke="none"/><rect x="40" y="84" width="256" height="8" fill="rgba(45,49,66,0.04)"/>
+      <line x1="40" y1="92" x2="296" y2="92" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text x="52" y="82" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif">barcodes.json</text>
+      <rect x="244" y="72" width="40" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="264" y="81" fill="#2d3142" opacity="0.8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">JSON</text>
+      <rect x="40" y="92" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="52" y="108" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">gsm</text>
+      <rect x="188" y="100" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="198" y="109" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">PK</text>
+      <rect x="212" y="100" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="222" y="109" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">FK</text>
+      <text x="284" y="108" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="52" y="132" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">five_prime</text>
+      <rect x="188" y="124" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="198" y="133" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="284" y="132" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="40" y="140" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="52" y="156" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">umi_barcode</text>
+      <text x="284" y="156" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="52" y="180" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">protocol</text>
+      <text x="284" y="180" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="40" y="188" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="52" y="204" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">notes</text>
+      <text x="284" y="204" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <!-- Table: sheet_rows.json -->
+      <rect x="40" y="260" width="256" height="124" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="40" y="260" width="256" height="28" rx="6" fill="rgba(45,49,66,0.04)" stroke="none"/><rect x="40" y="280" width="256" height="8" fill="rgba(45,49,66,0.04)"/>
+      <line x1="40" y1="288" x2="296" y2="288" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text x="52" y="278" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif">sheet_rows.json</text>
+      <rect x="244" y="268" width="40" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="264" y="277" fill="#2d3142" opacity="0.8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">JSON</text>
+      <rect x="40" y="288" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="52" y="304" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">gsm</text>
+      <rect x="188" y="296" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="198" y="305" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">PK</text>
+      <text x="284" y="304" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="52" y="328" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">accession</text>
+      <rect x="188" y="320" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="198" y="329" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="284" y="328" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="40" y="336" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="52" y="352" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">srr</text>
+      <rect x="188" y="344" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="198" y="353" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="284" y="352" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="52" y="376" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">sample_type</text>
+      <rect x="188" y="368" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="198" y="377" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="284" y="376" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <!-- Table: annotation.raw.csv -->
+      <rect x="416" y="64" width="256" height="220" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="416" y="64" width="256" height="28" rx="6" fill="rgba(235,108,54,0.08)" stroke="none"/><rect x="416" y="84" width="256" height="8" fill="rgba(235,108,54,0.08)"/>
+      <line x1="416" y1="92" x2="672" y2="92" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text x="428" y="82" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif">annotation.raw.csv</text>
+      <rect x="620" y="72" width="40" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="640" y="81" fill="#2d3142" opacity="0.8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CSV</text>
+      <rect x="416" y="92" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="108" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">Sample Name</text>
+      <rect x="564" y="100" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="109" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">PK</text>
+      <text x="660" y="108" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="428" y="132" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">5' Barcode Sequence</text>
+      <rect x="564" y="124" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="133" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">FK</text>
+      <rect x="588" y="124" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="598" y="133" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="132" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="416" y="140" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="156" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">GEO ID</text>
+      <rect x="564" y="148" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="157" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">FK</text>
+      <rect x="588" y="148" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="598" y="157" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="156" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="428" y="180" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">Purification Target</text>
+      <rect x="564" y="172" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="181" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="180" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="416" y="188" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="204" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">Purification Agent</text>
+      <text x="660" y="204" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="428" y="228" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">Organism</text>
+      <rect x="564" y="220" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="229" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="228" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">char(2)</text>
+      <rect x="416" y="236" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="252" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">Comments</text>
+      <text x="660" y="252" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">varchar(1000)</text>
+      <text x="428" y="276" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">+ 9 more columns</text>
+      <!-- Table: import_sheet.csv -->
+      <rect x="416" y="332" width="256" height="196" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="416" y="332" width="256" height="28" rx="6" fill="rgba(45,49,66,0.04)" stroke="none"/><rect x="416" y="352" width="256" height="8" fill="rgba(45,49,66,0.04)"/>
+      <line x1="416" y1="360" x2="672" y2="360" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text x="428" y="350" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif">import_sheet.csv</text>
+      <rect x="620" y="340" width="40" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="640" y="349" fill="#2d3142" opacity="0.8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CSV</text>
+      <rect x="416" y="360" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="376" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">accession</text>
+      <rect x="564" y="368" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="377" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">PK</text>
+      <rect x="588" y="368" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="598" y="377" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">FK</text>
+      <text x="660" y="376" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="428" y="400" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">name</text>
+      <rect x="564" y="392" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="401" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">UQ</text>
+      <rect x="588" y="392" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="598" y="401" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="400" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="416" y="408" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="424" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">sample_type</text>
+      <rect x="564" y="416" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="425" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="424" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="428" y="448" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">five_prime_barcode_sequence</text>
+      <text x="660" y="448" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="416" y="456" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="472" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">purification_target</text>
+      <rect x="564" y="464" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="574" y="473" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">NN</text>
+      <text x="660" y="472" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="428" y="496" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">pubmed</text>
+      <text x="660" y="496" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="416" y="504" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="428" y="520" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">+ 5 more columns</text>
+      <!-- Table: GET /samples/{id} -->
+      <rect x="780" y="120" width="256" height="172" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <rect x="780" y="120" width="256" height="28" rx="6" fill="rgba(45,49,66,0.04)" stroke="none"/><rect x="780" y="140" width="256" height="8" fill="rgba(45,49,66,0.04)"/>
+      <line x1="780" y1="148" x2="1036" y2="148" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+      <text x="792" y="138" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif">GET /samples/{id}</text>
+      <rect x="984" y="128" width="40" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/><text x="1004" y="137" fill="#2d3142" opacity="0.8" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">API</text>
+      <rect x="780" y="148" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="792" y="164" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">id</text>
+      <rect x="928" y="156" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="938" y="165" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">PK</text>
+      <text x="1024" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">bigint</text>
+      <text x="792" y="188" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">name</text>
+      <rect x="928" y="180" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="938" y="189" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">UQ</text>
+      <text x="1024" y="188" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <rect x="780" y="196" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="792" y="212" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">project</text>
+      <rect x="928" y="204" width="20" height="12" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="0.8"/><text x="938" y="213" fill="#2d3142" opacity="0.75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">FK</text>
+      <text x="1024" y="212" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">bigint</text>
+      <text x="792" y="236" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">metadata</text>
+      <text x="1024" y="236" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">jsonb</text>
+      <rect x="780" y="244" width="256" height="24" fill="rgba(45,49,66,0.02)"/>
+      <text x="792" y="260" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">pubmed</text>
+      <text x="1024" y="260" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">text</text>
+      <text x="792" y="284" fill="#2d3142" font-size="12" font-family="'Geist', sans-serif">filesets</text>
+      <text x="1024" y="284" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">jsonb</text>
+      <line x1="40" y1="564" x2="1052" y2="564" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="580" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+      <rect x="40" y="596" width="20" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/><text x="68" y="604" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Artefact in the run directory (JSON, CSV) or a live Flow record (API)</text>
+      <rect x="440" y="596" width="20" height="12" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.35)" stroke-width="0.8" stroke-dasharray="3,3"/><text x="468" y="604" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Flow.bio, outside the run directory</text>
+      <line x1="680" y1="602" x2="700" y2="602" stroke="#4f5d75" stroke-width="1"/><text x="708" y="604" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">Key one artefact carries from another, and the rule that checks it</text>
+      <line x1="40" y1="622" x2="60" y2="622" stroke="#eb6c36" stroke-width="1.2"/><text x="68" y="624" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif">The join no check can catch: a wrong confirmed barcode demultiplexes into the wrong sample without an error</text>
+    </svg>
+    <p class="caption">Five of the run's artefacts, drawn as tables. <code>state.json</code> is the ledger of which stage ran and what it read, not a table, so it is not drawn; the import sheet is one row per annotation row and sits under it for that reason. The join into the annotation carries no error path: 05_metadata checks every field but cannot know whether a confirmed barcode is the right one.</p>
+  </div>
+</body>
+</html>
